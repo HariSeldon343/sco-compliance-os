@@ -1,22 +1,22 @@
-"""Wrapper async per Claude Agent SDK integrato con SaaS proxy SCO.
+"""Wrapper async per Anthropic SDK Python integrato con SaaS proxy SCO.
 
-Architettura license + proxy:
+Architettura license + proxy v0.1.1+ (Option C senza Claude Code CLI):
 - Cliente NON inserisce mai chiave Anthropic.
 - Cliente inserisce email + license_key SCO via LoginScreen.
-- Backend locale Python usa `ANTHROPIC_BASE_URL` custom che punta al backend SaaS
-  SCO (https://sco-saas-claude.vercel.app/api/v1/llm/proxy).
-- Backend locale usa `ANTHROPIC_AUTH_TOKEN = license_key` (passato come Bearer).
-- SaaS valida license + forwarda a Anthropic con chiave server-side.
+- Backend locale Python usa `anthropic.AsyncAnthropic` con custom `base_url`
+  pointing al SaaS proxy SCO (https://sco-saas-claude.vercel.app/api/v1/llm/proxy).
+- `api_key = license_key` viene passato come Bearer al SaaS proxy.
+- SaaS valida license + forwarda ad Anthropic con NOSTRA chiave server-side.
 
-Fallback dev mode: se license_key vuoto OR sco_saas_base_url empty → fallback a
-env vars standard `ANTHROPIC_API_KEY` (per testing locale su PC sviluppatore con
-chiave reale).
+Cambio architetturale v0.1.0-alpha.7 → v0.1.1:
+- Rimosso `claude-agent-sdk` (richiedeva `claude.exe` CLI bundled via npm install).
+- Usato `anthropic` SDK Python direct con streaming nativo.
+- Perso temporaneamente: tool use built-in, MCP integration (carry-over v0.2.0).
+- Mantenuto: SSE streaming text_delta + AgentEvent typed.
 
 Pattern Conv. 44 lesson 1: nessun avvio uvicorn/long-running da shell ephemeral.
-Pattern Conv. 44 lesson 3: hidden imports per PyInstaller (claude_agent_sdk + mcp)
-da dichiarare nel .spec quando si farà il sidecar bundle.
-Pattern Conv. 48: stream() yield eventi tipizzati che includono ask_user_question
-e tool_calls per persistenza backend-side.
+Pattern Conv. 44 lesson 3: hidden imports anthropic + httpx già nei .spec.
+Pattern Conv. 48: stream() yield eventi tipizzati per persistenza backend-side.
 """
 
 from __future__ import annotations
@@ -26,19 +26,11 @@ import json
 import os
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Literal
 
-from claude_agent_sdk import (
-    AssistantMessage,
-    ClaudeAgentOptions,
-    ClaudeSDKClient,
-    ResultMessage,
-    StreamEvent,
-    TextBlock,
-    ThinkingBlock,
-    ToolResultBlock,
-    ToolUseBlock,
-)
+from anthropic import AsyncAnthropic
+from anthropic.types import MessageParam
 
 from sco_compliance_os.config import get_settings
 from sco_compliance_os.core.logging_setup import get_logger
@@ -47,12 +39,7 @@ logger = get_logger(__name__)
 
 
 def _load_active_license_from_disk() -> tuple[str, str] | None:
-    """Legge ~/.sco-compliance-os/active-license.json + ritorna (email, license_key) se valido.
-
-    Pattern Karpathy single-source-of-truth: la license attivata via
-    `/api/license/activate` vive su disco (NON in settings env). Questo helper
-    è la SOURCE PRIMARIA per configurare ANTHROPIC_AUTH_TOKEN runtime.
-    """
+    """Legge ~/.sco-compliance-os/active-license.json + ritorna (email, license_key) se valido."""
     settings = get_settings()
     license_path = settings.data_dir / "active-license.json"
     if not license_path.exists():
@@ -105,27 +92,20 @@ class AgentRunnerConfig:
     tools: list[dict[str, Any]] = field(default_factory=list)
 
 
-def _configure_anthropic_env() -> dict[str, str]:
-    """Configura env vars Anthropic per routing via SaaS proxy SCO.
+def _resolve_credentials() -> tuple[str, str] | None:
+    """Resolve (base_url, api_key) per AsyncAnthropic.
 
-    Strategia priorità (cristallizzata v0.1.0-alpha.6 dopo bug chat smoke E2E):
-    1. **active-license.json** (license attivata runtime via /api/license/activate):
-       fonte PRIMARIA. La license vive su disco, NON in settings .env file.
-    2. settings.license_key (env .env file): fallback per dev pre-attivazione.
-    3. settings.anthropic_api_key: ultimo fallback dev locale.
-
-    Le env vars sono settate sia in os.environ (per il subprocess claude.exe del
-    SDK) sia ritornate come dict per essere passate via ClaudeAgentOptions(env=...)
-    in modo esplicito (defensive — alcune versioni del SDK ignorano os.environ).
+    Priorità:
+    1. active-license.json (runtime, post-/api/license/activate)
+    2. settings.license_key (env .env file)
+    3. settings.anthropic_api_key (fallback dev locale)
 
     Returns:
-        dict env vars da passare a ClaudeAgentOptions(env=...).
+        (base_url, api_key) o None se nessuna credenziale.
     """
     settings = get_settings()
     saas_base = settings.sco_saas_base_url.strip().rstrip("/")
-    env_overrides: dict[str, str] = {}
 
-    # SOURCE PRIMARY: active-license.json (runtime, post-activate)
     active = _load_active_license_from_disk()
     license_key_value = ""
     source = "none"
@@ -133,47 +113,31 @@ def _configure_anthropic_env() -> dict[str, str]:
         _, license_key_value = active
         source = "active_license_json"
     else:
-        # FALLBACK: settings.license_key (.env file)
         license_key_value = settings.license_key.get_secret_value().strip()
         if license_key_value:
             source = "settings_env"
 
     if license_key_value and saas_base:
-        # Production proxy mode: routing via SaaS SCO
         base_url = f"{saas_base}/api/v1/llm/proxy"
-        env_overrides["ANTHROPIC_BASE_URL"] = base_url
-        env_overrides["ANTHROPIC_AUTH_TOKEN"] = license_key_value
-        # Rimuovi eventuale ANTHROPIC_API_KEY conflittuale dall'env corrente
-        os.environ.pop("ANTHROPIC_API_KEY", None)
-        os.environ["ANTHROPIC_BASE_URL"] = base_url
-        os.environ["ANTHROPIC_AUTH_TOKEN"] = license_key_value
         logger.info(
-            "agent_runner.env.proxy_mode",
+            "agent_runner.credentials.proxy_mode",
             source=source,
-            saas_base=saas_base,
-            license_set=True,
+            base_url=base_url,
         )
-    else:
-        # Dev fallback: usa ANTHROPIC_API_KEY da settings (chiave reale Anthropic)
-        api_key = settings.anthropic_api_key.get_secret_value().strip()
-        if api_key:
-            env_overrides["ANTHROPIC_API_KEY"] = api_key
-            os.environ["ANTHROPIC_API_KEY"] = api_key
-            # Pulisci override custom se presenti
-            os.environ.pop("ANTHROPIC_BASE_URL", None)
-            os.environ.pop("ANTHROPIC_AUTH_TOKEN", None)
-            logger.info("agent_runner.env.dev_mode", api_key_set=True)
-        else:
-            logger.warning(
-                "agent_runner.env.no_credentials",
-                hint="Attiva license via UI OR set ANTHROPIC_API_KEY in .env.",
-            )
+        return base_url, license_key_value
 
-    return env_overrides
+    # Dev fallback: chiave Anthropic reale + endpoint nativo
+    api_key = settings.anthropic_api_key.get_secret_value().strip()
+    if api_key:
+        logger.info("agent_runner.credentials.dev_mode")
+        return "https://api.anthropic.com", api_key
+
+    logger.warning("agent_runner.credentials.missing")
+    return None
 
 
 class AgentRunner:
-    """Wrapper attorno a Claude Agent SDK con routing via SaaS proxy SCO.
+    """Wrapper anthropic SDK con routing via SaaS proxy SCO.
 
     Esposizione minimale:
     - stream(prompt): AsyncIterator[AgentEvent]
@@ -190,47 +154,50 @@ class AgentRunner:
             tools_count=len(config.tools),
         )
 
-    def _build_options(self) -> ClaudeAgentOptions:
-        """Costruisce ClaudeAgentOptions con env proxy configurato."""
-        env_overrides = _configure_anthropic_env()
-
-        # MCP servers: per ora dict vuoto (Sessione successiva: cablatura)
-        # Il SDK accetta dict[str, McpServerConfig] | str | Path
-        mcp_dict: dict[str, Any] = {}
-
-        options = ClaudeAgentOptions(
-            model=self.config.model_slug,
-            system_prompt=self.config.system_prompt,
-            mcp_servers=mcp_dict,
-            permission_mode="default",  # production-safe
-            include_partial_messages=True,  # per text_delta granulare via StreamEvent
-            env=env_overrides,
-        )
-        return options
-
     async def stream(self, prompt: str) -> AsyncIterator[AgentEvent]:
-        """Stream eventi dell'agente durante l'esecuzione.
+        """Stream eventi dell'agente.
 
-        Usa ClaudeSDKClient (chat multi-turn) e itera receive_response() per
-        ricevere AssistantMessage + ResultMessage + StreamEvent (delta).
+        Usa anthropic.AsyncAnthropic.messages.stream() per ricevere text_delta
+        + thinking_delta + message_stop events.
 
         Args:
             prompt: messaggio utente.
 
         Yields:
-            AgentEvent in ordine: text_delta..., (eventuale tool_use/tool_result),
-            (eventuale thinking), done.
+            AgentEvent in ordine: text_delta..., done.
         """
         logger.info("agent_runner.stream.start", prompt_len=len(prompt))
 
-        options = self._build_options()
+        creds = _resolve_credentials()
+        if creds is None:
+            yield AgentEvent(
+                kind="error",
+                data={
+                    "message": "Nessuna license attiva. Attiva la license dal pannello prima di usare la chat.",
+                    "exc_type": "MissingCredentials",
+                },
+                seq=0,
+            )
+            return
+
+        base_url, api_key = creds
         seq = 0
 
         try:
-            async with ClaudeSDKClient(options=options) as client:
-                await client.query(prompt)
+            client = AsyncAnthropic(base_url=base_url, api_key=api_key)
+            messages: list[MessageParam] = [{"role": "user", "content": prompt}]
 
-                async for message in client.receive_response():
+            kwargs: dict[str, Any] = {
+                "model": self.config.model_slug,
+                "max_tokens": self.config.max_tokens,
+                "messages": messages,
+            }
+            if self.config.system_prompt:
+                kwargs["system"] = self.config.system_prompt
+
+            async with client.messages.stream(**kwargs) as stream:
+                # Stream text delta chunks
+                async for text_chunk in stream.text_stream:
                     if self._cancel_event.is_set():
                         yield AgentEvent(
                             kind="error",
@@ -238,98 +205,36 @@ class AgentRunner:
                             seq=seq,
                         )
                         return
+                    yield AgentEvent(
+                        kind="text_delta",
+                        data={"text": text_chunk},
+                        seq=seq,
+                    )
+                    seq += 1
 
-                    # StreamEvent: delta incrementale (text streaming granulare)
-                    if isinstance(message, StreamEvent):
-                        event_data = message.event
-                        event_type = event_data.get("type")
-                        if event_type == "content_block_delta":
-                            delta = event_data.get("delta", {})
-                            delta_type = delta.get("type")
-                            if delta_type == "text_delta":
-                                text = delta.get("text", "")
-                                if text:
-                                    yield AgentEvent(
-                                        kind="text_delta",
-                                        data={"text": text},
-                                        seq=seq,
-                                    )
-                                    seq += 1
-                            elif delta_type == "thinking_delta":
-                                thinking_text = delta.get("thinking", "")
-                                if thinking_text:
-                                    yield AgentEvent(
-                                        kind="thinking",
-                                        data={"text": thinking_text},
-                                        seq=seq,
-                                    )
-                                    seq += 1
-                        # Altri stream events (message_start, message_delta, ecc.)
-                        # sono ignorati: l'aggregato finale arriva via AssistantMessage.
-                        continue
+                # Final message con usage info
+                final_message = await stream.get_final_message()
 
-                    # AssistantMessage: blocchi consolidati (text, tool_use, tool_result)
-                    if isinstance(message, AssistantMessage):
-                        for block in message.content:
-                            if isinstance(block, TextBlock):
-                                # Se include_partial_messages=True, il testo è già stato
-                                # emesso via StreamEvent text_delta. Saltiamo per evitare
-                                # duplicazione. Se in futuro si disattiva partial, ri-emettere qui.
-                                continue
-                            elif isinstance(block, ToolUseBlock):
-                                yield AgentEvent(
-                                    kind="tool_use",
-                                    data={
-                                        "tool_use_id": block.id,
-                                        "tool_name": block.name,
-                                        "tool_input": block.input,
-                                    },
-                                    seq=seq,
-                                )
-                                seq += 1
-                            elif isinstance(block, ToolResultBlock):
-                                yield AgentEvent(
-                                    kind="tool_result",
-                                    data={
-                                        "tool_use_id": block.tool_use_id,
-                                        "content": block.content,
-                                        "is_error": block.is_error,
-                                    },
-                                    seq=seq,
-                                )
-                                seq += 1
-                            elif isinstance(block, ThinkingBlock):
-                                # ThinkingBlock può arrivare consolidato (extended thinking)
-                                # Se include_partial_messages=True è già stato emesso via
-                                # thinking_delta. Saltiamo per evitare duplicazione.
-                                continue
-                            # Altri block types (ServerToolUseBlock, ServerToolResultBlock)
-                            # ignorati in questa Sessione, cablatura futura.
-                        continue
-
-                    # ResultMessage: evento finale con cost/usage/stop_reason
-                    if isinstance(message, ResultMessage):
-                        yield AgentEvent(
-                            kind="done",
-                            data={
-                                "stop_reason": message.stop_reason,
-                                "usage": message.usage or {},
-                                "total_cost_usd": message.total_cost_usd or 0.0,
-                                "model": self.config.model_slug,
-                                "num_turns": message.num_turns,
-                                "duration_ms": message.duration_ms,
-                                "is_error": message.is_error,
-                            },
-                            seq=seq,
-                        )
-                        seq += 1
-                        logger.info(
-                            "agent_runner.stream.done",
-                            events=seq,
-                            cost_usd=message.total_cost_usd,
-                            stop_reason=message.stop_reason,
-                        )
-                        return
+                yield AgentEvent(
+                    kind="done",
+                    data={
+                        "stop_reason": final_message.stop_reason,
+                        "usage": {
+                            "input_tokens": final_message.usage.input_tokens,
+                            "output_tokens": final_message.usage.output_tokens,
+                        },
+                        "model": final_message.model,
+                        "is_error": False,
+                    },
+                    seq=seq,
+                )
+                logger.info(
+                    "agent_runner.stream.done",
+                    events=seq + 1,
+                    input_tokens=final_message.usage.input_tokens,
+                    output_tokens=final_message.usage.output_tokens,
+                    stop_reason=final_message.stop_reason,
+                )
 
         except Exception as exc:
             logger.exception("agent_runner.stream.error", error=str(exc))
@@ -354,7 +259,10 @@ async def build_runner(
     """Factory helper per istanziare AgentRunner con config standard."""
     config = AgentRunnerConfig(
         model_slug=model_slug,
-        system_prompt=system_prompt,
+        system_prompt=system_prompt or (
+            "Sei SCO Compliance OS, il Personal AI di Antonio Silvestro Amodeo, "
+            "consulente compliance italiana. Rispondi in italiano professionale, conciso, fact-based."
+        ),
         mcp_servers=mcp_servers or [],
         tools=tools or [],
     )
