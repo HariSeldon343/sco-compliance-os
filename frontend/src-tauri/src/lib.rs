@@ -14,7 +14,8 @@
 //!   - PyInstaller transitive deps: gestiti dal .spec del backend, qui solo PATH
 //!     enrichment per propagare environment al subprocess (Conv. 45 lesson PATH).
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, WindowEvent};
@@ -56,7 +57,7 @@ fn get_backend_url() -> String {
 /// Usato dal frontend per StatusBar (verde/giallo/rosso indicator).
 #[tauri::command]
 async fn get_backend_status(state: tauri::State<'_, AppState>) -> Result<BackendStatus, String> {
-    let manager = state.backend.lock().map_err(|e| e.to_string())?;
+    let manager = state.backend.lock().await;
     Ok(manager.health_probe().await)
 }
 
@@ -69,7 +70,7 @@ async fn restart_backend(
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
     info!("[SCO] Restart backend richiesto dall'utente");
-    let mut manager = state.backend.lock().map_err(|e| e.to_string())?;
+    let mut manager = state.backend.lock().await;
     manager.restart(&app).map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -241,13 +242,8 @@ pub fn run() {
             // o `backend-error` verso il frontend per aggiornare la UI di stato.
             let manager_clone = Arc::clone(&backend_for_setup);
             std::thread::spawn(move || {
-                let mut manager = match manager_clone.lock() {
-                    Ok(m) => m,
-                    Err(e) => {
-                        error!("[SCO] BackendManager mutex poisoned: {e}");
-                        return;
-                    }
-                };
+                // tokio Mutex blocking_lock per contesto sync thread
+                let mut manager = manager_clone.blocking_lock();
                 match manager.start(&app_handle) {
                     Ok(()) => {
                         info!("[SCO] Backend sidecar avviato con successo");
@@ -276,10 +272,10 @@ pub fn run() {
             // (Conv. 44 lesson 1: socket zombie immune a taskkill su Windows).
             if matches!(event, WindowEvent::Destroyed) {
                 info!("[SCO] Finestra '{}' chiusa: shutdown backend sidecar...", window.label());
-                if let Ok(mut manager) = backend_for_window.lock() {
-                    if let Err(e) = manager.stop() {
-                        error!("[SCO] Stop backend fallito: {e}");
-                    }
+                // tokio Mutex blocking_lock per contesto sync callback Tauri
+                let mut manager = backend_for_window.blocking_lock();
+                if let Err(e) = manager.stop() {
+                    error!("[SCO] Stop backend fallito: {e}");
                 }
             }
         })
