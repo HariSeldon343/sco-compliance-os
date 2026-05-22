@@ -199,15 +199,19 @@ app = create_app()
 def main() -> None:
     """CLI entrypoint: avvia uvicorn senza --reload (Conv. 44 lesson 1).
 
+    PATTERN PyInstaller bundle (Conv. 44 lesson 3 enforcement): passa l'OGGETTO
+    `app` direttamente a uvicorn.run() invece della stringa "module:attr".
+    String import dinamico fallisce in bundle PyInstaller perché il modulo
+    risiede dentro il pyz archive e uvicorn non sa risolverlo via importlib.
+
     Per development con auto-reload, usa scripts/dev.ps1 o scripts/dev.sh
     da un terminale PowerShell/bash PERSISTENTE (non shell ephemeral).
     """
     settings = get_settings()
     uvicorn.run(
-        "sco_compliance_os.main:app",
+        app,  # OGGETTO diretto, NON stringa (Conv. 44 lesson 3 PyInstaller-safe)
         host=settings.backend_host,
         port=settings.backend_port,
-        reload=False,  # MAI True qui — Conv. 44 lesson 1
         log_level=settings.log_level.lower(),
         access_log=True,
     )
