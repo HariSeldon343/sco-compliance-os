@@ -40,26 +40,60 @@ from sco_compliance_os.api import (
 from sco_compliance_os.config import get_settings
 from sco_compliance_os.core.logging_setup import configure_logging, set_request_id
 from sco_compliance_os.core.store import get_store
+from sco_compliance_os.services.integrations.scheduler import ConnectorScheduler
+from sco_compliance_os.services.memory.store import init_schema as init_memory_schema
 
 # Carica .env override=True (Conv. 44 enforcement: override valori già in env)
 load_dotenv(override=True)
 
 
+# Global ref scheduler per shutdown pulito
+_active_scheduler: ConnectorScheduler | None = None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Lifespan handler: init DB schema + cleanup."""
+    """Lifespan handler: init DB schema + Memory Tree + Auto-fetch scheduler + cleanup.
+
+    Pattern Subconscio OpenHuman: scheduler ConnectorScheduler auto-start a 20 min
+    interval su connettori attivi (token presenti nel keyring). Idempotente.
+    """
+    global _active_scheduler
     settings = get_settings()
     settings.ensure_data_dir()
+
+    # Init main DB (conversations + messages)
     store = get_store(settings.memory_tree_db_path)
     await store.init_schema()
+
+    # Init Memory Tree DB schema (chunks per Subconscio)
+    await init_memory_schema()
+
+    # Avvia auto-fetch scheduler se license_key presente (= cliente attivato)
+    # Per ora scheduler disabilitato di default — abilitabile via env SCO_AUTO_FETCH_ENABLED=1
+    auto_fetch_enabled = os.environ.get("SCO_AUTO_FETCH_ENABLED", "0") == "1"
+    user_id = settings.user_email or "default-user"
+    if auto_fetch_enabled and settings.user_email:
+        _active_scheduler = ConnectorScheduler(user_id=user_id)
+        await _active_scheduler.start()
+
     logger = structlog.get_logger(__name__)
     logger.info(
         "backend.startup.complete",
         version=__version__,
         port=settings.backend_port,
         data_dir=str(settings.data_dir),
+        scheduler_active=_active_scheduler is not None,
+        user_id=user_id,
     )
+
     yield
+
+    # Shutdown pulito scheduler
+    if _active_scheduler is not None:
+        await _active_scheduler.stop()
+        _active_scheduler = None
+
     await store.close()
     logger.info("backend.shutdown.complete")
 
