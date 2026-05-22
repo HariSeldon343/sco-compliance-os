@@ -45,7 +45,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 
 # Risoluzione cartelle utente cross-platform (Win %APPDATA%, Mac ~/Library, Linux ~/.config)
-dirs = "5"
+dirs = "6"
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-autostart = "2"
