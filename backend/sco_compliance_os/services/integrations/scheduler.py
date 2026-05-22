@@ -176,5 +176,58 @@ class ConnectorScheduler:
     async def _dispatch_chunks(
         self, slug: str, chunks: "list[MemoryChunk]"
     ) -> None:
-        """TODO Wave 2: ingest chunk nel Memory Tree (Conv. 43 Smart File Injection)."""
-        logger.debug("dispatch_chunks STUB | slug=%s count=%d", slug, len(chunks))
+        """Ingest chunks dal connector → Memory Tree (Conv. 43 Smart File Injection).
+
+        Pipeline: ogni MemoryChunk → markdown ben formato → ingest_text con provenance
+        connector + external_id + occurred_at. Idempotente su source_id (dedupe MD5
+        deterministico = sha256(connector + external_id)).
+        """
+        if not chunks:
+            return
+
+        # Import lazy per evitare circular dependency con services.memory
+        from sco_compliance_os.services.memory.ingest import ingest_text
+
+        ingested_count = 0
+        for chunk in chunks:
+            # Formato markdown del chunk per Memory Tree (heading + body + metadata)
+            md_body = (
+                f"# {chunk.title}\n\n"
+                f"**Source**: {chunk.source_connector} | "
+                f"**Kind**: {chunk.kind} | "
+                f"**Occurred**: {chunk.occurred_at.isoformat()}\n\n"
+                f"{chunk.body}\n"
+            )
+            # Provenance Conv. 43 enforcement
+            provenance = {
+                "connector_slug": slug,
+                "external_id": chunk.external_id,
+                "kind": chunk.kind,
+                "occurred_at": chunk.occurred_at.isoformat(),
+                "ingested_at": chunk.ingested_at.isoformat(),
+                "tags": chunk.tags,
+                **chunk.metadata,
+            }
+            try:
+                await ingest_text(
+                    md_body,
+                    source_type="connector",
+                    source_id=f"{slug}:{chunk.external_id}",
+                    source_path=f"connector://{slug}/{chunk.external_id}",
+                    provenance=provenance,
+                )
+                ingested_count += 1
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "scheduler.dispatch.ingest_failed | slug=%s external_id=%s err=%s",
+                    slug,
+                    chunk.external_id,
+                    exc,
+                )
+
+        logger.info(
+            "scheduler.dispatch | slug=%s chunks=%d ingested=%d",
+            slug,
+            len(chunks),
+            ingested_count,
+        )

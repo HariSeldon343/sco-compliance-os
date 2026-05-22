@@ -63,6 +63,21 @@ hiddenimports = [
     "uvicorn.protocols.websockets.auto",
     "uvicorn.lifespan",
     "uvicorn.lifespan.on",
+    # Google OAuth + API
+    "google", "google.auth", "google.auth.transport.requests",
+    "google.oauth2", "google.oauth2.credentials",
+    "google_auth_oauthlib", "google_auth_oauthlib.flow",
+    "googleapiclient", "googleapiclient.discovery", "googleapiclient.errors",
+    # Document parsing
+    "pypdf", "docx",
+    # TokenJuice
+    "html2text",
+    # SSE streaming
+    "sse_starlette",
+    # SQLAlchemy + aiosqlite
+    "sqlalchemy", "sqlalchemy.ext.asyncio", "aiosqlite",
+    # PyJWT
+    "jwt",
 ]
 
 datas = []

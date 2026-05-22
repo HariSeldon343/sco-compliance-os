@@ -77,7 +77,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "PLACEHOLDER_PUBKEY_BASE64_DA_GENERARE_CON_TAURI_SIGNER_GENERATE",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEIwQUNCQ0NBMUQ4QUNCRTIKUldUaXk0b2R5cnlzc1ByL0V4NTJNNUk4QmtmZCswTnhqeHh5cVlVOWdWVDMxNWQ4MHFaZWlQei8K",
       "endpoints": [
         "https://github.com/HariSeldon343/sco-compliance-os/releases/latest/download/latest.json"
       ],

@@ -32,6 +32,7 @@ from sco_compliance_os import __version__
 from sco_compliance_os.api import (
     chat_routes,
     integrations_routes,
+    license_routes,
     memory_routes,
     onboarding_routes,
     vault_routes,
@@ -153,6 +154,7 @@ def create_app() -> FastAPI:
     app.include_router(memory_routes.router)
     app.include_router(integrations_routes.router)
     app.include_router(onboarding_routes.router)
+    app.include_router(license_routes.router)
 
     return app
 

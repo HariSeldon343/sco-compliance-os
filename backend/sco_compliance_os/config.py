@@ -75,6 +75,20 @@ class Settings(BaseSettings):
         description="DSN Sentry opzionale. Se None, Sentry disabilitato.",
     )
 
+    # ----- License + SaaS proxy -----
+    sco_saas_base_url: str = Field(
+        default="https://sco-saas-claude.vercel.app",
+        description="Base URL del SaaS proxy LLM + license validate.",
+    )
+    license_key: SecretStr = Field(
+        default=SecretStr(""),
+        description="License key cliente, override anthropic_api_key per proxy.",
+    )
+    user_email: str = Field(
+        default="",
+        description="Email cliente associata alla license key.",
+    )
+
     # ----- Storage paths derivati -----
     @property
     def memory_tree_db_path(self) -> Path:
