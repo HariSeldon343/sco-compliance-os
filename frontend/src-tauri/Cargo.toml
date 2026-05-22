@@ -1,0 +1,59 @@
+[package]
+name = "sco-compliance-os-app"
+version = "0.1.0"
+description = "SCO Compliance OS — Personal AI desktop app per compliance italiana"
+authors = ["SCO Solution Consulting srls"]
+edition = "2021"
+license = "Proprietary"
+publish = false
+
+# Workspace-style versioning per evitare drift fra Cargo.toml e tauri.conf.json
+# (Conv. 47 enforcement: bump version single source of truth).
+[workspace]
+
+[lib]
+# Suffisso _lib evita conflitto bin/lib su Windows
+# (vedi https://github.com/rust-lang/cargo/issues/8519).
+name = "sco_compliance_os_app_lib"
+crate-type = ["staticlib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# Tauri 2 core + plugin ufficiali necessari allo shell desktop
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-store = "2"
+tauri-plugin-updater = { version = "2", features = ["rustls-tls"] }
+tauri-plugin-opener = "2"
+
+# Serializzazione, async runtime, HTTP client per health probe backend
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+
+# Error handling idiomatico Rust
+anyhow = "1"
+thiserror = "2"
+
+# Tracing strutturato (Conv. 41 enforcement: log con structured fields)
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+# Risoluzione cartelle utente cross-platform (Win %APPDATA%, Mac ~/Library, Linux ~/.config)
+dirs = "5"
+
+[target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
+tauri-plugin-autostart = "2"
+
+# Profilo release ottimizzato per dimensione MSI/DMG/AppImage
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

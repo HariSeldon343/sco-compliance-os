@@ -1,0 +1,210 @@
+name: Release
+
+# Trigger su push tag v*.*.*  (es. v0.1.0, v1.0.0).
+# Crea RELEASE BOZZA su GitHub. Pubblicazione manuale dalla UI dopo smoke E2E PASS (Conv. 46).
+#
+# Pattern Conv. 45 cross-platform Tauri 2 + PyInstaller matrix:
+#  - PyInstaller NON cross-compila (lesson 1): un .spec per OS, matrix necessario
+#  - Tauri Updater supporta MSI/DMG/AppImage, NON DEB/RPM (lesson 2)
+#  - Universal2 macOS: copia binario con 3 nomi alternativi (aarch64, x86_64, universal)
+#
+# Setup iniziale (una volta sola):
+#   1. cargo install tauri-cli --version "^2" --locked
+#   2. pnpm tauri signer generate -w ~/.tauri/sco-compliance-os.key
+#   3. Copia pubkey in plugins.updater.pubkey di tauri.conf.json
+#   4. GitHub Secrets:
+#      - TAURI_SIGNING_PRIVATE_KEY (contenuto file privato)
+#      - TAURI_SIGNING_PRIVATE_KEY_PASSWORD (password o vuoto)
+#      - GH_TOKEN (release publish, default GITHUB_TOKEN fornito da Actions)
+#
+# Workflow release:
+#   1. scripts/version-bump.ps1 0.1.1 (Conv. 47 BUMP VERSION grep enforcement)
+#   2. Smoke E2E locale fresh install (Conv. 46 SMOKE PRIMA DEL TAG)
+#   3. git commit -am "bump v0.1.1" && git tag v0.1.1 && git push --tags
+#   4. GitHub Actions builda + firma + crea draft release
+#   5. Apri draft GitHub Releases UI + Publish quando ready
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version_tag:
+        description: 'Versione (es. v0.1.1) per trigger manuale senza tag'
+        required: false
+
+jobs:
+  release:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows MSVC (default Tauri 2 raccomandato per WebView2)
+          - platform: "windows-latest"
+            os_label: "windows"
+            rust_target: "x86_64-pc-windows-msvc"
+            rust_toolchain: "stable-x86_64-pc-windows-msvc"
+            pyinstaller_spec: "sco-compliance-os-backend-windows.spec"
+            sidecar_src: "dist/sco-compliance-os-backend.exe"
+            sidecar_dest: "../frontend/src-tauri/binaries/sco-compliance-os-backend-x86_64-pc-windows-msvc.exe"
+            tauri_args: "--target x86_64-pc-windows-msvc --bundles msi,nsis"
+          # macOS aarch64 (Apple Silicon nativo)
+          # NB: universal2 richiede fat binary wheels per tutte le native deps,
+          # uv sync installa solo arm64 su macos-latest (M1). Copiamo come universal
+          # con 3 nomi alternativi per Tauri sidecar resolution (Conv. 45 cristallizzato).
+          - platform: "macos-latest"
+            os_label: "macos"
+            rust_target: "aarch64-apple-darwin"
+            rust_toolchain: "stable"
+            pyinstaller_spec: "sco-compliance-os-backend-macos.spec"
+            sidecar_src: "dist/sco-compliance-os-backend"
+            sidecar_dest: "../frontend/src-tauri/binaries/sco-compliance-os-backend-aarch64-apple-darwin"
+            tauri_args: "--target aarch64-apple-darwin --bundles dmg,app"
+          # Linux x86_64 AppImage (Tauri Updater nativo, NO DEB/RPM Conv. 45 lesson 2)
+          - platform: "ubuntu-22.04"
+            os_label: "linux"
+            rust_target: "x86_64-unknown-linux-gnu"
+            rust_toolchain: "stable"
+            pyinstaller_spec: "sco-compliance-os-backend-linux.spec"
+            sidecar_src: "dist/sco-compliance-os-backend"
+            sidecar_dest: "../frontend/src-tauri/binaries/sco-compliance-os-backend-x86_64-unknown-linux-gnu"
+            tauri_args: "--target x86_64-unknown-linux-gnu --bundles appimage"
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ matrix.rust_toolchain }}
+          targets: ${{ matrix.rust_target }}
+
+      - name: Cache cargo (release)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            frontend/src-tauri/target
+          key: ${{ runner.os }}-cargo-release-${{ hashFiles('frontend/src-tauri/Cargo.lock') }}
+
+      # Linux deps Tauri 2 GTK/WebKit + AppImage tools
+      - name: Install Linux build deps
+        if: matrix.os_label == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            patchelf \
+            file
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup uv (cross-platform)
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: true
+
+      # Job 1: build-backend (PyInstaller per OS)
+      - name: Build backend sidecar (PyInstaller) Windows
+        if: matrix.os_label == 'windows'
+        working-directory: backend
+        shell: powershell
+        run: |
+          uv sync
+          uv run pyinstaller ${{ matrix.pyinstaller_spec }} --noconfirm
+          New-Item -ItemType Directory -Path "../frontend/src-tauri/binaries" -Force | Out-Null
+          Copy-Item "${{ matrix.sidecar_src }}" "${{ matrix.sidecar_dest }}" -Force
+
+      - name: Build backend sidecar (PyInstaller) macOS
+        if: matrix.os_label == 'macos'
+        working-directory: backend
+        shell: bash
+        run: |
+          uv sync
+          uv run pyinstaller ${{ matrix.pyinstaller_spec }} --noconfirm
+          mkdir -p ../frontend/src-tauri/binaries
+          # Conv. 45 cristallizzato sco-agent-local: copia universal binary
+          # con 3 nomi alternativi (aarch64, x86_64, universal) per Tauri
+          # sidecar resolution opaca rispetto al triple variant.
+          cp ${{ matrix.sidecar_src }} ${{ matrix.sidecar_dest }}
+          cp ${{ matrix.sidecar_src }} ../frontend/src-tauri/binaries/sco-compliance-os-backend-x86_64-apple-darwin
+          cp ${{ matrix.sidecar_src }} ../frontend/src-tauri/binaries/sco-compliance-os-backend-universal-apple-darwin
+          chmod +x ../frontend/src-tauri/binaries/sco-compliance-os-backend-aarch64-apple-darwin
+          chmod +x ../frontend/src-tauri/binaries/sco-compliance-os-backend-x86_64-apple-darwin
+          chmod +x ../frontend/src-tauri/binaries/sco-compliance-os-backend-universal-apple-darwin
+
+      - name: Build backend sidecar (PyInstaller) Linux
+        if: matrix.os_label == 'linux'
+        working-directory: backend
+        shell: bash
+        run: |
+          uv sync
+          uv run pyinstaller ${{ matrix.pyinstaller_spec }} --noconfirm
+          mkdir -p ../frontend/src-tauri/binaries
+          cp ${{ matrix.sidecar_src }} ${{ matrix.sidecar_dest }}
+          chmod +x ${{ matrix.sidecar_dest }}
+
+      # Job 2+3+4: build-frontend + sign + publish via tauri-action canonico
+      - name: Build, sign e pubblica release Tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: frontend
+          tagName: ${{ github.ref_name || inputs.version_tag }}
+          releaseName: "SCO Compliance OS v__VERSION__"
+          releaseBody: |
+            ## SCO Compliance OS v__VERSION__
+
+            **Aggiornamento automatico:** se hai l'app installata, riceverai notifica in-app entro 1h o al riavvio.
+
+            **Prima installazione:**
+            - Windows -> scarica il file `.msi` o `.exe` (NSIS)
+            - macOS -> scarica il file `.dmg`
+            - Linux -> scarica il file `.AppImage`
+
+            ### Cosa cambia
+            (compilare manualmente dopo pubblicazione)
+
+            ### Note tecniche
+            - Firma Ed25519 verificata dall'app prima di installare l'aggiornamento.
+            - macOS: build Apple Silicon arm64 (universal2 in roadmap).
+            - Linux: AppImage portable, nessuna installazione di sistema.
+            - I dati utente in `~/.sco-compliance-os/` non vengono toccati durante l'upgrade.
+          releaseDraft: true
+          prerelease: false
+          includeUpdaterJson: true
+          args: ${{ matrix.tauri_args }}

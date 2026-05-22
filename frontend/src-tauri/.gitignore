@@ -1,0 +1,31 @@
+# Tauri/Rust build artifacts
+target/
+**/*.rs.bk
+
+# Cargo.lock policy: keep for binary, ignore for library.
+# SCO Compliance OS è una binary application → Cargo.lock va versionato
+# per riproducibilità delle build CI. Quindi NIENTE ignore di Cargo.lock qui.
+# (Documentato esplicitamente per evitare ambiguità in code review.)
+
+# WiX toolset cache (Windows installer build)
+WixTools/
+wix/.cache/
+
+# Tauri generated artifacts (gen/ è output di tauri-build)
+gen/schemas/
+
+# Sidecar binaries: NON committare i binary Python compilati con PyInstaller
+# (sono OS-specific + grandi). Vanno generati in CI e raccolti in artifact storage.
+binaries/sco-compliance-os-backend-*
+
+# IDE artifacts
+.idea/
+.vscode/settings.json
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Updater test artifacts
+*.sig
+latest.json.test

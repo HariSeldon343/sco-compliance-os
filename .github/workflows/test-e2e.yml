@@ -1,0 +1,107 @@
+name: E2E Tests
+
+# E2E test workflow su Tauri build artifacts via Playwright.
+# Stub iniziale: smoke test avvio + chat hello world.
+# Headless mode su Linux (display virtuale).
+#
+# Trigger:
+#   - workflow_dispatch: manuale
+#   - schedule: weekly (luned 06:00 UTC)
+#
+# NB: Playwright Tauri richiede `tauri-driver` (Linux) o WebDriver nativo.
+# Versione minima funzionante = stub che verifica solo che il build NON
+# crashi all'avvio. Espansione progressiva in wave successive.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1"  # luned 06:00 UTC
+
+jobs:
+  e2e:
+    name: E2E (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+            os_label: linux
+          - platform: windows-latest
+            os_label: windows
+          - platform: macos-latest
+            os_label: macos
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux build deps
+        if: matrix.os_label == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            webkit2gtk-driver \
+            xvfb
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Build backend sidecar (stub linux)
+        if: matrix.os_label == 'linux'
+        working-directory: backend
+        run: |
+          uv sync
+          uv run pyinstaller sco-compliance-os-backend-linux.spec --noconfirm
+          mkdir -p ../frontend/src-tauri/binaries
+          cp dist/sco-compliance-os-backend ../frontend/src-tauri/binaries/sco-compliance-os-backend-x86_64-unknown-linux-gnu
+          chmod +x ../frontend/src-tauri/binaries/sco-compliance-os-backend-x86_64-unknown-linux-gnu
+
+      - name: Run E2E smoke (Linux con xvfb)
+        if: matrix.os_label == 'linux'
+        working-directory: frontend
+        run: |
+          xvfb-run -a --server-args="-screen 0 1280x720x24" pnpm run test:e2e
+
+      - name: Run E2E smoke (Windows/macOS)
+        if: matrix.os_label != 'linux'
+        working-directory: frontend
+        run: pnpm run test:e2e
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ matrix.os_label }}
+          path: frontend/playwright-report/
+          retention-days: 7

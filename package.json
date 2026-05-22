@@ -1,0 +1,34 @@
+{
+  "name": "sco-compliance-os",
+  "version": "0.0.1",
+  "private": true,
+  "description": "SCO Compliance OS — Compliance OS for AI. Proprietario SCO Solution Consulting srls.",
+  "author": "SCO Solution Consulting srls",
+  "license": "SEE LICENSE IN LICENSE",
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "packageManager": "pnpm@10.0.0",
+  "scripts": {
+    "dev": "pnpm --filter frontend dev",
+    "dev:backend": "cd backend && uv run uvicorn sco_compliance_os.main:app --host 127.0.0.1 --port 7800",
+    "dev:all": "powershell -ExecutionPolicy Bypass -File scripts/dev.ps1",
+    "build": "pnpm --filter frontend build",
+    "build:backend": "powershell -ExecutionPolicy Bypass -File scripts/build-backend.ps1",
+    "build:msi": "pnpm build:backend && pnpm --filter frontend tauri build --bundles msi",
+    "build:dmg": "pnpm build:backend && pnpm --filter frontend tauri build --bundles dmg",
+    "build:appimage": "pnpm build:backend && pnpm --filter frontend tauri build --bundles appimage",
+    "test": "pnpm --recursive --if-present test",
+    "test:backend": "cd backend && uv run pytest",
+    "lint": "pnpm --recursive --if-present lint",
+    "typecheck": "pnpm --recursive --if-present typecheck",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yaml,yml,css}\" --ignore-path .gitignore",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yaml,yml,css}\" --ignore-path .gitignore",
+    "clean": "powershell -ExecutionPolicy Bypass -Command \"Remove-Item -Recurse -Force frontend/dist, frontend/src-tauri/target, backend/dist, backend/build -ErrorAction SilentlyContinue\""
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3"
+  }
+}

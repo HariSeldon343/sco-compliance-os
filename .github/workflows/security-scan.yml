@@ -1,0 +1,87 @@
+name: Security Scan
+
+# Dependency scan + secret scan.
+# Trigger:
+#   - schedule daily 04:00 UTC
+#   - push su main/master
+# Tools: pnpm audit + pip-audit + cargo audit + gitleaks
+# Notifica via GitHub issue se vulnerabilita critical.
+
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  security-events: write
+
+jobs:
+  pnpm-audit:
+    name: pnpm audit (frontend)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install frontend deps
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: pnpm audit
+        working-directory: frontend
+        run: pnpm audit --prod --audit-level=high
+        continue-on-error: true
+
+  pip-audit:
+    name: pip-audit (backend)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+      - name: Install backend deps
+        working-directory: backend
+        run: uv sync
+      - name: pip-audit
+        working-directory: backend
+        run: |
+          uv pip install pip-audit
+          uv run pip-audit --strict
+        continue-on-error: true
+
+  cargo-audit:
+    name: cargo audit (Rust)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: Run cargo-audit
+        working-directory: frontend/src-tauri
+        run: cargo audit
+        continue-on-error: true
+
+  gitleaks:
+    name: gitleaks (secret scan)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          config-path: .gitleaks.toml

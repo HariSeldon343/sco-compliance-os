@@ -1,0 +1,52 @@
+SCO COMPLIANCE OS — PROPRIETARY SOFTWARE LICENSE
+
+Copyright (C) 2026 SCO Solution Consulting srls. All rights reserved.
+
+This software, including its source code, compiled artifacts, documentation,
+configuration files, data schemas, and any accompanying material (collectively,
+the "Software"), is proprietary and confidential to SCO Solution Consulting srls
+("Licensor"). Unauthorized copying, modification, merging, publication,
+distribution, sublicensing, public display, or sale of the Software, in whole or
+in part, is strictly prohibited.
+
+1. GRANT OF LICENSE. No license, express or implied, is granted under this
+notice. Access to the Software does not transfer any ownership interest, nor
+does it grant any right to use the Software beyond what is explicitly authorized
+in a separate, signed agreement with the Licensor.
+
+2. CONFIDENTIALITY. The Software contains trade secrets and confidential
+information of the Licensor. Any person or entity granted access to the Software
+shall treat it as strictly confidential, shall not disclose it to third parties,
+and shall use it solely for the purpose authorized in writing by the Licensor.
+This obligation survives termination of any access.
+
+3. NO REVERSE ENGINEERING. Reverse engineering, decompiling, disassembling, or
+otherwise attempting to derive the source code, algorithms, or data structures
+of the Software is prohibited, except to the extent such activity is expressly
+permitted by mandatory provisions of applicable law and cannot be excluded by
+contract.
+
+4. NO WARRANTY. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. IN NO
+EVENT SHALL THE LICENSOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+5. THIRD-PARTY COMPONENTS. The Software may incorporate third-party open source
+components, each governed by its own license. A list of such components and
+their respective licenses is maintained in the accompanying THIRD-PARTY-NOTICES
+file (when present). The Licensor's proprietary rights under this notice apply
+to the original portions of the Software authored by or on behalf of the
+Licensor, and to the integrated work as a whole.
+
+6. GOVERNING LAW. This notice and any disputes arising from or relating to the
+Software shall be governed by the laws of the Republic of Italy. Exclusive
+venue for any dispute lies with the courts competent for the registered office
+of SCO Solution Consulting srls.
+
+7. CONTACT. For licensing inquiries, partnership requests, or to report
+unauthorized use, contact SCO Solution Consulting srls through the channels
+indicated on the corporate website.
+
+End of license.

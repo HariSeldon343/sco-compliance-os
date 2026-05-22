@@ -1,0 +1,151 @@
+name: CI
+
+# CI pull request workflow.
+# Trigger su pull_request + push branches main/master.
+# Esegue lint, typecheck, test su frontend + backend + Rust.
+# Build Rust matrix sui 3 OS (lint/test single platform per velocita').
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-frontend:
+    name: Lint frontend (pnpm + tsc)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install frontend deps
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: Lint
+        working-directory: frontend
+        run: pnpm run lint
+      - name: Typecheck
+        working-directory: frontend
+        run: pnpm run typecheck
+
+  lint-backend:
+    name: Lint backend (ruff + mypy)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: true
+      - name: Install backend deps
+        working-directory: backend
+        run: uv sync --all-extras
+      - name: Ruff (lint)
+        working-directory: backend
+        run: uv run ruff check .
+      - name: Ruff (format check)
+        working-directory: backend
+        run: uv run ruff format --check .
+      - name: Mypy (typecheck)
+        working-directory: backend
+        run: uv run mypy sco_compliance_os
+
+  test-frontend:
+    name: Test frontend (vitest)
+    runs-on: ubuntu-22.04
+    needs: lint-frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install frontend deps
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: Test
+        working-directory: frontend
+        run: pnpm run test -- --run
+
+  test-backend:
+    name: Test backend (pytest)
+    runs-on: ubuntu-22.04
+    needs: lint-backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: true
+      - name: Install backend deps
+        working-directory: backend
+        run: uv sync --all-extras
+      - name: Pytest
+        working-directory: backend
+        run: uv run pytest -q
+
+  build-rust:
+    name: Build Rust (${{ matrix.platform }})
+    needs: [lint-frontend, lint-backend]
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ubuntu-22.04, windows-latest, macos-latest]
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            frontend/src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('frontend/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      # Linux: deps GTK/WebKit per Tauri 2
+      - name: Install Linux build deps
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev
+      - name: Cargo fmt
+        working-directory: frontend/src-tauri
+        run: cargo fmt --all -- --check
+      - name: Cargo clippy
+        working-directory: frontend/src-tauri
+        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Cargo check
+        working-directory: frontend/src-tauri
+        run: cargo check --all-targets --all-features

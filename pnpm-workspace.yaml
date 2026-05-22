@@ -1,0 +1,10 @@
+packages:
+  - "frontend"
+  - "packages/*"
+
+# Note operative:
+# - frontend/ contiene la shell Tauri 2 + React 19 + TS 5.8.
+# - packages/agent-skills e packages/integrations sono workspace di supporto
+#   per skill di dominio markdown e adattatori MCP dei connettori OAuth.
+# - backend/ Python NON è gestito da pnpm: vive sotto uv (Python package
+#   manager). Vedere backend/pyproject.toml e scripts/dev.ps1.

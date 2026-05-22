@@ -1,0 +1,89 @@
+name: Auto-Update Check
+
+# Verifica integrita latest.json auto-update post-release.
+# Trigger: release published + workflow_dispatch + schedule daily 05:00 UTC.
+#
+# Step:
+#   1. Fetch latest release da GitHub API
+#   2. Download latest.json + verifica firme Ed25519 presenti per ogni piattaforma
+#   3. Verifica URL artefatti raggiungibili (HEAD request)
+#   4. Verifica schema JSON valido (version, notes, pub_date, platforms)
+#   5. Apre issue se anomalia rilevata
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+  schedule:
+    - cron: "0 5 * * *"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    name: Verify latest.json integrity
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch latest release
+        id: latest
+        run: |
+          REPO="${{ github.repository }}"
+          LATEST_URL="https://api.github.com/repos/${REPO}/releases/latest"
+          echo "Fetching ${LATEST_URL}"
+          RELEASE_JSON=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "${LATEST_URL}")
+          TAG=$(echo "${RELEASE_JSON}" | jq -r '.tag_name')
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Latest tag: ${TAG}"
+
+      - name: Download latest.json
+        run: |
+          REPO="${{ github.repository }}"
+          TAG="${{ steps.latest.outputs.tag }}"
+          URL="https://github.com/${REPO}/releases/download/${TAG}/latest.json"
+          echo "Downloading ${URL}"
+          curl -sLf -o latest.json "${URL}" || (echo "::error::latest.json NOT found in release ${TAG}" && exit 1)
+          cat latest.json | jq .
+
+      - name: Validate schema
+        run: |
+          jq -e '.version and .notes and .pub_date and .platforms' latest.json > /dev/null
+          jq -e '.platforms | keys | length > 0' latest.json > /dev/null
+          echo "Schema valid."
+
+      - name: Verify signatures present
+        run: |
+          PLATFORMS=$(jq -r '.platforms | keys[]' latest.json)
+          for plat in ${PLATFORMS}; do
+            SIG=$(jq -r ".platforms[\"${plat}\"].signature" latest.json)
+            if [ "${SIG}" = "null" ] || [ -z "${SIG}" ]; then
+              echo "::error::Missing signature for platform ${plat}"
+              exit 1
+            fi
+            echo "OK: signature present for ${plat}"
+          done
+
+      - name: Verify artifact URLs reachable
+        run: |
+          URLS=$(jq -r '.platforms[].url' latest.json)
+          for url in ${URLS}; do
+            echo "HEAD ${url}"
+            curl -sLfI "${url}" > /dev/null || (echo "::error::URL unreachable: ${url}" && exit 1)
+          done
+          echo "All artifact URLs reachable."
+
+      - name: Open issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Auto-update check FAILED for ${{ steps.latest.outputs.tag }}`,
+              body: `Workflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\nlatest.json integrity check failed. Investigate signing keys, artifact upload, or schema generation.`,
+              labels: ['bug', 'release', 'priority:high']
+            });

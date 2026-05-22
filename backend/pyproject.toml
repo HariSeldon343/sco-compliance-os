@@ -1,0 +1,106 @@
+# SCO Compliance OS — backend pyproject.toml
+# Pacchetto Python clean-room scritto da zero da Antonio Silvestro Amodeo.
+# Build system: hatchling (PEP 517/660).
+# Python target: 3.12+ typed strict (vedi mypy config + ruff).
+
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sco-compliance-os-backend"
+version = "0.1.0"
+description = "Backend FastAPI per l'app desktop SCO Compliance OS, AI assistant brandata per compliance e consulenza normativa."
+readme = "../README.md"
+requires-python = ">=3.12,<4.0"
+license = { text = "Proprietario - tutti i diritti riservati ad Antonio Silvestro Amodeo" }
+authors = [
+    { name = "Antonio Silvestro Amodeo", email = "a.oedoma@gmail.com" },
+]
+keywords = ["compliance", "ai", "assistant", "fastapi", "anthropic", "desktop"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "Framework :: FastAPI",
+]
+
+dependencies = [
+    # Web framework + ASGI server
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "python-multipart>=0.0.20",
+    # Anthropic + Agent SDK + MCP
+    "anthropic>=0.96.0",
+    "claude-agent-sdk>=0.2.82",
+    "mcp>=1.27.0",
+    # Modello dati + settings
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.6.0",
+    "python-dotenv>=1.0.1",
+    # Persistenza
+    "sqlalchemy>=2.0.36",
+    "aiosqlite>=0.20.0",
+    # HTTP client (per integrazioni futuro)
+    "httpx>=0.28.0",
+    # Config YAML (skill cataloghi)
+    "pyyaml>=6.0.2",
+    # Logging strutturato
+    "structlog>=24.4.0",
+    # Validazione email (utile, Conv. 44 lesson 3 PyInstaller hidden imports candidate)
+    "email-validator>=2.2.0",
+    # Sentry opzionale per error tracking (disabilitato se SENTRY_DSN assente)
+    "sentry-sdk[fastapi]>=2.18.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.8.0",
+    "black>=24.10.0",
+    "mypy>=1.13.0",
+    "types-pyyaml>=6.0.12",
+]
+
+[project.urls]
+Homepage = "https://github.com/HariSeldon342/sco-compliance-os"
+Repository = "https://github.com/HariSeldon342/sco-compliance-os"
+
+[project.scripts]
+sco-compliance-os = "sco_compliance_os.main:main"
+
+# ----- Hatchling build config -----
+[tool.hatch.build.targets.wheel]
+packages = ["sco_compliance_os"]
+
+# ----- Ruff (linter + formatter) -----
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = [".venv", "dist", "build", "__pycache__"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ASYNC", "S", "RUF"]
+ignore = ["S101", "B008"]
+
+# ----- Mypy (typed strict) -----
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["claude_agent_sdk.*", "mcp.*"]
+ignore_missing_imports = true
+
+# ----- Pytest -----
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]

@@ -1,0 +1,73 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability principale per la finestra main di SCO Compliance OS — espone permission core + plugin necessari al funzionamento dell'app desktop.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:default",
+    "core:webview:default",
+    "core:event:default",
+    "core:path:default",
+
+    "dialog:default",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "dialog:allow-message",
+    "dialog:allow-confirm",
+
+    "fs:default",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        { "path": "$APPCONFIG/**" },
+        { "path": "$APPDATA/**" },
+        { "path": "$APPLOG/**" },
+        { "path": "$HOME/.sco-compliance-os/**" },
+        { "path": "$HOME/Documents/sco-compliance-os/**" }
+      ]
+    },
+    "fs:allow-read-text-file",
+    "fs:allow-write-text-file",
+    "fs:allow-mkdir",
+    "fs:allow-read-dir",
+    "fs:allow-exists",
+    "fs:allow-remove",
+
+    "store:default",
+    "store:allow-get",
+    "store:allow-set",
+    "store:allow-save",
+    "store:allow-load",
+    "store:allow-delete",
+
+    "updater:default",
+    "updater:allow-check",
+    "updater:allow-download",
+    "updater:allow-install",
+    "updater:allow-download-and-install",
+
+    "opener:default",
+    "opener:allow-open-url",
+
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled",
+
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "binaries/sco-compliance-os-backend",
+          "sidecar": true
+        }
+      ]
+    },
+    {
+      "identifier": "shell:allow-open",
+      "allow": [
+        { "url": "^https?://" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+# CODEOWNERS - default owner per tutti i path.
+# Subset path-specific per /backend/ + /frontend/ (futuro split team).
+
+* @asamodeo
+
+/backend/      @asamodeo
+/frontend/     @asamodeo
+/.github/      @asamodeo
+/scripts/      @asamodeo

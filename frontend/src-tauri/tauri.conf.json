@@ -1,0 +1,96 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "SCO Compliance OS",
+  "version": "0.1.0",
+  "identifier": "it.scosolution.complianceos",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "SCO Compliance OS",
+        "label": "main",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 1024,
+        "minHeight": 600,
+        "center": true,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true,
+        "visible": true,
+        "theme": "Dark"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' tauri: http://tauri.localhost https://tauri.localhost; img-src 'self' data: https://* asset: http://asset.localhost; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost http://localhost:7800 http://127.0.0.1:7800 https://api.anthropic.com"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["msi", "nsis", "deb", "rpm", "appimage", "dmg"],
+    "createUpdaterArtifacts": true,
+    "externalBin": ["binaries/sco-compliance-os-backend"],
+    "publisher": "SCO Solution Consulting srls",
+    "copyright": "© 2026 SCO Solution Consulting srls — Tutti i diritti riservati",
+    "category": "Productivity",
+    "shortDescription": "Personal AI OS per compliance italiana",
+    "longDescription": "SCO Compliance OS è il tuo Personal AI Operating System per la compliance italiana: NIS 2, ISO 27001, AI Act, GDPR, accreditamento sanitario. Lavora direttamente sul tuo vault locale Karpathy-style (raw + wiki + CLAUDE.md), costruisce conoscenza che cresce ad ogni sessione, e ti aiuta a rispondere come farebbe un consulente senior. Tutti i dati restano sulla tua macchina.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico",
+      "icons/icon.icns"
+    ],
+    "windows": {
+      "digestAlgorithm": "sha256",
+      "wix": {
+        "language": ["it-IT"],
+        "upgradeCode": "a1b2c3d4-e5f6-7890-abcd-ef0123456789"
+      },
+      "nsis": {
+        "languages": ["Italian", "English"],
+        "displayLanguageSelector": false
+      }
+    },
+    "macOS": {
+      "frameworks": [],
+      "minimumSystemVersion": "10.15",
+      "exceptionDomain": "",
+      "signingIdentity": null,
+      "providerShortName": null,
+      "entitlements": null
+    },
+    "linux": {
+      "appimage": {
+        "bundleMediaFramework": true
+      },
+      "deb": {
+        "depends": []
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "PLACEHOLDER_PUBKEY_BASE64_DA_GENERARE_CON_TAURI_SIGNER_GENERATE",
+      "endpoints": [
+        "https://github.com/HariSeldon343/sco-compliance-os/releases/latest/download/latest.json"
+      ],
+      "dialog": true,
+      "windows": {
+        "installMode": "basicUi"
+      }
+    },
+    "shell": {
+      "open": "^https?://"
+    },
+    "fs": {
+      "requireLiteralLeadingDot": false
+    }
+  }
+}
