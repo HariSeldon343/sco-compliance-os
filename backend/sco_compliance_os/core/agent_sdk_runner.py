@@ -22,6 +22,7 @@ e tool_calls per persistenza backend-side.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
@@ -43,6 +44,30 @@ from sco_compliance_os.config import get_settings
 from sco_compliance_os.core.logging_setup import get_logger
 
 logger = get_logger(__name__)
+
+
+def _load_active_license_from_disk() -> tuple[str, str] | None:
+    """Legge ~/.sco-compliance-os/active-license.json + ritorna (email, license_key) se valido.
+
+    Pattern Karpathy single-source-of-truth: la license attivata via
+    `/api/license/activate` vive su disco (NON in settings env). Questo helper
+    è la SOURCE PRIMARIA per configurare ANTHROPIC_AUTH_TOKEN runtime.
+    """
+    settings = get_settings()
+    license_path = settings.data_dir / "active-license.json"
+    if not license_path.exists():
+        return None
+    try:
+        data = json.loads(license_path.read_text(encoding="utf-8"))
+        email = str(data.get("email", "")).strip()
+        license_key = str(data.get("license_key", "")).strip()
+        validation = data.get("validation_result", {}) or {}
+        if email and license_key and validation.get("is_valid", False):
+            return email, license_key
+        return None
+    except (json.JSONDecodeError, KeyError, OSError) as exc:
+        logger.warning("agent_runner.load_active_license_failed", error=str(exc))
+        return None
 
 
 EventKind = Literal[
@@ -83,11 +108,11 @@ class AgentRunnerConfig:
 def _configure_anthropic_env() -> dict[str, str]:
     """Configura env vars Anthropic per routing via SaaS proxy SCO.
 
-    Strategia:
-    1. Se settings.license_key valorizzato AND settings.sco_saas_base_url valorizzato
-       → set ANTHROPIC_BASE_URL + ANTHROPIC_AUTH_TOKEN (modalità production proxy).
-    2. Altrimenti fallback: usa ANTHROPIC_API_KEY da settings.anthropic_api_key
-       (modalità dev locale con chiave reale).
+    Strategia priorità (cristallizzata v0.1.0-alpha.6 dopo bug chat smoke E2E):
+    1. **active-license.json** (license attivata runtime via /api/license/activate):
+       fonte PRIMARIA. La license vive su disco, NON in settings .env file.
+    2. settings.license_key (env .env file): fallback per dev pre-attivazione.
+    3. settings.anthropic_api_key: ultimo fallback dev locale.
 
     Le env vars sono settate sia in os.environ (per il subprocess claude.exe del
     SDK) sia ritornate come dict per essere passate via ClaudeAgentOptions(env=...)
@@ -97,10 +122,21 @@ def _configure_anthropic_env() -> dict[str, str]:
         dict env vars da passare a ClaudeAgentOptions(env=...).
     """
     settings = get_settings()
-    license_key_value = settings.license_key.get_secret_value().strip()
     saas_base = settings.sco_saas_base_url.strip().rstrip("/")
-
     env_overrides: dict[str, str] = {}
+
+    # SOURCE PRIMARY: active-license.json (runtime, post-activate)
+    active = _load_active_license_from_disk()
+    license_key_value = ""
+    source = "none"
+    if active:
+        _, license_key_value = active
+        source = "active_license_json"
+    else:
+        # FALLBACK: settings.license_key (.env file)
+        license_key_value = settings.license_key.get_secret_value().strip()
+        if license_key_value:
+            source = "settings_env"
 
     if license_key_value and saas_base:
         # Production proxy mode: routing via SaaS SCO
@@ -113,6 +149,7 @@ def _configure_anthropic_env() -> dict[str, str]:
         os.environ["ANTHROPIC_AUTH_TOKEN"] = license_key_value
         logger.info(
             "agent_runner.env.proxy_mode",
+            source=source,
             saas_base=saas_base,
             license_set=True,
         )
@@ -129,7 +166,7 @@ def _configure_anthropic_env() -> dict[str, str]:
         else:
             logger.warning(
                 "agent_runner.env.no_credentials",
-                hint="Set license_key+sco_saas_base_url OR anthropic_api_key.",
+                hint="Attiva license via UI OR set ANTHROPIC_API_KEY in .env.",
             )
 
     return env_overrides
