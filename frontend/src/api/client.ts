@@ -3,7 +3,6 @@
 // il frontend deduce sempre lo stato dal fetch, mai dalla memoria React optimistic.
 
 import type {
-  ChatStreamChunk,
   ConversationItem,
   IntegrationItem,
   MessageItem,
@@ -65,46 +64,6 @@ async function request<T>(
   }
 }
 
-/** Parser SSE incremental — accumula chunk e invoca onChunk per ogni evento "data:" */
-async function consumeSSE(
-  response: Response,
-  onChunk: (chunk: ChatStreamChunk) => void,
-): Promise<void> {
-  if (!response.body) {
-    throw new ApiError(0, "no_body", "Response senza body SSE");
-  }
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder("utf-8");
-  let buffer = "";
-
-  // Pattern Conv. 48 + lezione sco-agent-local Bug 2 SSE consumer fix:
-  // mai consumare il buffer per linee complete senza prima accumulare le partials.
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    let nlIndex = buffer.indexOf("\n\n");
-    while (nlIndex !== -1) {
-      const event = buffer.slice(0, nlIndex);
-      buffer = buffer.slice(nlIndex + 2);
-      const dataLine = event
-        .split("\n")
-        .find((line) => line.startsWith("data: "));
-      if (dataLine) {
-        const payload = dataLine.slice(6);
-        if (payload === "[DONE]") return;
-        try {
-          onChunk(JSON.parse(payload) as ChatStreamChunk);
-        } catch {
-          // chunk malformato: ignora ma non interrompere lo stream
-        }
-      }
-      nlIndex = buffer.indexOf("\n\n");
-    }
-  }
-}
-
 export const apiClient = {
   // ---- Conversations ----
   async listConversations(): Promise<ConversationItem[]> {
@@ -114,30 +73,73 @@ export const apiClient = {
     return request<MessageItem[]>(`/api/conversations/${id}/messages`);
   },
 
+  // ---- Conversations CRUD ----
+  async createConversation(title?: string): Promise<ConversationItem> {
+    const res = await fetch(`${BACKEND_URL}/api/chat/conversations`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(title ? { title } : {}),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new ApiError(res.status, "create_conv_error", `HTTP ${res.status} ${body}`);
+    }
+    return res.json() as Promise<ConversationItem>;
+  },
+
   // ---- Chat stream (SSE) ----
+  // Backend field name è "message" (non "content"). Eventi SSE backend hanno
+  // formato {kind, data, seq} (NON {type, delta} come ChatStreamChunk legacy).
   async sendChatMessage(params: {
     conversation_id: string;
-    content: string;
-    onChunk?: (chunk: ChatStreamChunk) => void;
+    message: string;
+    model_slug?: string;
+    onEvent?: (event: { kind: string; data: Record<string, unknown>; seq: number }) => void;
   }): Promise<void> {
-    const { conversation_id, content, onChunk } = params;
+    const { conversation_id, message, model_slug, onEvent } = params;
     const res = await fetch(`${BACKEND_URL}/api/chat/stream`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Accept: "text/event-stream",
       },
-      body: JSON.stringify({ conversation_id, content }),
+      body: JSON.stringify({ conversation_id, message, model_slug }),
     }).catch((err) => {
-      // Backend non raggiungibile (sviluppo iniziale): fail silenzioso non bloccante
       throw new ApiError(0, "network", `Backend non raggiungibile: ${err}`);
     });
 
     if (!res.ok) {
-      throw new ApiError(res.status, "stream_error", `HTTP ${res.status}`);
+      const body = await res.text().catch(() => "");
+      throw new ApiError(res.status, "stream_error", `HTTP ${res.status} ${body}`);
     }
 
-    if (onChunk) await consumeSSE(res, onChunk);
+    if (!res.body) {
+      throw new ApiError(0, "no_body", "Response senza body SSE");
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let nlIndex = buffer.indexOf("\n\n");
+      while (nlIndex !== -1) {
+        const ev = buffer.slice(0, nlIndex);
+        buffer = buffer.slice(nlIndex + 2);
+        const dataLine = ev.split("\n").find((l) => l.startsWith("data: "));
+        if (dataLine && onEvent) {
+          const payload = dataLine.slice(6);
+          if (payload === "[DONE]") return;
+          try {
+            onEvent(JSON.parse(payload));
+          } catch {
+            // chunk malformato: ignora
+          }
+        }
+        nlIndex = buffer.indexOf("\n\n");
+      }
+    }
   },
 
   // ---- Vaults ----

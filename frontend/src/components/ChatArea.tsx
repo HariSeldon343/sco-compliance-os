@@ -136,15 +136,21 @@ function MessageBubble({ message }: MessageBubbleProps) {
             : "border border-sco-border bg-sco-surface-elevated text-sco-text dark:text-sco-text-dark",
         )}
       >
-        {/* Markdown body */}
-        <div className={cn("prose prose-sm max-w-none", isUser && "text-white")}>
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            rehypePlugins={[rehypeHighlight]}
-          >
+        {/* Markdown body: user = plain text whitespace-pre, agent = full markdown */}
+        {isUser ? (
+          <div className="whitespace-pre-wrap break-words text-white">
             {message.content}
-          </ReactMarkdown>
-        </div>
+          </div>
+        ) : (
+          <div className="prose prose-sm max-w-none dark:prose-invert">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              rehypePlugins={[rehypeHighlight]}
+            >
+              {message.content}
+            </ReactMarkdown>
+          </div>
+        )}
 
         {/* Tool calls inline (Read/Grep/Write ...) */}
         {message.tool_calls && message.tool_calls.length > 0 && (

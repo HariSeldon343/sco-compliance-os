@@ -118,57 +118,91 @@ export const useChatStore = create<ChatState>()(
       },
 
       sendMessage: async (text, _attachments) => {
-        const { activeConversationId, createConversation } = get();
-        const convId = activeConversationId ?? createConversation();
+        const state = get();
+        let convId = state.activeConversationId;
         const now = new Date().toISOString();
 
-        // Append messaggio utente
+        // Se non c'è conversation attiva OPPURE è una stub (non backend) → crea backend
+        const existing = convId ? state.conversations[convId] : null;
+        const isBackendConv = existing && !existing.id.startsWith("stub-");
+
+        if (!convId || !isBackendConv) {
+          try {
+            const newConv = await apiClient.createConversation();
+            convId = newConv.id;
+            set((s) => ({
+              conversations: { ...s.conversations, [newConv.id]: newConv },
+              messagesByConv: { ...s.messagesByConv, [newConv.id]: [] },
+              activeConversationId: newConv.id,
+            }));
+          } catch (err) {
+            set({
+              error: `Errore creazione conversation: ${err instanceof Error ? err.message : err}`,
+              isStreaming: false,
+            });
+            return;
+          }
+        }
+
+        const conversationId: string = convId!;
+
+        // Append messaggio utente locale
         const userMsg: MessageItem = {
           id: `msg-${Date.now()}-u`,
-          conversation_id: convId,
+          conversation_id: conversationId,
           role: "user",
           content: text,
+          created_at: now,
+        };
+        // Append empty assistant message che riempiremo via SSE
+        const assistantMsgId = `msg-${Date.now()}-a`;
+        const assistantMsg: MessageItem = {
+          id: assistantMsgId,
+          conversation_id: conversationId,
+          role: "assistant",
+          content: "",
           created_at: now,
         };
         set((s) => ({
           messagesByConv: {
             ...s.messagesByConv,
-            [convId]: [...(s.messagesByConv[convId] ?? []), userMsg],
+            [conversationId]: [...(s.messagesByConv[conversationId] ?? []), userMsg, assistantMsg],
           },
           isStreaming: true,
           error: null,
         }));
 
         try {
-          // Stream backend (stub: chiamata fittizia con delay)
-          // TODO: collegare a /api/chat/stream SSE reale lato backend.
           await apiClient.sendChatMessage({
-            conversation_id: convId,
-            content: text,
-            onChunk: (chunk) => {
-              // Hook futuro: aggiorna messaggio assistant in streaming
-              void chunk;
+            conversation_id: conversationId,
+            message: text,
+            onEvent: (event) => {
+              if (event.kind === "text_delta") {
+                const chunk = String(event.data?.text ?? "");
+                if (chunk) {
+                  // Append chunk al messaggio assistant in streaming
+                  set((s) => ({
+                    messagesByConv: {
+                      ...s.messagesByConv,
+                      [conversationId]: (s.messagesByConv[conversationId] ?? []).map((m) =>
+                        m.id === assistantMsgId
+                          ? { ...m, content: m.content + chunk }
+                          : m,
+                      ),
+                    },
+                  }));
+                }
+              } else if (event.kind === "error") {
+                const errMsg = String((event.data as { message?: string })?.message ?? "errore stream");
+                set({ error: errMsg });
+              } else if (event.kind === "done") {
+                set({ isStreaming: false });
+              }
             },
           });
-
-          const assistantMsg: MessageItem = {
-            id: `msg-${Date.now()}-a`,
-            conversation_id: convId,
-            role: "assistant",
-            content:
-              "Backend non collegato — questo è un messaggio di prova della UI. Il messaggio reale arriverà dal backend FastAPI quando l'endpoint /api/chat/stream sarà attivo.",
-            created_at: new Date().toISOString(),
-          };
-          set((s) => ({
-            messagesByConv: {
-              ...s.messagesByConv,
-              [convId]: [...(s.messagesByConv[convId] ?? []), assistantMsg],
-            },
-            isStreaming: false,
-          }));
+          set({ isStreaming: false });
         } catch (err) {
-          const message =
-            err instanceof Error ? err.message : "Errore sconosciuto";
+          const message = err instanceof Error ? err.message : "Errore sconosciuto";
           set({ isStreaming: false, error: message });
         }
       },
