@@ -6,9 +6,9 @@
   "description": "SCO Compliance OS — Personal AI for Italian Compliance. Frontend React 19 + Vite 6 + Tailwind 4.",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -b --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "lint": "eslint . --ext .ts,.tsx --max-warnings 0",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json,md}\"",
     "tauri": "tauri"
@@ -36,6 +36,7 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.2.0",
+    "@types/node": "^22.10.5",
     "@types/react": "^19.0.6",
     "@types/react-dom": "^19.0.2",
     "@typescript-eslint/eslint-plugin": "^8.19.0",

@@ -8,7 +8,7 @@ import path from "node:path";
 const DEV_PORT = 1420;
 
 // https://vitejs.dev/config/
-export default defineConfig(async () => ({
+export default defineConfig({
   plugins: [react(), tailwindcss()],
 
   // Prevent vite from obscuring rust errors quando lanciato via `tauri dev`
@@ -44,4 +44,4 @@ export default defineConfig(async () => ({
     outDir: "dist",
     emptyOutDir: true,
   },
-}));
+});

@@ -7,7 +7,7 @@ import { toast } from "sonner";
 
 import { useLicenseStore } from "@/store/license-store";
 
-export function LicenseScreen(): JSX.Element {
+export function LicenseScreen() {
   const status = useLicenseStore((s) => s.status);
   const errorMessage = useLicenseStore((s) => s.errorMessage);
   const loading = useLicenseStore((s) => s.loading);
