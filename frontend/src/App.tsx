@@ -1,5 +1,5 @@
 // SCO Compliance OS — root App con LicenseGate + layout sidebar + header + outlet router
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Outlet } from "react-router-dom";
 
 import { Sidebar } from "@/components/Sidebar";
@@ -22,9 +22,13 @@ export default function App() {
   const theme = useThemeStore((s) => s.theme);
   const applyTheme = useThemeStore((s) => s.applyTheme);
 
-  const licenseStatus = useLicenseStore((s) => s.status);
   const licenseValid = useLicenseStore((s) => s.isValid);
   const fetchLicenseStatus = useLicenseStore((s) => s.fetchStatus);
+
+  // Flag: true dopo che il primo fetch è terminato (success o fail).
+  // Necessario per distinguere "fetch in corso" da "no license attivata" —
+  // entrambi danno status="unknown" nello store iniziale e nel backend response.
+  const [initialFetchDone, setInitialFetchDone] = useState(false);
 
   // Sync classe `dark` su <html> all'avvio + ai cambi di tema
   useEffect(() => {
@@ -40,20 +44,15 @@ export default function App() {
     return () => mq.removeEventListener("change", handler);
   }, [theme, applyTheme]);
 
-  // License gate: fetch status all'avvio + polling 5 min per revoche server-side
+  // License gate: fetch status all'avvio (con flag initialFetchDone) + polling 5 min
   useEffect(() => {
-    fetchLicenseStatus();
+    fetchLicenseStatus().finally(() => setInitialFetchDone(true));
     const id = setInterval(() => fetchLicenseStatus(), 5 * 60 * 1000);
     return () => clearInterval(id);
   }, [fetchLicenseStatus]);
 
-  // Mostra LicenseScreen finché non si conferma valida
-  // (status "unknown" significa fetch iniziale non ancora completato)
-  if (!licenseValid && licenseStatus !== "unknown") {
-    return <LicenseScreen />;
-  }
-  // Fetch iniziale in corso: spinner minimale (no flash di contenuto)
-  if (licenseStatus === "unknown") {
+  // Fetch iniziale ancora in corso: spinner minimale (no flash di contenuto)
+  if (!initialFetchDone) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
         <div className="text-sm text-slate-500 dark:text-slate-400">
@@ -61,6 +60,11 @@ export default function App() {
         </div>
       </div>
     );
+  }
+
+  // Fetch completato + license non valida → mostra LicenseScreen
+  if (!licenseValid) {
+    return <LicenseScreen />;
   }
 
   return (
