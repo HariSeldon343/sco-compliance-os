@@ -136,6 +136,21 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev \
             libssl-dev
+      # Placeholder sidecar binaries: tauri.conf.json ha externalBin che
+      # punta al backend PyInstaller-built. In CI il sidecar reale viene
+      # buildato solo nel workflow Release. Per cargo check/clippy bastano
+      # placeholder empty file con i nomi corretti (Tauri verifica esistenza,
+      # non contenuto). Conv. 44 lesson 3 enforcement: tutti i Rust target
+      # triple coperti per la matrix CI.
+      - name: Create placeholder sidecar binaries (CI only)
+        shell: bash
+        run: |
+          mkdir -p frontend/src-tauri/binaries
+          touch frontend/src-tauri/binaries/sco-compliance-os-backend-x86_64-pc-windows-msvc.exe
+          touch frontend/src-tauri/binaries/sco-compliance-os-backend-aarch64-apple-darwin
+          touch frontend/src-tauri/binaries/sco-compliance-os-backend-x86_64-apple-darwin
+          touch frontend/src-tauri/binaries/sco-compliance-os-backend-x86_64-unknown-linux-gnu
+          chmod +x frontend/src-tauri/binaries/sco-compliance-os-backend-* || true
       - name: Cargo fmt
         working-directory: frontend/src-tauri
         run: cargo fmt --all -- --check
