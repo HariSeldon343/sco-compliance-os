@@ -21,7 +21,7 @@ import { cn } from "@/lib/cn";
 
 // Versione app — bumped manualmente con bump version script ogni release Conv. 47.
 // TODO v0.2.0: fetch dinamico da backend /health endpoint (rimuove hardcode).
-const APP_VERSION_PLACEHOLDER = "0.2.0";
+const APP_VERSION_PLACEHOLDER = "0.3.0";
 
 interface NavItem {
   to: string;

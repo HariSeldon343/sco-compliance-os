@@ -30,6 +30,7 @@ from fastapi.responses import JSONResponse
 
 from sco_compliance_os import __version__
 from sco_compliance_os.api import (
+    autofetch_routes,
     chat_routes,
     integrations_routes,
     license_routes,
@@ -43,7 +44,17 @@ from sco_compliance_os.config import get_settings
 from sco_compliance_os.core.logging_setup import configure_logging, set_request_id
 from sco_compliance_os.core.migrations import apply_migrations
 from sco_compliance_os.core.store import get_store
-from sco_compliance_os.services.integrations.scheduler import ConnectorScheduler
+from sco_compliance_os.services.integrations.auto_fetch_loop import (
+    AutoFetchLoop,
+    AutoFetchOutcome,
+)
+from sco_compliance_os.services.integrations.auto_fetch_loop import (
+    set_active_loop as set_active_autofetch_loop,
+)
+from sco_compliance_os.services.integrations.scheduler import (
+    ConnectorScheduler,
+    fetch_connector,
+)
 from sco_compliance_os.services.memory.store import init_schema as init_memory_schema
 from sco_compliance_os.services.subconscious.tick_loop import (
     SubconsciousTickLoop,
@@ -57,6 +68,7 @@ load_dotenv(override=True)
 # Global ref scheduler per shutdown pulito
 _active_scheduler: ConnectorScheduler | None = None
 _subconscious_loop: SubconsciousTickLoop | None = None
+_autofetch_loop: AutoFetchLoop | None = None
 
 
 @asynccontextmanager
@@ -66,7 +78,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     Pattern Subconscio OpenHuman: scheduler ConnectorScheduler auto-start a 20 min
     interval su connettori attivi (token presenti nel keyring). Idempotente.
     """
-    global _active_scheduler, _subconscious_loop
+    global _active_scheduler, _subconscious_loop, _autofetch_loop
     settings = get_settings()
     settings.ensure_data_dir()
 
@@ -96,13 +108,35 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             note="migration apply failed but startup continues",
         )
 
-    # Avvia auto-fetch scheduler se license_key presente (= cliente attivato)
-    # Per ora scheduler disabilitato di default — abilitabile via env SCO_AUTO_FETCH_ENABLED=1
-    auto_fetch_enabled = os.environ.get("SCO_AUTO_FETCH_ENABLED", "0") == "1"
+    # Inizializza Auto-Fetch loop sempre (registra ref globale per le route W2).
+    # Avvia background task SOLO se settings.auto_fetch_enabled OR
+    # env SCO_AUTO_FETCH_ENABLED=1 (default OFF privacy v0.3.0).
     user_id = settings.user_email or "default-user"
-    if auto_fetch_enabled and settings.user_email:
-        _active_scheduler = ConnectorScheduler(user_id=user_id)
-        await _active_scheduler.start()
+    env_auto_fetch_enabled = os.environ.get("SCO_AUTO_FETCH_ENABLED", "0") == "1"
+    effective_auto_fetch_enabled = settings.auto_fetch_enabled or env_auto_fetch_enabled
+
+    # Wire fetch_handler: cattura settings + user_id come closure.
+    # In v0.3.0 nessun connector_credentials e' configurato a startup;
+    # quando il cabling W3 sara' attivo, le credentials verranno iniettate
+    # via env var dedicate. Per ora il handler invoca fetch_connector senza
+    # credentials -> outcome stub-like con errors[] "no_oauth_credentials".
+    async def _autofetch_handler(connector_name: str, uid: str) -> AutoFetchOutcome:
+        return await fetch_connector(connector_name, uid, connector_credentials=None)
+
+    _autofetch_loop = AutoFetchLoop(
+        user_id=user_id,
+        interval_seconds=settings.auto_fetch_interval_seconds,
+        activity_log_path=settings.auto_fetch_log_path,
+        fetch_handler=_autofetch_handler,
+    )
+    set_active_autofetch_loop(_autofetch_loop)
+    if effective_auto_fetch_enabled:
+        await _autofetch_loop.start()
+
+    # NOTE: legacy ConnectorScheduler resta disponibile per import esterni che
+    # lo richiedano (backwards-compat W1). Non viene piu' istanziato in lifespan
+    # dato che AutoFetchLoop copre lo use case 1:1. La variabile globale
+    # _active_scheduler resta a None.
 
     # Inizializza Subconscious tick loop sempre (registra ref globale per le route).
     # Avvia background task SOLO se settings.subconscious_enabled (default OFF privacy).
@@ -120,7 +154,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         version=__version__,
         port=settings.backend_port,
         data_dir=str(settings.data_dir),
-        scheduler_active=_active_scheduler is not None,
+        autofetch_enabled=effective_auto_fetch_enabled,
+        autofetch_running=_autofetch_loop.is_running(),
         subconscious_enabled=settings.subconscious_enabled,
         subconscious_running=_subconscious_loop.is_running(),
         user_id=user_id,
@@ -134,7 +169,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         set_active_loop(None)
         _subconscious_loop = None
 
-    # Shutdown pulito scheduler
+    # Shutdown pulito auto-fetch loop
+    if _autofetch_loop is not None:
+        await _autofetch_loop.stop()
+        set_active_autofetch_loop(None)
+        _autofetch_loop = None
+
+    # Shutdown pulito scheduler legacy (se istanziato esternamente)
     if _active_scheduler is not None:
         await _active_scheduler.stop()
         _active_scheduler = None
@@ -236,6 +277,7 @@ def create_app() -> FastAPI:
     app.include_router(license_routes.router)
     app.include_router(subconscious_routes.router)
     app.include_router(tokenjuice_routes.router)
+    app.include_router(autofetch_routes.router)
 
     return app
 

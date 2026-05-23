@@ -316,7 +316,10 @@ async def step_3_user_rules_yaml() -> tuple[bool, str]:
 
         # Verifica sostituzioni applicate
         if "ClientBravo" not in result.compressed_text:
-            return False, f"sostituzione 'ClientBravo' non applicata. {log_msg}\nout: {result.compressed_text}"
+            return (
+                False,
+                f"sostituzione 'ClientBravo' non applicata. {log_msg}\nout: {result.compressed_text}",
+            )
         if "Coop Damiano" not in result.compressed_text:
             return False, f"sostituzione 'Coop Damiano' non applicata. {log_msg}"
         # Verifica che almeno 2 user rules siano nel applied_rules log
@@ -336,10 +339,7 @@ async def step_4_layer_stats_coerenti() -> tuple[bool, str]:
     sample = _fake_markdown_normativo()
     result = await compress_text(sample, source_type="markdown")
 
-    layers_saved_sum = sum(
-        stats.get("tokens_saved", 0)
-        for stats in result.layer_stats.values()
-    )
+    layers_saved_sum = sum(stats.get("tokens_saved", 0) for stats in result.layer_stats.values())
     expected_saved = result.original_tokens - result.compressed_tokens
 
     log_msg = (

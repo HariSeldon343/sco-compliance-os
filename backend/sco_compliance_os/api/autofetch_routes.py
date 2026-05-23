@@ -221,7 +221,7 @@ async def get_activity(
     for r in raw:
         try:
             parsed.append(ActivityEntry(**r))
-        except Exception as e:  # noqa: BLE001 - schema mismatch tollerato
+        except Exception as e:
             logger.warning("autofetch.activity.parse_error", error=str(e))
             continue
     return ActivityResponse(entries=parsed, count=len(parsed))

@@ -108,6 +108,33 @@ class Settings(BaseSettings):
         ),
     )
 
+    # ----- Auto-Fetch loop (Wave 2 v0.3.0, blueprint OpenHuman replica) -----
+    # Default OFF v0.3.0 (privacy enforcement: opt-in esplicito,
+    # blueprint Sezione 7 mitigazione "OAuth token leak via logs").
+    auto_fetch_enabled: bool = Field(
+        default=False,
+        description=(
+            "Abilita il Auto-Fetch loop 20 min walker connettori OAuth. "
+            "Default OFF (privacy opt-in v0.3.0). Quando True, il lifespan "
+            "avvia automaticamente il loop a startup."
+        ),
+    )
+    auto_fetch_interval_seconds: int = Field(
+        default=1200,
+        ge=300,
+        description=(
+            "Intervallo tick auto-fetch in secondi. Hard floor 300s (5 min, "
+            "anti-hammering OAuth rate limit). Default 1200s (20 min) blueprint."
+        ),
+    )
+    auto_fetch_log_path: Path | None = Field(
+        default=None,
+        description=(
+            "Path del file JSONL del activity log auto-fetch. Se None, "
+            "default a ``~/.sco-compliance-os/autofetch_activity.jsonl``."
+        ),
+    )
+
     # ----- Storage paths derivati -----
     @property
     def memory_tree_db_path(self) -> Path:

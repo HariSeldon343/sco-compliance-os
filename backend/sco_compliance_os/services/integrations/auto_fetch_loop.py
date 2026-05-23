@@ -55,7 +55,7 @@ import asyncio
 import json
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -87,9 +87,7 @@ DEFAULT_COOLDOWN_SECONDS: int = 3600
 """Durata cooldown 1h dopo threshold raggiunto. Skippa il connector nei tick
 seguenti finche' ``cooldown_until > now()``."""
 
-DEFAULT_ACTIVITY_LOG_PATH: Path = (
-    Path.home() / ".sco-compliance-os" / "autofetch_activity.jsonl"
-)
+DEFAULT_ACTIVITY_LOG_PATH: Path = Path.home() / ".sco-compliance-os" / "autofetch_activity.jsonl"
 
 STOP_TIMEOUT_SECONDS: float = 30.0
 """Timeout cooperativo stop: oltre questo, fallback a task.cancel()."""
@@ -213,9 +211,7 @@ class AutoFetchLoop:
         self._interval = max(MIN_INTERVAL_SECONDS, int(interval_seconds))
         connectors_list = list(connectors) if connectors is not None else list(DEFAULT_CONNECTORS)
         if not connectors_list:
-            raise ValueError(
-                "AutoFetchLoop: connectors deve avere almeno 1 elemento."
-            )
+            raise ValueError("AutoFetchLoop: connectors deve avere almeno 1 elemento.")
         self._connectors: list[str] = connectors_list
         self._activity_log = activity_log_path or DEFAULT_ACTIVITY_LOG_PATH
         self._activity_log.parent.mkdir(parents=True, exist_ok=True)
@@ -272,12 +268,12 @@ class AutoFetchLoop:
         if self._task is not None:
             try:
                 await asyncio.wait_for(self._task, timeout=STOP_TIMEOUT_SECONDS)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning("autofetch.loop.stop.timeout_force_cancel")
                 self._task.cancel()
                 try:
                     await self._task
-                except (asyncio.CancelledError, Exception):  # noqa: BLE001
+                except (asyncio.CancelledError, Exception):
                     pass
         self._status.running = False
         self._task = None
@@ -318,7 +314,7 @@ class AutoFetchLoop:
             while not self._stop_event.is_set():
                 try:
                     await self._execute_one_tick(manual=False)
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
                     # mai uccidere il loop per eccezioni applicative
                     logger.error(
                         "autofetch.loop.tick_unhandled_error",
@@ -328,10 +324,8 @@ class AutoFetchLoop:
 
                 # Sleep fino al prossimo tick. Esce in anticipo se stop_event.
                 try:
-                    await asyncio.wait_for(
-                        self._stop_event.wait(), timeout=float(self._interval)
-                    )
-                except asyncio.TimeoutError:
+                    await asyncio.wait_for(self._stop_event.wait(), timeout=float(self._interval))
+                except TimeoutError:
                     pass  # timeout = e' ora del prossimo tick
         except asyncio.CancelledError:
             logger.info("autofetch.loop.cancelled")
@@ -346,7 +340,7 @@ class AutoFetchLoop:
         """
         async with self._throttle.acquire() as token:
             tick_start_iso = _utc_now_iso()
-            tick_start_ts = datetime.now(timezone.utc)
+            tick_start_ts = datetime.now(UTC)
             self._status.last_tick_started_at = tick_start_iso
 
             # 1. Seleziona prossimo connector skippando quelli in cooldown.
@@ -384,7 +378,7 @@ class AutoFetchLoop:
 
             # 2. Invoca fetch handler (o stub) cattura eccezioni come errors[].
             handler_outcome = await self._invoke_fetch(connector)
-            duration = (datetime.now(timezone.utc) - tick_start_ts).total_seconds()
+            duration = (datetime.now(UTC) - tick_start_ts).total_seconds()
             handler_outcome.duration_seconds = duration
 
             if token.cancelled.is_set():
@@ -438,7 +432,7 @@ class AutoFetchLoop:
             if outcome.connector_name != connector:
                 outcome.connector_name = connector
             return outcome
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             error_str = f"{type(e).__name__}: {e}"
             logger.warning(
                 "autofetch.fetch.handler_error",
@@ -494,16 +488,14 @@ class AutoFetchLoop:
             # ISO malformato -> resetta cooldown (fail-safe)
             state.cooldown_until = None
             return False
-        if datetime.now(timezone.utc) >= until:
+        if datetime.now(UTC) >= until:
             # Cooldown scaduto: pulisci e considera non in cooldown.
             state.cooldown_until = None
             state.consecutive_failures = 0
             return False
         return True
 
-    def _update_connector_state(
-        self, connector: str, outcome: AutoFetchOutcome
-    ) -> None:
+    def _update_connector_state(self, connector: str, outcome: AutoFetchOutcome) -> None:
         """Aggiorna lo state per-connector dopo un tick eseguito.
 
         Logica:
@@ -528,9 +520,7 @@ class AutoFetchLoop:
             )
             if state.consecutive_failures >= self._failure_threshold:
                 # Attiva cooldown
-                cooldown_until = datetime.now(timezone.utc) + _seconds_to_timedelta(
-                    self._cooldown_seconds
-                )
+                cooldown_until = datetime.now(UTC) + _seconds_to_timedelta(self._cooldown_seconds)
                 state.cooldown_until = cooldown_until.isoformat()
                 logger.warning(
                     "autofetch.connector.cooldown_activated",
@@ -611,7 +601,7 @@ class AutoFetchLoop:
 
 def _utc_now_iso() -> str:
     """Timestamp UTC ISO 8601."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _seconds_to_timedelta(seconds: int) -> Any:
