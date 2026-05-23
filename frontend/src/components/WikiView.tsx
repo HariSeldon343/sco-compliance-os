@@ -44,7 +44,6 @@ async function withRetry<T>(fn: () => Promise<T>, label: string): Promise<T> {
     }
   }
   // tutti i retry falliti → log + rilancia
-  // eslint-disable-next-line no-console
   console.warn(`[WikiView] ${label} fallito dopo ${MAX_RETRIES} tentativi`, lastErr);
   throw lastErr;
 }
