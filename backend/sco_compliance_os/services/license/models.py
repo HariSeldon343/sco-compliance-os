@@ -3,19 +3,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 
 
-class LicenseStatus(str, Enum):
+class LicenseStatus(StrEnum):
     """Stati possibili di una license key."""
 
-    VALID = "valid"          # license attiva e valida
-    INVALID = "invalid"      # license non esiste o malformata
-    REVOKED = "revoked"      # license revocata da admin
-    EXPIRED = "expired"      # license scaduta (oltre expires_at)
+    VALID = "valid"  # license attiva e valida
+    INVALID = "invalid"  # license non esiste o malformata
+    REVOKED = "revoked"  # license revocata da admin
+    EXPIRED = "expired"  # license scaduta (oltre expires_at)
     NETWORK_ERROR = "network_error"  # validazione fallita (rete giù) - cache fallback
-    UNKNOWN = "unknown"      # stato non determinabile
+    UNKNOWN = "unknown"  # stato non determinabile
 
 
 @dataclass(slots=True)
@@ -40,7 +40,7 @@ class LicenseValidationResult:
     tenant_id: str = ""
     expires_at: str = ""
     plan: str = ""
-    validated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    validated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     cache_ttl_seconds: int = 86400  # 24h default
     error_message: str = ""
 

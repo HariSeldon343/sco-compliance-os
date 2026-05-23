@@ -19,7 +19,6 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 from .parser import parse_vault_file
 from .scanner import index_document, init_schema, scan_vault
@@ -42,7 +41,7 @@ class SyncReport:
 async def sync_vault(
     vault_root: Path,
     *,
-    db_path: Optional[Path] = None,
+    db_path: Path | None = None,
     force: bool = False,
 ) -> SyncReport:
     """Sync completo vault → index SQLite.
@@ -82,7 +81,7 @@ async def sync_vault(
 
 async def sync_single_file(
     file_path: Path,
-    db_path: Optional[Path] = None,
+    db_path: Path | None = None,
 ) -> bool:
     """Re-index puntuale di un singolo file .md.
 
@@ -104,7 +103,7 @@ async def sync_single_file(
 
 async def watch_vault(
     vault_root: Path,
-    db_path: Optional[Path] = None,
+    db_path: Path | None = None,
 ) -> None:
     """Watch mode opzionale via watchdog.
 

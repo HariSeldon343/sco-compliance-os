@@ -90,3 +90,33 @@ export interface ChatStreamChunk {
   ask_user_question?: AskUserQuestionWidget;
   error?: { code: string; message: string };
 }
+
+// ===== Wave 2 OpenHuman replica: Memory Tree summaries + Hotness =====
+// Shape allineata 1:1 al Pydantic backend `TreeSummaryItem` / `HotnessItem`
+// (vedi backend/sco_compliance_os/api/memory_routes.py righe 148-170).
+
+/** Livello gerarchico nel Memory Tree (L0 = chunk raw, L1 = summary, L2 = meta-summary) */
+export type TreeLevel = 0 | 1 | 2;
+
+/** Nodo summary del Memory Tree (response GET /api/memory/tree-summaries) */
+export interface TreeSummaryItem {
+  id: string;
+  level: number; // 0 | 1 | 2 — non vincolato a TreeLevel sul wire per tolleranza forward-compat
+  source: string;
+  topic: string | null;
+  day: string | null; // ISO YYYY-MM-DD
+  content_preview: string;
+  token_count: number;
+  children_ids: string[];
+  parent_id: string | null;
+  created_at: string; // ISO 8601
+}
+
+/** Snapshot hotness di un chunk (response GET /api/memory/hotness/top) */
+export interface HotnessItem {
+  chunk_id: string;
+  hotness: number;
+  last_accessed: string | null; // ISO 8601
+  access_count: number;
+  days_since_access: number | null;
+}

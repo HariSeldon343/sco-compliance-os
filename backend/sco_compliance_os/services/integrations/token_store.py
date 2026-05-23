@@ -29,7 +29,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import datetime
 
 import keyring
 from keyring.errors import KeyringError, PasswordDeleteError
@@ -186,9 +186,7 @@ def list_providers(user_id: str, known_slugs: list[str]) -> list[str]:
             if keyring.get_password(_service_name(slug), user_id) is not None:
                 connected.append(slug)
         except KeyringError as exc:
-            logger.warning(
-                "keyring list probe failed | provider=%s err=%s", slug, exc
-            )
+            logger.warning("keyring list probe failed | provider=%s err=%s", slug, exc)
             # Non escalate: il provider verrà semplicemente segnato come disconnected.
             continue
     return connected

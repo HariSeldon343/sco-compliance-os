@@ -70,9 +70,7 @@ def _load_registry(registry_path: Path) -> list[dict[str, Any]]:
 def _save_registry(registry_path: Path, entries: list[dict[str, Any]]) -> None:
     """Salva vault registry su JSON, atomico."""
     registry_path.parent.mkdir(parents=True, exist_ok=True)
-    registry_path.write_text(
-        json.dumps(entries, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    registry_path.write_text(json.dumps(entries, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _inspect_vault(vault_path: Path) -> dict[str, Any]:

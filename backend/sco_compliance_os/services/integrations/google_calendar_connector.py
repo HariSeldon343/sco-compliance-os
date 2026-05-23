@@ -16,7 +16,7 @@ Wave 1 status: STUB.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
 from .base import BaseConnector, MemoryChunk, OAuthError, OAuthTokens
@@ -54,10 +54,8 @@ class GoogleCalendarConnector(BaseConnector):
 
     async def handle_callback(self, code: str, state: str) -> OAuthTokens:
         """STUB scambio code→token. TODO Wave 2 httpx reale."""
-        logger.warning(
-            "google_calendar handle_callback STUB — wave 2 implementation pending"
-        )
-        now = datetime.now(timezone.utc)
+        logger.warning("google_calendar handle_callback STUB — wave 2 implementation pending")
+        now = datetime.now(UTC)
         return OAuthTokens(
             access_token="STUB_ACCESS_TOKEN_GCAL",
             refresh_token="STUB_REFRESH_TOKEN_GCAL",
@@ -77,7 +75,7 @@ class GoogleCalendarConnector(BaseConnector):
                 provider=self.oauth_provider,
             )
         logger.warning("google_calendar refresh STUB — wave 2 pending")
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return OAuthTokens(
             access_token="STUB_ACCESS_TOKEN_GCAL_REFRESHED",
             refresh_token=tokens.refresh_token,
@@ -98,7 +96,7 @@ class GoogleCalendarConnector(BaseConnector):
                event.description, event.attendees[].email.
         """
         logger.warning("google_calendar fetch_data STUB — wave 2 implementation pending")
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return [
             MemoryChunk(
                 external_id="gcal_event_stub_001",

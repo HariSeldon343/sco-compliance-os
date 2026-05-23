@@ -16,12 +16,11 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from typing import Any
 
 from sqlalchemy import (
     CheckConstraint,
-    DateTime,
     ForeignKey,
     Index,
     Integer,
@@ -37,7 +36,7 @@ class Base(DeclarativeBase):
 
 def _utc_now_iso() -> str:
     """Timestamp UTC ISO 8601 (string) — coerente con memory_chunks.created_at."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _new_uuid() -> str:
@@ -144,7 +143,7 @@ class Summary(Base):
     )
 
     # Self-referential parent relationship (optional, lazy)
-    parent: Mapped["Summary | None"] = relationship(
+    parent: Mapped[Summary | None] = relationship(
         "Summary",
         remote_side="Summary.id",
         backref="children",

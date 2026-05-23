@@ -16,13 +16,11 @@ Score (chunk_id UNIQUE), updated_at riflette ultimo refresh.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import (
-    DateTime,
     Float,
-    ForeignKey,
     Index,
     Integer,
     String,
@@ -35,7 +33,7 @@ from .summary import Base
 
 def _utc_now_iso() -> str:
     """Timestamp UTC ISO 8601."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _new_uuid() -> str:

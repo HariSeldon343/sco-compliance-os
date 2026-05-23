@@ -13,6 +13,7 @@ import {
   ChevronDown,
   Pin,
   Sparkles,
+  FolderTree,
 } from "lucide-react";
 
 import { useChatStore } from "@/store/chat-store";
@@ -30,6 +31,8 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Chat", icon: MessageSquare },
+  // Wave 2 OpenHuman replica — Wiki Memory Tree gerarchico L0/L1/L2
+  { to: "/wiki", label: "Wiki", icon: FolderTree },
   { to: "/integrations", label: "Integrazioni", icon: Plug },
   { to: "/vault", label: "Vault", icon: Database },
   { to: "/memory", label: "Memoria", icon: Brain },

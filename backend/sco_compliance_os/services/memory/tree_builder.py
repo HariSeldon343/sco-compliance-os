@@ -21,11 +21,10 @@ API pubblica:
 from __future__ import annotations
 
 import json
-import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import aiosqlite
 import structlog
@@ -103,7 +102,7 @@ class TreeBuildResult:
 
 def _utc_now_iso() -> str:
     """Timestamp UTC ISO 8601."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _chunk_to_node(chunk: Chunk) -> TreeNode:
@@ -160,7 +159,7 @@ class TreeBuilder:
     def __init__(
         self,
         llm_client: LLMClient | None = None,
-        db_path: Optional[Path] = None,
+        db_path: Path | None = None,
     ) -> None:
         self.llm_client = llm_client or StubLLMClient()
         self.db_path = db_path or default_db_path()
@@ -239,9 +238,7 @@ class TreeBuilder:
         roots = [n.id for n in nodes if not n.parent_id]
 
         compression_ratio = (
-            total_input_tokens / max(total_output_tokens, 1)
-            if total_output_tokens > 0
-            else 1.0
+            total_input_tokens / max(total_output_tokens, 1) if total_output_tokens > 0 else 1.0
         )
 
         result = TreeBuildResult(
@@ -311,9 +308,7 @@ class TreeBuilder:
 
         roots = [n.id for n in nodes if not n.parent_id]
         compression_ratio = (
-            total_input_tokens / max(total_output_tokens, 1)
-            if total_output_tokens > 0
-            else 1.0
+            total_input_tokens / max(total_output_tokens, 1) if total_output_tokens > 0 else 1.0
         )
 
         result = TreeBuildResult(
@@ -416,9 +411,7 @@ class TreeBuilder:
 
         roots = [n.id for n in nodes if not n.parent_id]
         compression_ratio = (
-            total_input_tokens / max(total_output_tokens, 1)
-            if total_output_tokens > 0
-            else 1.0
+            total_input_tokens / max(total_output_tokens, 1) if total_output_tokens > 0 else 1.0
         )
 
         result = TreeBuildResult(

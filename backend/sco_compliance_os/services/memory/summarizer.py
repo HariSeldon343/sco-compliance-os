@@ -17,9 +17,10 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Iterable, Protocol
+from datetime import UTC, datetime
+from typing import Protocol
 
 from .chunker import Chunk
 
@@ -52,7 +53,7 @@ class StubLLMClient:
     Questo NON è un summary semantico ma un placeholder navigabile.
     """
 
-    async def complete(self, prompt: str, max_tokens: int) -> str:  # noqa: ARG002
+    async def complete(self, prompt: str, max_tokens: int) -> str:
         # TODO wave 2: chiamata reale a claude-haiku-3.5 o equivalente locale.
         # Per wave 1, ritorniamo placeholder esplicito che non simula intelligenza.
         return "[SUMMARY STUB — wave 1 placeholder, integrate LLM in wave 2]"
@@ -103,9 +104,7 @@ async def summarize_siblings(
 
     total_tokens = sum(c.token_count for c in children_list)
     if total_tokens <= sibling_budget:
-        logger.debug(
-            "Summarization skipped: %d token < budget %d", total_tokens, sibling_budget
-        )
+        logger.debug("Summarization skipped: %d token < budget %d", total_tokens, sibling_budget)
         return None
 
     # Costruisce prompt per LLM (wave 2 lo userà davvero).
@@ -139,7 +138,7 @@ async def summarize_siblings(
         source_id=f"summary_{children_list[0].source_id}",
         provenance={
             "summary_of": [c.id for c in children_list],
-            "summary_generated_at": datetime.now(timezone.utc).isoformat(),
+            "summary_generated_at": datetime.now(UTC).isoformat(),
             "summary_method": "stub" if isinstance(llm_client, StubLLMClient) else "llm",
         },
     )

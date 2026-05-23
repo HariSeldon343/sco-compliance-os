@@ -20,7 +20,7 @@ from __future__ import annotations
 
 __all__ = [
     "parser",
-    "scanner",
     "query",
+    "scanner",
     "sync",
 ]

@@ -13,9 +13,9 @@ from __future__ import annotations
 
 import math
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Iterable, Optional
+from datetime import UTC, datetime
 
 from .chunker import Chunk
 
@@ -68,8 +68,7 @@ def _compute_idf(corpus_tokens: list[list[str]]) -> dict[str, float]:
         for term in set(tokens):
             df[term] = df.get(term, 0) + 1
     return {
-        term: math.log((n_docs - count + 0.5) / (count + 0.5) + 1.0)
-        for term, count in df.items()
+        term: math.log((n_docs - count + 0.5) / (count + 0.5) + 1.0) for term, count in df.items()
     }
 
 
@@ -106,10 +105,10 @@ def _recency_score(created_at_iso: str, half_life_days: float) -> float:
     try:
         created = datetime.fromisoformat(created_at_iso)
         if created.tzinfo is None:
-            created = created.replace(tzinfo=timezone.utc)
+            created = created.replace(tzinfo=UTC)
     except (ValueError, TypeError):
         return 0.0
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     age_days = (now - created).total_seconds() / 86400.0
     if age_days < 0:
         return 1.0
@@ -119,7 +118,7 @@ def _recency_score(created_at_iso: str, half_life_days: float) -> float:
 def score_chunks(
     chunks: Iterable[Chunk],
     query: str,
-    options: Optional[ScoringOptions] = None,
+    options: ScoringOptions | None = None,
 ) -> list[ScoredChunk]:
     """Ranking chunks per rilevanza alla query.
 
@@ -142,10 +141,8 @@ def score_chunks(
     avg_doc_len = sum(len(t) for t in corpus_tokens) / max(len(corpus_tokens), 1)
 
     scored: list[ScoredChunk] = []
-    for chunk, doc_tokens in zip(chunks_list, corpus_tokens):
-        bm25 = _bm25_score(
-            query_tokens, doc_tokens, idf, avg_doc_len, opts.bm25_k1, opts.bm25_b
-        )
+    for chunk, doc_tokens in zip(chunks_list, corpus_tokens, strict=False):
+        bm25 = _bm25_score(query_tokens, doc_tokens, idf, avg_doc_len, opts.bm25_k1, opts.bm25_b)
         recency = _recency_score(chunk.created_at, opts.recency_half_life_days)
         manual = float(chunk.provenance.get(opts.manual_boost_field, 0.0))
         # Composite score: BM25 dominante, recency + manual additivi.

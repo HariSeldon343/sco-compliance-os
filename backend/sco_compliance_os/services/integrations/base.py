@@ -20,9 +20,8 @@ from __future__ import annotations
 import abc
 import secrets
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, ClassVar
-
 
 # ─────────────────────────────────────────────────────────────────────
 # Dataclass tipizzate (il contratto stabile del package)
@@ -47,7 +46,7 @@ class OAuthTokens:
 
     def is_expired(self, leeway_seconds: int = 60) -> bool:
         """Ritorna True se il token è scaduto (con leeway per network jitter)."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         delta = (self.expires_at - now).total_seconds()
         return delta < leeway_seconds
 
@@ -67,7 +66,7 @@ class MemoryChunk:
     title: str
     body: str
     occurred_at: datetime
-    ingested_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    ingested_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     metadata: dict[str, Any] = field(default_factory=dict)
     tags: list[str] = field(default_factory=list)
 

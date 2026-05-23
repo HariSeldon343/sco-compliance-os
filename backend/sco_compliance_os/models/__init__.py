@@ -16,11 +16,11 @@ idempotenza cross-environment (PyInstaller bundle, dev local, CI).
 
 from __future__ import annotations
 
-from .summary import Base, Summary
 from .score import Score
+from .summary import Base, Summary
 
 __all__ = [
     "Base",
-    "Summary",
     "Score",
+    "Summary",
 ]

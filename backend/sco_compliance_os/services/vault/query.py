@@ -20,11 +20,10 @@ import logging
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
-from typing import Optional
 
 import aiosqlite
 
-from .parser import AppliedEntity, FornitoreDi, PertinenzaInVerifica, Relationship
+from .parser import AppliedEntity, Relationship
 from .scanner import default_db_path
 
 logger = logging.getLogger(__name__)
@@ -46,9 +45,9 @@ class EntityHit:
 
     path: str
     title: str
-    entity_type: Optional[str]
-    entity_subtype: Optional[str]
-    ambito_canonico: Optional[str]
+    entity_type: str | None
+    entity_subtype: str | None
+    ambito_canonico: str | None
     status: str
 
 
@@ -82,7 +81,7 @@ def _parse_entity_link(wikilink: str) -> str:
 
 async def clients_applying_entity(
     entity_slug: str,
-    db_path: Optional[Path] = None,
+    db_path: Path | None = None,
 ) -> list[ClientHit]:
     """Lista clienti che hanno entity_slug in applica_entity (Dimensione 5).
 
@@ -119,8 +118,8 @@ async def clients_applying_entity(
 
 async def client_entities_by_role(
     client_path: str,
-    ruolo: Optional[str] = None,
-    db_path: Optional[Path] = None,
+    ruolo: str | None = None,
+    db_path: Path | None = None,
 ) -> list[AppliedEntity]:
     """Per un cliente, ritorna le applica_entity filtrate opzionalmente per ruolo."""
     path = db_path or default_db_path()
@@ -149,7 +148,7 @@ async def client_entities_by_role(
 
 
 async def pertinenze_in_verifica_open(
-    db_path: Optional[Path] = None,
+    db_path: Path | None = None,
 ) -> list[PertinenzaOpenHit]:
     """Cruscotto finding aperti (Conv. 30 Ondata 4, cruscotto O.8).
 
@@ -191,7 +190,7 @@ async def pertinenze_in_verifica_open(
 
 async def suppliers_of(
     client_path: str,
-    db_path: Optional[Path] = None,
+    db_path: Path | None = None,
 ) -> list[SupplierHit]:
     """Reverse query Dimensione 8: chi sono i fornitori del cliente X?
 
@@ -226,7 +225,7 @@ async def suppliers_of(
 
 async def entities_by_ambito(
     ambito: str,
-    db_path: Optional[Path] = None,
+    db_path: Path | None = None,
 ) -> list[EntityHit]:
     """Lista entity wiki per ambito_canonico (es. 'cybersicurezza')."""
     path = db_path or default_db_path()
@@ -257,8 +256,8 @@ async def entities_by_ambito(
 
 async def entities_with_relationships(
     entity_slug: str,
-    rel_type: Optional[str] = None,
-    db_path: Optional[Path] = None,
+    rel_type: str | None = None,
+    db_path: Path | None = None,
 ) -> list[Relationship]:
     """Per un'entity, ritorna relationships eventualmente filtrate per tipo."""
     path = db_path or default_db_path()

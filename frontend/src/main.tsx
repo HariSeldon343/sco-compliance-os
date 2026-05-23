@@ -10,6 +10,7 @@ import { SettingsScreen } from "./screens/SettingsScreen";
 import { IntegrationsScreen } from "./screens/IntegrationsScreen";
 import { VaultScreen } from "./screens/VaultScreen";
 import { MemoryScreen } from "./screens/MemoryScreen";
+import { WikiView } from "./components/WikiView";
 
 import "./index.css";
 import "highlight.js/styles/github-dark.css";
@@ -25,6 +26,8 @@ const router = createBrowserRouter([
       { path: "integrations", element: <IntegrationsScreen /> },
       { path: "vault", element: <VaultScreen /> },
       { path: "memory", element: <MemoryScreen /> },
+      // Wave 2 OpenHuman replica — Memory Tree gerarchico L0/L1/L2 navigabile
+      { path: "wiki", element: <WikiView /> },
     ],
   },
 ]);

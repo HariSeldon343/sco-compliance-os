@@ -101,7 +101,16 @@ extend-exclude = [".venv", "dist", "build", "__pycache__"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "ASYNC", "S", "RUF"]
-ignore = ["S101", "B008"]
+ignore = [
+    "S101",     # assert used (test code ok)
+    "B008",     # function call in default arg (FastAPI Depends idiomatic)
+    "S105",     # hardcoded password string (false positives keyring/oauth/license)
+    "S106",     # hardcoded password func arg (idem)
+    "S110",     # try-except-pass (intentional in network error handling)
+    "ASYNC240", # blocking Path method in async (carry-over wave 3 aiofile refactor)
+    "E501",     # line too long (pragmatic, 100 chars enforced via formatter only)
+    "RUF012",   # mutable class default (dataclass field default factory pattern ok)
+]
 
 # ----- Mypy (typed strict) -----
 [tool.mypy]
@@ -113,9 +122,24 @@ disallow_untyped_defs = true
 no_implicit_optional = true
 check_untyped_defs = true
 
+# Tech debt Wave 0 — pre-existing modules carry-over (TODO cleanup Wave 4+):
+# - missing type args (dict/tuple/list) + unused noqa + return Any
+# - elenchi puntuali per non degradare il check sui moduli Wave 1+
 [[tool.mypy.overrides]]
-module = ["claude_agent_sdk.*", "mcp.*"]
-ignore_missing_imports = true
+module = [
+    "sco_compliance_os.services.memory.chunker",
+    "sco_compliance_os.services.memory.ingest",
+    "sco_compliance_os.services.memory.store",
+    "sco_compliance_os.services.vault.parser",
+    "sco_compliance_os.services.vault.scanner",
+    "sco_compliance_os.services.integrations.registry",
+    "sco_compliance_os.services.license.models",
+    "sco_compliance_os.api.vault_routes",
+    "sco_compliance_os.api.onboarding_routes",
+    "sco_compliance_os.api.license_routes",
+    "sco_compliance_os.core.logging_setup",
+]
+disable_error_code = ["type-arg", "no-any-return", "unused-ignore"]
 
 # ----- Pytest -----
 [tool.pytest.ini_options]

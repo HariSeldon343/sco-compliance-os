@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from .base import OAuthError
@@ -100,7 +100,7 @@ class ConnectorScheduler:
                 await self._run_iteration()
             except asyncio.CancelledError:
                 raise
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 # mai uccidere il loop per eccezioni applicative
                 logger.exception("scheduler iteration crashed | err=%s", exc)
             await asyncio.sleep(self.interval_seconds)
@@ -109,9 +109,7 @@ class ConnectorScheduler:
         """Singola iterazione di fetch su tutti i connettori attivi."""
         known_slugs = ConnectorRegistry.list_slugs()
         active_slugs = list_providers(self.user_id, known_slugs)
-        logger.info(
-            "scheduler iteration | active_connectors=%d", len(active_slugs)
-        )
+        logger.info("scheduler iteration | active_connectors=%d", len(active_slugs))
         for slug in active_slugs:
             # rispetta backoff se presente
             backoff = self._backoff.get(slug, 0)
@@ -130,9 +128,7 @@ class ConnectorScheduler:
             return
         creds = self.connector_credentials.get(slug)
         if creds is None:
-            logger.warning(
-                "no OAuth credentials configured for connector | slug=%s", slug
-            )
+            logger.warning("no OAuth credentials configured for connector | slug=%s", slug)
             return
         client_id, client_secret, redirect_uri = creds
         connector_instance: BaseConnector = connector_cls(
@@ -150,19 +146,15 @@ class ConnectorScheduler:
                 store_tokens(slug, self.user_id, refreshed)
                 tokens = refreshed
             since = self._last_fetch.get(slug)
-            chunks: list[MemoryChunk] = await connector_instance.fetch_data(
-                tokens, since=since
-            )
+            chunks: list[MemoryChunk] = await connector_instance.fetch_data(tokens, since=since)
             await self._dispatch_chunks(slug, chunks)
-            self._last_fetch[slug] = datetime.now(timezone.utc)
+            self._last_fetch[slug] = datetime.now(UTC)
             self._backoff[slug] = 0  # reset backoff su successo
-            logger.info(
-                "fetch ok | slug=%s chunks=%d", slug, len(chunks)
-            )
+            logger.info("fetch ok | slug=%s chunks=%d", slug, len(chunks))
         except OAuthError as exc:
             logger.error("OAuth error during fetch | slug=%s err=%s", slug, exc)
             self._apply_backoff(slug)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.exception("generic error during fetch | slug=%s err=%s", slug, exc)
             self._apply_backoff(slug)
 
@@ -173,9 +165,7 @@ class ConnectorScheduler:
         self._backoff[slug] = next_backoff
         logger.info("backoff applied | slug=%s next_seconds=%d", slug, next_backoff)
 
-    async def _dispatch_chunks(
-        self, slug: str, chunks: "list[MemoryChunk]"
-    ) -> None:
+    async def _dispatch_chunks(self, slug: str, chunks: list[MemoryChunk]) -> None:
         """Ingest chunks dal connector → Memory Tree (Conv. 43 Smart File Injection).
 
         Pipeline: ogni MemoryChunk → markdown ben formato → ingest_text con provenance
@@ -217,7 +207,7 @@ class ConnectorScheduler:
                     provenance=provenance,
                 )
                 ingested_count += 1
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.warning(
                     "scheduler.dispatch.ingest_failed | slug=%s external_id=%s err=%s",
                     slug,

@@ -102,7 +102,9 @@ async def chat_stream(
     store = get_store(settings.memory_tree_db_path)
     conv = await store.get_conversation(payload.conversation_id)
     if conv is None:
-        raise HTTPException(status_code=404, detail=f"Conversation {payload.conversation_id} non trovata")
+        raise HTTPException(
+            status_code=404, detail=f"Conversation {payload.conversation_id} non trovata"
+        )
 
     # Persisti messaggio utente prima dello stream
     await store.append_message(
@@ -133,7 +135,7 @@ async def chat_stream(
                 # Emit SSE
                 event_payload = {"kind": ev.kind, "data": ev.data, "seq": ev.seq}
                 yield f"data: {json.dumps(event_payload, ensure_ascii=False)}\n\n"
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.error("chat_stream.error", error=str(exc), exc_info=True)
             yield f"data: {json.dumps({'kind': 'error', 'data': {'message': str(exc)}})}\n\n"
         finally:
@@ -217,13 +219,9 @@ async def get_conversation_messages(
                 role=m.role,
                 content=m.content,
                 ask_user_question=(
-                    json.loads(m.ask_user_question_json)
-                    if m.ask_user_question_json
-                    else None
+                    json.loads(m.ask_user_question_json) if m.ask_user_question_json else None
                 ),
-                tool_calls=(
-                    json.loads(m.tool_calls_json) if m.tool_calls_json else None
-                ),
+                tool_calls=(json.loads(m.tool_calls_json) if m.tool_calls_json else None),
                 created_at=m.created_at.isoformat(),
             )
         )

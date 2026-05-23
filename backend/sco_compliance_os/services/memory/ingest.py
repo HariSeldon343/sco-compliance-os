@@ -23,9 +23,8 @@ from __future__ import annotations
 import hashlib
 import logging
 import mimetypes
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 from .chunker import Chunk, chunk_markdown
 from .store import bulk_insert
@@ -58,7 +57,7 @@ def _read_pdf(path: Path) -> tuple[str, int]:
         reader = PdfReader(str(path))
         pages = [p.extract_text() or "" for p in reader.pages]
         return "\n\n".join(pages), len(pages)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.error("Errore parsing PDF %s: %s", path, exc)
         return "", 0
 
@@ -80,7 +79,7 @@ def _read_docx(path: Path) -> str:
         doc = Document(str(path))
         paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
         return "\n\n".join(paragraphs)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.error("Errore parsing DOCX %s: %s", path, exc)
         return ""
 
@@ -100,8 +99,8 @@ async def ingest_text(
     source_type: str = "manual",
     source_id: str = "",
     source_path: str = "",
-    provenance: Optional[dict] = None,
-    db_path: Optional[Path] = None,
+    provenance: dict | None = None,
+    db_path: Path | None = None,
 ) -> list[Chunk]:
     """Ingest di stringa in memoria → chunker → store.
 
@@ -132,8 +131,8 @@ async def ingest_file(
     path: Path,
     *,
     source_type: str = "user_upload",
-    db_path: Optional[Path] = None,
-    extra_provenance: Optional[dict] = None,
+    db_path: Path | None = None,
+    extra_provenance: dict | None = None,
 ) -> list[Chunk]:
     """Ingest di file da filesystem con provenance metadata completi (Conv. 43).
 
@@ -150,7 +149,7 @@ async def ingest_file(
     size_bytes = path.stat().st_size
     suffix = path.suffix.lower()
     mime, _ = mimetypes.guess_type(str(path))
-    pages: Optional[int] = None
+    pages: int | None = None
     parser: str
 
     if suffix in {".md", ".markdown"}:
@@ -178,7 +177,7 @@ async def ingest_file(
         "hash_md5": md5,
         "dimensione_byte": size_bytes,
         "mime_type": mime or "application/octet-stream",
-        "data_import_vault": datetime.now(timezone.utc).isoformat(),
+        "data_import_vault": datetime.now(UTC).isoformat(),
         "filename_original": path.name,
     }
     if pages is not None:

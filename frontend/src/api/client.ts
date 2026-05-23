@@ -4,8 +4,11 @@
 
 import type {
   ConversationItem,
+  HotnessItem,
   IntegrationItem,
   MessageItem,
+  TreeLevel,
+  TreeSummaryItem,
   VaultItem,
 } from "@/types/api";
 
@@ -150,5 +153,34 @@ export const apiClient = {
   // ---- Integrations ----
   async listIntegrations(): Promise<IntegrationItem[]> {
     return request<IntegrationItem[]>("/api/integrations");
+  },
+
+  // ---- Memory Tree (Wave 2 OpenHuman replica) ----
+  // Backend single source of truth: tabella `summaries` (migration 0002).
+  // Endpoint distinto da `/tree` legacy per evitare breaking changes contratto.
+  async listTreeSummaries(params: {
+    source?: string;
+    level?: TreeLevel;
+    topic?: string;
+    day?: string; // ISO YYYY-MM-DD
+    limit?: number;
+  } = {}): Promise<TreeSummaryItem[]> {
+    const search = new URLSearchParams();
+    if (params.source) search.set("source", params.source);
+    if (params.level !== undefined) search.set("level", String(params.level));
+    if (params.topic) search.set("topic", params.topic);
+    if (params.day) search.set("day", params.day);
+    if (params.limit !== undefined) search.set("limit", String(params.limit));
+    const qs = search.toString();
+    const path = qs
+      ? `/api/memory/tree-summaries?${qs}`
+      : "/api/memory/tree-summaries";
+    return request<TreeSummaryItem[]>(path);
+  },
+
+  // Top-N chunks per hotness con decay 0.95/day applicato lato backend.
+  async getTopHotness(params: { n?: number } = {}): Promise<HotnessItem[]> {
+    const n = params.n ?? 20;
+    return request<HotnessItem[]>(`/api/memory/hotness/top?n=${n}`);
   },
 };

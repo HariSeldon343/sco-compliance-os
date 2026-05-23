@@ -20,7 +20,7 @@ del messaggio assistant per sopravvivere ai cambi conversazione.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -88,7 +88,7 @@ def _save_active_license(
         "email": email,
         "license_key": license_key,  # plaintext temp; Wave 2 → keyring
         "validation_result": result.to_dict(),
-        "activated_at": datetime.now(timezone.utc).isoformat(),
+        "activated_at": datetime.now(UTC).isoformat(),
     }
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 

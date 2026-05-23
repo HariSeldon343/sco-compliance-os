@@ -18,7 +18,7 @@ Wave 1 status: STUB.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
 from .base import BaseConnector, MemoryChunk, OAuthError, OAuthTokens
@@ -60,7 +60,7 @@ class GoogleDriveConnector(BaseConnector):
     async def handle_callback(self, code: str, state: str) -> OAuthTokens:
         """STUB. TODO Wave 2."""
         logger.warning("google_drive handle_callback STUB — wave 2 pending")
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return OAuthTokens(
             access_token="STUB_ACCESS_TOKEN_GDRIVE",
             refresh_token="STUB_REFRESH_TOKEN_GDRIVE",
@@ -80,7 +80,7 @@ class GoogleDriveConnector(BaseConnector):
                 provider=self.oauth_provider,
             )
         logger.warning("google_drive refresh STUB — wave 2 pending")
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return OAuthTokens(
             access_token="STUB_ACCESS_TOKEN_GDRIVE_REFRESHED",
             refresh_token=tokens.refresh_token,
@@ -102,7 +102,7 @@ class GoogleDriveConnector(BaseConnector):
                (rispetta privacy: solo se utente abilita esplicitamente).
         """
         logger.warning("google_drive fetch_data STUB — wave 2 pending")
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return [
             MemoryChunk(
                 external_id="gdrive_file_stub_001",
@@ -113,8 +113,7 @@ class GoogleDriveConnector(BaseConnector):
                 occurred_at=now - timedelta(hours=12),
                 metadata={
                     "mime_type": (
-                        "application/vnd.openxmlformats-officedocument."
-                        "wordprocessingml.document"
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                     ),
                     "size_bytes": 245_678,
                     "owner": "user@example.com",

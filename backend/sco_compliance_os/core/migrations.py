@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Optional
 
 import aiosqlite
 import structlog
@@ -50,7 +49,7 @@ def _resolve_migrations_dir() -> Path | None:
     return None
 
 
-async def apply_migrations(db_path: Optional[Path] = None) -> dict[str, int | list[str]]:
+async def apply_migrations(db_path: Path | None = None) -> dict[str, int | list[str]]:
     """Applica tutte le migration .sql trovate in ordine alfabetico.
 
     Args:

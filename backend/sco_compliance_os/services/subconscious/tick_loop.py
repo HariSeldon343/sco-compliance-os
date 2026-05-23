@@ -30,8 +30,8 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import Awaitable, Callable
-from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -130,7 +130,9 @@ class SubconsciousTickLoop:
         self._activity_log = activity_log_path or DEFAULT_ACTIVITY_LOG_PATH
         self._activity_log.parent.mkdir(parents=True, exist_ok=True)
 
-        self._throttle = TickThrottle()
+        # name="subconscious" preserva il namespace logger storico W1
+        # (subconscious.throttle.preempt / acquired / released / external_cancel).
+        self._throttle = TickThrottle(name="subconscious")
         self._status = _LoopStatus(interval_seconds=self._interval)
         self._task: asyncio.Task[None] | None = None
         self._stop_event = asyncio.Event()
@@ -173,12 +175,12 @@ class SubconsciousTickLoop:
         if self._task is not None:
             try:
                 await asyncio.wait_for(self._task, timeout=30.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning("subconscious.loop.stop.timeout_force_cancel")
                 self._task.cancel()
                 try:
                     await self._task
-                except (asyncio.CancelledError, Exception):  # noqa: BLE001
+                except (asyncio.CancelledError, Exception):
                     pass
         self._status.running = False
         self._task = None
@@ -233,7 +235,7 @@ class SubconsciousTickLoop:
                 # Esegui tick (cattura eccezioni per evitare crash loop)
                 try:
                     await self._execute_one_tick(manual=False)
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
                     self._status.consecutive_failures += 1
                     logger.error(
                         "subconscious.loop.tick_unhandled_error",
@@ -246,7 +248,7 @@ class SubconsciousTickLoop:
                 wait = self._effective_interval()
                 try:
                     await asyncio.wait_for(self._stop_event.wait(), timeout=wait)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     pass  # timeout = e' ora del prossimo tick
         except asyncio.CancelledError:
             logger.info("subconscious.loop.cancelled")
@@ -316,7 +318,7 @@ class SubconsciousTickLoop:
             return SubconsciousContext()
         try:
             return await self._context_provider()
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.warning(
                 "subconscious.context.build_failed",
                 error=str(e),
@@ -334,12 +336,12 @@ class SubconsciousTickLoop:
         # Failure > soglia: backoff esponenziale capped
         # n_fail=4 -> 600s, n_fail=5 -> 1200s, n_fail=6 -> 2400s, n_fail>=7 -> 3600s
         excess = n_fail - BACKOFF_FAILURE_THRESHOLD
-        wait = BACKOFF_BASE_SECONDS * (2 ** (excess - 1))
+        wait: int = BACKOFF_BASE_SECONDS * (2 ** (excess - 1))
         return min(wait, BACKOFF_CAP_SECONDS)
 
     def _maybe_reset_daily_counter(self) -> None:
         """Reset ticks_today se cambiata data UTC."""
-        today_utc = datetime.now(timezone.utc).date().isoformat()
+        today_utc = datetime.now(UTC).date().isoformat()
         if self._status.ticks_today_date != today_utc:
             if self._status.ticks_today_date is not None:
                 logger.info(
@@ -354,7 +356,7 @@ class SubconsciousTickLoop:
         """Sleep ~1h per controllare a breve cap reset midnight."""
         try:
             await asyncio.wait_for(self._stop_event.wait(), timeout=3600.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pass
 
     def _append_activity_log(
@@ -412,7 +414,7 @@ class SubconsciousTickLoop:
 
 def _utc_now_iso() -> str:
     """Timestamp UTC ISO 8601."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 # Default singleton-like ref per accesso da api/subconscious_routes.py.

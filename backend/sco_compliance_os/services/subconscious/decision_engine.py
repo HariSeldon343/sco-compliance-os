@@ -183,7 +183,7 @@ class DecisionEngine:
         try:
             outcome = await self._llm_decide(context)
             return outcome
-        except Exception as e:  # noqa: BLE001 - voluto: fallback safe a SKIP
+        except Exception as e:
             logger.warning(
                 "subconscious.decide.llm_failure",
                 error=str(e),
@@ -243,11 +243,7 @@ class DecisionEngine:
             else settings.anthropic_api_key
         )
         api_key = api_key_secret.get_secret_value() or "missing-key"
-        base_url = (
-            settings.sco_saas_base_url
-            if settings.license_key.get_secret_value()
-            else None
-        )
+        base_url = settings.sco_saas_base_url if settings.license_key.get_secret_value() else None
         kwargs: dict[str, Any] = {"api_key": api_key}
         if base_url:
             kwargs["base_url"] = base_url
@@ -266,7 +262,7 @@ class DecisionEngine:
                 return str(first.text)
             if isinstance(first, dict):
                 return str(first.get("text", ""))
-        except Exception:  # noqa: BLE001
+        except Exception:
             return ""
         return ""
 
@@ -286,7 +282,8 @@ class DecisionEngine:
         if start == -1 or end == -1 or end <= start:
             return {}
         try:
-            return json.loads(text[start : end + 1])
+            parsed: dict[str, Any] = json.loads(text[start : end + 1])
+            return parsed
         except json.JSONDecodeError:
             return {}
 

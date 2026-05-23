@@ -21,7 +21,6 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from sco_compliance_os.core.logging_setup import get_logger
-from sco_compliance_os.services.subconscious.decision_engine import Decision
 from sco_compliance_os.services.subconscious.tick_loop import (
     SubconsciousTickLoop,
     get_active_loop,
@@ -189,7 +188,7 @@ async def get_activity(
     for r in raw:
         try:
             parsed.append(ActivityEntry(**r))
-        except Exception as e:  # noqa: BLE001 - schema mismatch tollerato
+        except Exception as e:
             logger.warning("subconscious.activity.parse_error", error=str(e))
             continue
     return ActivityResponse(entries=parsed, count=len(parsed))

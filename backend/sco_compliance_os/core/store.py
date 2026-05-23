@@ -124,7 +124,7 @@ class Store:
     async def _safe_add_column(conn: Any, table: str, column: str, sql_type: str) -> None:
         try:
             await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {sql_type}"))
-        except Exception:  # noqa: BLE001 — duplicate column è atteso
+        except Exception:
             pass
 
     @asynccontextmanager
@@ -178,9 +178,7 @@ class Store:
                     else None
                 ),
                 tool_calls_json=(
-                    json.dumps(tool_calls, ensure_ascii=False)
-                    if tool_calls is not None
-                    else None
+                    json.dumps(tool_calls, ensure_ascii=False) if tool_calls is not None else None
                 ),
             )
             sess.add(msg)

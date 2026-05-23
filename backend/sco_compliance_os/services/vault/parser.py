@@ -24,64 +24,71 @@ import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 # Vocabolari chiusi Ondate 2-3-4 (riferimento: CLAUDE.md vault Amodeo).
-ENTITY_TYPES = frozenset({
-    "atto-normativo",
-    "standard-tecnico",
-    "linea-guida",
-    "autorita",
-    "metodologia",
-    "autore-prassi",
-    "soggetto-obbligato",
-    "scadenza",  # Dimensione 6 Ondata 3 — sub-tipo dedicato
-})
+ENTITY_TYPES = frozenset(
+    {
+        "atto-normativo",
+        "standard-tecnico",
+        "linea-guida",
+        "autorita",
+        "metodologia",
+        "autore-prassi",
+        "soggetto-obbligato",
+        "scadenza",  # Dimensione 6 Ondata 3 — sub-tipo dedicato
+    }
+)
 
-AMBITO_CANONICO = frozenset({
-    "cybersicurezza",
-    "governance-ai",
-    "privacy-protezione-dati",
-    "accreditamento-sanitario",
-    "dispositivi-medici",
-    "radioprotezione",
-    "sicurezza-lavoro",
-    "farmacovigilanza",
-    "service-management-ict",
-    "appalti-pubblici",
-    "prevenzione-incendi",
-    "compliance-231",
-    "qualita-sgq",
-    "gestione-ambientale",
-    "sicurezza-alimentare",
-    "responsabilita-sociale",
-    "multi-dominio",  # metaflag
-})
+AMBITO_CANONICO = frozenset(
+    {
+        "cybersicurezza",
+        "governance-ai",
+        "privacy-protezione-dati",
+        "accreditamento-sanitario",
+        "dispositivi-medici",
+        "radioprotezione",
+        "sicurezza-lavoro",
+        "farmacovigilanza",
+        "service-management-ict",
+        "appalti-pubblici",
+        "prevenzione-incendi",
+        "compliance-231",
+        "qualita-sgq",
+        "gestione-ambientale",
+        "sicurezza-alimentare",
+        "responsabilita-sociale",
+        "multi-dominio",  # metaflag
+    }
+)
 
-RELATIONSHIP_TYPES = frozenset({
-    "recepisce",
-    "attua",
-    "abroga",
-    "modifica",
-    "supersedes",
-    "correlato-a",
-    "richiama",
-    "vigilato-da",
-})
+RELATIONSHIP_TYPES = frozenset(
+    {
+        "recepisce",
+        "attua",
+        "abroga",
+        "modifica",
+        "supersedes",
+        "correlato-a",
+        "richiama",
+        "vigilato-da",
+    }
+)
 
-EDGE_RUOLI = frozenset({
-    "soggetto-essenziale",
-    "soggetto-importante",
-    "destinatario-obblighi",
-    "certificando",
-    "fornitore-critico",
-    "destinatario-vigilanza",
-    "mah-farmacovigilanza",
-    "provider-deployer-ai",
-    "applica-volontario",
-})
+EDGE_RUOLI = frozenset(
+    {
+        "soggetto-essenziale",
+        "soggetto-importante",
+        "destinatario-obblighi",
+        "certificando",
+        "fornitore-critico",
+        "destinatario-vigilanza",
+        "mah-farmacovigilanza",
+        "provider-deployer-ai",
+        "applica-volontario",
+    }
+)
 
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n(.*)$", re.DOTALL)
 
@@ -142,9 +149,9 @@ class VaultDocument:
     body_md: str = ""
 
     # Dimensioni Ondata 2-3-4 (popolate solo se applicabili al tipo doc).
-    entity_type: Optional[str] = None
-    entity_subtype: Optional[str] = None
-    ambito_canonico: Optional[str] = None
+    entity_type: str | None = None
+    entity_subtype: str | None = None
+    ambito_canonico: str | None = None
     domini_applicabili: list[str] = field(default_factory=list)
     relationships: list[Relationship] = field(default_factory=list)
     applica_entity: list[AppliedEntity] = field(default_factory=list)

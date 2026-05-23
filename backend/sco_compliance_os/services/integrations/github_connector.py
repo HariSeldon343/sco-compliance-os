@@ -23,7 +23,7 @@ Wave 1 status: STUB.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
 from .base import BaseConnector, MemoryChunk, OAuthError, OAuthTokens
@@ -68,7 +68,7 @@ class GitHubConnector(BaseConnector):
         bisogna forzare ``Accept: application/json`` per JSON response.
         """
         logger.warning("github handle_callback STUB — wave 2 pending")
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         # GitHub OAuth tokens NON scadono di default (a meno di expirations
         # abilitate). Codifichiamo expires_at lontano nel futuro.
         return OAuthTokens(
@@ -96,7 +96,7 @@ class GitHubConnector(BaseConnector):
                 provider=self.oauth_provider,
             )
         logger.warning("github refresh STUB — wave 2 pending")
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return OAuthTokens(
             access_token="gho_STUB_REFRESHED",
             refresh_token=tokens.refresh_token,
@@ -117,7 +117,7 @@ class GitHubConnector(BaseConnector):
             4. Header rate limit handling: X-RateLimit-Remaining; backoff on 403.
         """
         logger.warning("github fetch_data STUB — wave 2 pending")
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return [
             MemoryChunk(
                 external_id="gh_pr_stub_001",

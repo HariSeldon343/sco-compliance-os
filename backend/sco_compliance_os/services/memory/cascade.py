@@ -21,9 +21,9 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime, timedelta, timezone
+from collections.abc import Sequence
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Optional, Sequence
 
 import aiosqlite
 import structlog
@@ -44,7 +44,7 @@ _SUMMARY_TARGET_TOKENS = 1500
 
 def _utc_now_iso() -> str:
     """Timestamp UTC ISO 8601."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def should_seal_l0(buffer_chunks: Sequence[Chunk]) -> tuple[bool, str]:
@@ -68,14 +68,14 @@ def should_seal_l0(buffer_chunks: Sequence[Chunk]) -> tuple[bool, str]:
         return True, f"budget_exceeded: {total_tokens} > {_L0_TO_L1_BUDGET_TOKENS}"
 
     # Check oldest chunk age
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     threshold = now - timedelta(days=_L0_TO_L1_AGE_DAYS)
     oldest_iso = min((c.created_at for c in buffer_chunks), default=None)
     if oldest_iso:
         try:
             oldest = datetime.fromisoformat(oldest_iso)
             if oldest.tzinfo is None:
-                oldest = oldest.replace(tzinfo=timezone.utc)
+                oldest = oldest.replace(tzinfo=UTC)
             if oldest < threshold:
                 return True, f"age_exceeded: oldest {oldest_iso} > {_L0_TO_L1_AGE_DAYS}d"
         except (ValueError, TypeError):
@@ -91,7 +91,7 @@ async def promote_to_l1(
     topic: str | None = None,
     day: str | None = None,
     llm_client: LLMClient | None = None,
-    db_path: Optional[Path] = None,
+    db_path: Path | None = None,
 ) -> dict[str, str | int | list[str]]:
     """Promuove buffer di chunks L0 a un Summary L1.
 
@@ -214,7 +214,7 @@ async def aggregate_l1_to_l2(
     source: str,
     topic: str | None = None,
     llm_client: LLMClient | None = None,
-    db_path: Optional[Path] = None,
+    db_path: Path | None = None,
 ) -> dict[str, str | int | list[str]]:
     """Aggrega N Summary L1 in un Summary L2 (weekly/monthly aggregation).
 

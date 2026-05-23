@@ -35,7 +35,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
 
@@ -159,7 +159,10 @@ class LicenseClient:
             response = await client.post(
                 url,
                 json=payload,
-                headers={"Content-Type": "application/json", "User-Agent": "sco-compliance-os/0.1.0"},
+                headers={
+                    "Content-Type": "application/json",
+                    "User-Agent": "sco-compliance-os/0.1.0",
+                },
             )
 
         # Parse response
@@ -213,12 +216,10 @@ class LicenseClient:
             validated_at = datetime.fromisoformat(cached.validated_at.replace("Z", "+00:00"))
         except ValueError:
             return False
-        age = datetime.now(timezone.utc) - validated_at
+        age = datetime.now(UTC) - validated_at
         return age < timedelta(seconds=cached.cache_ttl_seconds)
 
-    def _read_cache(
-        self, email: str, license_hash: str
-    ) -> LicenseValidationResult | None:
+    def _read_cache(self, email: str, license_hash: str) -> LicenseValidationResult | None:
         """Legge cache JSON locale, ritorna result se exists per email+hash."""
         cache_file = _cache_path()
         if not cache_file.exists():
@@ -244,9 +245,7 @@ class LicenseClient:
             logger.warning("license.cache.read_error | err=%s", exc)
             return None
 
-    def _write_cache(
-        self, email: str, license_hash: str, result: LicenseValidationResult
-    ) -> None:
+    def _write_cache(self, email: str, license_hash: str, result: LicenseValidationResult) -> None:
         """Scrive result in cache JSON locale."""
         cache_file = _cache_path()
         cache_file.parent.mkdir(parents=True, exist_ok=True)
@@ -265,5 +264,6 @@ class LicenseClient:
 def get_license_client() -> LicenseClient:
     """Singleton LicenseClient con settings da env."""
     import os
+
     saas_url = os.environ.get("SCO_SAAS_BASE_URL", DEFAULT_SAAS_BASE_URL)
     return LicenseClient(saas_base_url=saas_url)

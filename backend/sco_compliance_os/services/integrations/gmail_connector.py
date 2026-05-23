@@ -22,7 +22,7 @@ Wave 2.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
 from .base import BaseConnector, MemoryChunk, OAuthError, OAuthTokens
@@ -72,7 +72,7 @@ class GmailConnector(BaseConnector):
         """
         # TODO: httpx.AsyncClient.post(self.token_url, data={...})
         logger.warning("gmail handle_callback STUB — wave 2 implementation pending")
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return OAuthTokens(
             access_token="STUB_ACCESS_TOKEN_GMAIL",
             refresh_token="STUB_REFRESH_TOKEN_GMAIL",
@@ -97,7 +97,7 @@ class GmailConnector(BaseConnector):
             )
         # TODO Wave 2: chiamata reale a token_url con grant_type=refresh_token
         logger.warning("gmail refresh_token STUB — wave 2 implementation pending")
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return OAuthTokens(
             access_token="STUB_ACCESS_TOKEN_GMAIL_REFRESHED",
             refresh_token=tokens.refresh_token,
@@ -119,7 +119,7 @@ class GmailConnector(BaseConnector):
             4. Parsing payload MIME (headers Subject/From/Date + snippet/body).
         """
         logger.warning("gmail fetch_data STUB — wave 2 implementation pending")
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         # MOCK: 2 chunk di esempio per dimostrare la shape
         return [
             MemoryChunk(

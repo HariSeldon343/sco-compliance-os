@@ -18,4 +18,4 @@ from __future__ import annotations
 
 __version__ = "0.2.0"
 __author__ = "Antonio Silvestro Amodeo"
-__all__ = ["__version__", "__author__"]
+__all__ = ["__author__", "__version__"]

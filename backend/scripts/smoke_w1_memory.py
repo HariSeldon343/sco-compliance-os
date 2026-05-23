@@ -16,11 +16,10 @@ Esecuzione: cd backend && uv run python scripts/smoke_w1_memory.py
 from __future__ import annotations
 
 import asyncio
-import json
 import sys
 import tempfile
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 # Ensure backend package in path (pyproject install handles this normally)
@@ -30,24 +29,22 @@ sys.path.insert(0, str(HERE.parent))
 import structlog  # noqa: E402
 
 from sco_compliance_os.core.migrations import apply_migrations  # noqa: E402
+from sco_compliance_os.services.memory.cascade import (  # noqa: E402
+    promote_to_l1,
+    should_seal_l0,
+)
 from sco_compliance_os.services.memory.chunker import Chunk  # noqa: E402
-from sco_compliance_os.services.memory.store import (  # noqa: E402
-    bulk_insert,
-    count_chunks,
-    init_schema,
-    query_by_source,
-)
-from sco_compliance_os.services.memory.openhuman_scorer import (  # noqa: E402
-    fast_score_sync,
-    fast_score_batch,
-)
 from sco_compliance_os.services.memory.hotness import (  # noqa: E402
     get_top_hot_chunks,
     record_access,
 )
-from sco_compliance_os.services.memory.cascade import (  # noqa: E402
-    promote_to_l1,
-    should_seal_l0,
+from sco_compliance_os.services.memory.openhuman_scorer import (  # noqa: E402
+    fast_score_batch,
+)
+from sco_compliance_os.services.memory.store import (  # noqa: E402
+    bulk_insert,
+    count_chunks,
+    init_schema,
 )
 from sco_compliance_os.services.memory.tree_builder import TreeBuilder  # noqa: E402
 
@@ -103,7 +100,7 @@ def _fake_chunk(idx: int, source: str = "test") -> Chunk:
         source_type="manual",
         source_id=source,
         provenance={"smoke_test": True, "idx": idx},
-        created_at=datetime.now(timezone.utc).isoformat(),
+        created_at=datetime.now(UTC).isoformat(),
     )
 
 
@@ -150,9 +147,11 @@ async def main() -> int:
     high_scores = [s for s in scores if s.fast_score > 0.4]
     print(f"      OK scored={len(scores)}, high_score(>0.4)={len(high_scores)}")
     if not scores or scores[0].fast_score == 0:
-        print(f"      FAIL: top score is 0, expected non-zero norm matches")
+        print("      FAIL: top score is 0, expected non-zero norm matches")
         return 4
-    print(f"      Top 3 scores: {[(s.chunk_id[:8], round(s.fast_score, 3), s.norm_matches, s.authority_matches) for s in scores[:3]]}")
+    print(
+        f"      Top 3 scores: {[(s.chunk_id[:8], round(s.fast_score, 3), s.norm_matches, s.authority_matches) for s in scores[:3]]}"
+    )
 
     # 5. record_access su 10 chunks per popolare hotness
     print("[5/8] record_access on 10 chunks (popolare hotness)...")
@@ -163,7 +162,9 @@ async def main() -> int:
     if len(top_hot) < 10:
         print(f"      FAIL: expected >=10 hotness rows, got {len(top_hot)}")
         return 5
-    print(f"      Top 3 hot: {[(s.chunk_id[:8], round(s.hotness, 3), s.access_count) for s in top_hot[:3]]}")
+    print(
+        f"      Top 3 hot: {[(s.chunk_id[:8], round(s.hotness, 3), s.access_count) for s in top_hot[:3]]}"
+    )
 
     # 6. promote_to_l1 con buffer chunks (forza seal)
     print("[6/8] promote_to_l1 (force seal con tutti i 50 chunks)...")
@@ -177,22 +178,26 @@ async def main() -> int:
         fake_chunks,
         source="test",
         topic="cybersicurezza",
-        day=datetime.now(timezone.utc).date().isoformat(),
+        day=datetime.now(UTC).date().isoformat(),
         db_path=test_db,
     )
     summary_id = promo_result.get("summary_id")
-    print(f"      OK summary_id={summary_id}, token_count={promo_result.get('token_count')}, chunk_count={promo_result.get('chunk_count')}")
+    print(
+        f"      OK summary_id={summary_id}, token_count={promo_result.get('token_count')}, chunk_count={promo_result.get('chunk_count')}"
+    )
     if not summary_id:
-        print(f"      FAIL: summary_id empty")
+        print("      FAIL: summary_id empty")
         return 6
 
     # 7. TreeBuilder.build_source_tree("test") + verifica
     print("[7/8] TreeBuilder.build_source_tree(test)...")
     builder = TreeBuilder(db_path=test_db)
     tree_result = await builder.build_source_tree("test")
-    print(f"      OK nodes={len(tree_result.nodes)}, roots={len(tree_result.roots)}, "
-          f"L0={tree_result.l0_count}, L1={tree_result.l1_count}, L2={tree_result.l2_count}, "
-          f"compression={tree_result.compression_ratio}x")
+    print(
+        f"      OK nodes={len(tree_result.nodes)}, roots={len(tree_result.roots)}, "
+        f"L0={tree_result.l0_count}, L1={tree_result.l1_count}, L2={tree_result.l2_count}, "
+        f"compression={tree_result.compression_ratio}x"
+    )
     if tree_result.l0_count != 50:
         print(f"      FAIL: expected 50 L0, got {tree_result.l0_count}")
         return 7
@@ -205,7 +210,7 @@ async def main() -> int:
     topic_result = await builder.build_topic_tree("cybersicurezza")
     print(f"      OK L1={topic_result.l1_count}, L2={topic_result.l2_count}")
     if topic_result.l1_count < 1:
-        print(f"      FAIL: expected >=1 L1 in topic tree")
+        print("      FAIL: expected >=1 L1 in topic tree")
         return 7
 
     # 7c. Verifica build_global_tree
@@ -218,7 +223,7 @@ async def main() -> int:
     l1_list = await builder.list_summaries_by_filter(level=1, limit=20)
     print(f"      OK L1 found via filter: {len(l1_list)}")
     if not l1_list:
-        print(f"      FAIL: expected >=1 L1 via filter")
+        print("      FAIL: expected >=1 L1 via filter")
         return 8
 
     print("\n=== SMOKE W1-MEMORY: PASS ===")

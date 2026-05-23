@@ -29,10 +29,10 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import AsyncIterator
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import AsyncIterator, Optional
 
 import aiosqlite
 
@@ -43,15 +43,17 @@ logger = logging.getLogger(__name__)
 _DEFAULT_DB_PATH = Path.home() / ".sco-compliance-os" / "vault_index.db"
 
 # Cartelle da escludere dalla scansione.
-_SKIP_DIRS = frozenset({
-    ".git",
-    ".obsidian",
-    ".claude",
-    "node_modules",
-    "_template-originale",
-    "__pycache__",
-    ".venv",
-})
+_SKIP_DIRS = frozenset(
+    {
+        ".git",
+        ".obsidian",
+        ".claude",
+        "node_modules",
+        "_template-originale",
+        "__pycache__",
+        ".venv",
+    }
+)
 
 # Pattern archivio (prefix-based).
 _SKIP_PREFIXES = ("_archivio", "_archived", ".")
@@ -88,7 +90,7 @@ def default_db_path() -> Path:
     return _DEFAULT_DB_PATH
 
 
-async def init_schema(db_path: Optional[Path] = None) -> None:
+async def init_schema(db_path: Path | None = None) -> None:
     """Inizializza schema idempotente."""
     path = db_path or default_db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -133,7 +135,7 @@ def walk_vault(vault_root: Path) -> AsyncIterator[Path]:
 
 def _doc_to_row(doc: VaultDocument) -> tuple:
     """Serializza VaultDocument in tupla per INSERT."""
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     return (
         doc.path,
         doc.type,
@@ -154,7 +156,7 @@ def _doc_to_row(doc: VaultDocument) -> tuple:
     )
 
 
-async def index_document(doc: VaultDocument, db_path: Optional[Path] = None) -> None:
+async def index_document(doc: VaultDocument, db_path: Path | None = None) -> None:
     """Inserisce o sostituisce un VaultDocument nell'index."""
     path = db_path or default_db_path()
     async with aiosqlite.connect(path) as db:
@@ -171,7 +173,7 @@ async def index_document(doc: VaultDocument, db_path: Optional[Path] = None) -> 
 
 async def scan_vault(
     vault_root: Path,
-    db_path: Optional[Path] = None,
+    db_path: Path | None = None,
 ) -> tuple[int, int]:
     """Scansiona ricorsivamente vault_root e popola l'index.
 
@@ -192,7 +194,7 @@ async def scan_vault(
                 continue
             await index_document(doc, db_path=db_path)
             indexed += 1
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.error("Errore indexing %s: %s", md_file, exc)
             continue
 
@@ -205,7 +207,7 @@ async def scan_vault(
     return processed, indexed
 
 
-async def count_documents(db_path: Optional[Path] = None) -> int:
+async def count_documents(db_path: Path | None = None) -> int:
     """Conta documenti indicizzati."""
     path = db_path or default_db_path()
     async with aiosqlite.connect(path) as db:

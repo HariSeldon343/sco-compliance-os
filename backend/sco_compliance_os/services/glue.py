@@ -19,9 +19,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
-from .memory.chunker import Chunk
 from .memory.scorer import ScoredChunk, score_chunks
 from .memory.store import query_recent
 from .vault.parser import VaultDocument
@@ -92,7 +90,7 @@ def is_compliance_query(query: str) -> bool:
     return bool(_COMPLIANCE_RE.search(query))
 
 
-def detect_ambito_hint(query: str) -> Optional[str]:
+def detect_ambito_hint(query: str) -> str | None:
     """Detect ambito_canonico hint dalla query (lookup keyword)."""
     q_lower = query.lower()
     for ambito, keywords in _AMBITO_HINTS.items():
@@ -106,8 +104,8 @@ async def unified_search(
     *,
     vault_first: bool = True,
     memory_fallback: bool = True,
-    memory_db_path: Optional[Path] = None,
-    vault_db_path: Optional[Path] = None,
+    memory_db_path: Path | None = None,
+    vault_db_path: Path | None = None,
     memory_candidates: int = 200,
     top_k: int = 10,
 ) -> SearchResults:
@@ -133,9 +131,9 @@ async def unified_search(
     if vault_first and is_compliance:
         # Strategy 1a: ambito hit → catalog entity per dominio.
         if ambito:
-            results.vault_entity_hits = (
-                await entities_by_ambito(ambito, db_path=vault_db_path)
-            )[:top_k]
+            results.vault_entity_hits = (await entities_by_ambito(ambito, db_path=vault_db_path))[
+                :top_k
+            ]
 
         # Strategy 1b: per ogni token "norma-like" nella query, prova reverse-edge.
         # Pattern: "D.Lgs. 138/2024" → slug "d-lgs-138-2024".
@@ -157,9 +155,7 @@ async def unified_search(
 
     # Layer 2: Memory Tree (sempre se memory_fallback, primario se non compliance).
     if memory_fallback:
-        candidates = await query_recent(
-            limit=memory_candidates, db_path=memory_db_path
-        )
+        candidates = await query_recent(limit=memory_candidates, db_path=memory_db_path)
         scored = score_chunks(candidates, query)
         results.memory_hits = scored[:top_k]
 

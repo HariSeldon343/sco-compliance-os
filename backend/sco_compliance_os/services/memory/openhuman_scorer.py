@@ -23,9 +23,10 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Iterable, Sequence
+from datetime import UTC, datetime
+from typing import Any
 
 import structlog
 
@@ -96,10 +97,10 @@ def _freshness_score(created_at_iso: str, half_life_days: float = 30.0) -> float
     try:
         created = datetime.fromisoformat(created_at_iso)
         if created.tzinfo is None:
-            created = created.replace(tzinfo=timezone.utc)
+            created = created.replace(tzinfo=UTC)
     except (ValueError, TypeError):
         return 0.0
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     age_days = (now - created).total_seconds() / 86400.0
     if age_days < 0:
         return 1.0
@@ -159,12 +160,7 @@ def fast_score_sync(chunk: Chunk) -> FastScoreResult:
     length_f = _length_factor(chunk.token_count)
     freshness_f = _freshness_score(chunk.created_at)
 
-    final_score = (
-        0.40 * norm_density
-        + 0.20 * auth_density
-        + 0.20 * length_f
-        + 0.20 * freshness_f
-    )
+    final_score = 0.40 * norm_density + 0.20 * auth_density + 0.20 * length_f + 0.20 * freshness_f
 
     return FastScoreResult(
         chunk_id=chunk.id,
@@ -297,10 +293,7 @@ async def deep_score_async(
 
     # Batching + concurrency control
     semaphore = asyncio.Semaphore(max_concurrent)
-    batches = [
-        chunks_list[i : i + batch_size]
-        for i in range(0, len(chunks_list), batch_size)
-    ]
+    batches = [chunks_list[i : i + batch_size] for i in range(0, len(chunks_list), batch_size)]
 
     async def _score_batch(batch: list[Chunk]) -> list[DeepScoreResult]:
         async with semaphore:
@@ -373,7 +366,8 @@ async def _llm_score_batch(
     try:
         from anthropic import AsyncAnthropic
 
-        client_kwargs: dict[str, str] = {}
+        # cast Any: AsyncAnthropic ha union types overload non amici di **dict[str, str]
+        client_kwargs: dict[str, Any] = {}
         if license_key:
             client_kwargs["base_url"] = settings.sco_saas_base_url
             client_kwargs["api_key"] = license_key
@@ -389,9 +383,7 @@ async def _llm_score_batch(
         )
 
         # Extract text from response
-        text_blocks = [
-            block.text for block in response.content if hasattr(block, "text")
-        ]
+        text_blocks = [block.text for block in response.content if hasattr(block, "text")]
         raw_text = "\n".join(text_blocks).strip()
 
         # Parse JSON output

@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import os
 import uuid
-from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 import sentry_sdk
@@ -36,6 +36,7 @@ from sco_compliance_os.api import (
     memory_routes,
     onboarding_routes,
     subconscious_routes,
+    tokenjuice_routes,
     vault_routes,
 )
 from sco_compliance_os.config import get_settings
@@ -80,12 +81,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Idempotente IF NOT EXISTS, sicuro da rieseguire ad ogni startup.
     try:
         migration_result = await apply_migrations()
-        applied_count = len(migration_result.get("applied", []))
+        applied_files: list[str] = migration_result.get("applied", []) or []  # type: ignore[assignment]
+        applied_count = len(applied_files)
         if applied_count > 0:
             structlog.get_logger(__name__).info(
                 "backend.startup.migrations_applied",
                 count=applied_count,
-                files=migration_result.get("applied", []),
+                files=applied_files,
             )
     except Exception as mig_err:
         structlog.get_logger(__name__).warning(
@@ -233,6 +235,7 @@ def create_app() -> FastAPI:
     app.include_router(onboarding_routes.router)
     app.include_router(license_routes.router)
     app.include_router(subconscious_routes.router)
+    app.include_router(tokenjuice_routes.router)
 
     return app
 

@@ -17,9 +17,8 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 import aiosqlite
 import structlog
@@ -58,7 +57,7 @@ class HotnessSnapshot:
 
 def _utc_now_iso() -> str:
     """Timestamp UTC ISO 8601."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _days_between(iso_then: str, iso_now: str | None = None) -> float:
@@ -66,18 +65,18 @@ def _days_between(iso_then: str, iso_now: str | None = None) -> float:
     try:
         then = datetime.fromisoformat(iso_then)
         if then.tzinfo is None:
-            then = then.replace(tzinfo=timezone.utc)
+            then = then.replace(tzinfo=UTC)
     except (ValueError, TypeError):
         return 0.0
     if iso_now:
         try:
             now = datetime.fromisoformat(iso_now)
             if now.tzinfo is None:
-                now = now.replace(tzinfo=timezone.utc)
+                now = now.replace(tzinfo=UTC)
         except (ValueError, TypeError):
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
     else:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
     return (now - then).total_seconds() / 86400.0
 
 
@@ -98,7 +97,7 @@ def _apply_decay(current_hotness: float, days_no_access: float) -> float:
 
 async def compute_hotness(
     chunk_id: str,
-    db_path: Optional[Path] = None,
+    db_path: Path | None = None,
 ) -> float:
     """Calcola hotness corrente per un chunk applicando decay temporale.
 
@@ -132,7 +131,7 @@ async def compute_hotness(
 
 async def record_access(
     chunk_id: str,
-    db_path: Optional[Path] = None,
+    db_path: Path | None = None,
 ) -> HotnessSnapshot:
     """Registra un access al chunk: aggiorna hotness, last_accessed, access_count.
 
@@ -215,7 +214,7 @@ async def record_access(
 
 async def get_top_hot_chunks(
     n: int = 20,
-    db_path: Optional[Path] = None,
+    db_path: Path | None = None,
 ) -> list[HotnessSnapshot]:
     """Ritorna i top-N chunks per hotness corrente (decay applicato).
 
@@ -270,7 +269,7 @@ async def get_top_hot_chunks(
 
 
 async def batch_decay_refresh(
-    db_path: Optional[Path] = None,
+    db_path: Path | None = None,
 ) -> int:
     """Refresh batch: applica decay a tutte le rows scores e aggiorna hotness.
 

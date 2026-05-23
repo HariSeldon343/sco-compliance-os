@@ -20,8 +20,7 @@ import logging
 import re
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -48,16 +47,14 @@ class Chunk:
 
     id: str
     source_path: str
-    parent_chunk_id: Optional[str]
+    parent_chunk_id: str | None
     heading_path: list[str]
     content_md: str
     token_count: int
     source_type: str = "manual"
     source_id: str = ""
     provenance: dict = field(default_factory=dict)
-    created_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 def _count_tokens(text: str) -> int:
@@ -93,7 +90,7 @@ def _split_by_headings(text: str) -> list[tuple[list[str], str]]:
             level = len(match.group(1))
             heading_text = f"{match.group(1)} {match.group(2)}"
             # Reset breadcrumb a quel livello.
-            current_breadcrumb = current_breadcrumb[: level - 1] + [heading_text]
+            current_breadcrumb = [*current_breadcrumb[: level - 1], heading_text]
             current_body.append(line)
         else:
             current_body.append(line)
@@ -133,7 +130,7 @@ def chunk_markdown(
     source_path: str = "",
     source_type: str = "manual",
     source_id: str = "",
-    provenance: Optional[dict] = None,
+    provenance: dict | None = None,
     max_tokens: int = 3000,
     overlap: int = 200,
 ) -> list[Chunk]:

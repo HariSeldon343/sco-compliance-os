@@ -17,14 +17,16 @@ Complementare al Vault Karpathy (services/vault/) per dati freschi non curati.
 from __future__ import annotations
 
 __all__ = [
+    "cascade",
     "chunker",
+    "hotness",
+    "ingest",
+    "openhuman_scorer",
     "scorer",
     "store",
     "summarizer",
-    "ingest",
+    # Wave 2 OpenHuman replica additions (subagent W2-TOKENJUICE 23/05/2026)
+    "tokenjuice",
     # Wave 1 OpenHuman replica additions (subagent W1-MEMORY 23/05/2026)
     "tree_builder",
-    "openhuman_scorer",
-    "hotness",
-    "cascade",
 ]

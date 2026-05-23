@@ -46,10 +46,10 @@ class ConnectorRegistry:
     da moduli importati in parallelo.
     """
 
-    _instance: "ConnectorRegistry | None" = None
+    _instance: ConnectorRegistry | None = None
     _lock = RLock()
 
-    def __new__(cls) -> "ConnectorRegistry":
+    def __new__(cls) -> ConnectorRegistry:
         with cls._lock:
             if cls._instance is None:
                 cls._instance = super().__new__(cls)
@@ -77,9 +77,7 @@ class ConnectorRegistry:
         instance = cls()
         slug = getattr(connector_cls, "slug", "")
         if not slug:
-            raise ValueError(
-                f"{connector_cls.__name__}: class attribute 'slug' mancante."
-            )
+            raise ValueError(f"{connector_cls.__name__}: class attribute 'slug' mancante.")
         with cls._lock:
             if slug in instance._connectors:
                 logger.warning(
@@ -89,9 +87,7 @@ class ConnectorRegistry:
                     connector_cls.__name__,
                 )
             instance._connectors[slug] = connector_cls
-            logger.info(
-                "connector registered | slug=%s class=%s", slug, connector_cls.__name__
-            )
+            logger.info("connector registered | slug=%s class=%s", slug, connector_cls.__name__)
         return connector_cls
 
     @classmethod
@@ -120,11 +116,7 @@ class ConnectorRegistry:
             category: una di ``ConnectorCategory`` (es. ``"email"``).
         """
         instance = cls()
-        return [
-            c
-            for c in instance._connectors.values()
-            if getattr(c, "category", "") == category
-        ]
+        return [c for c in instance._connectors.values() if getattr(c, "category", "") == category]
 
     @classmethod
     def clear(cls) -> None:
@@ -134,7 +126,7 @@ class ConnectorRegistry:
             instance._connectors.clear()
 
 
-def connector(cls: type["BaseConnector"]) -> type["BaseConnector"]:
+def connector(cls: type[BaseConnector]) -> type[BaseConnector]:
     """Decorator helper per registrare un connector.
 
     Usage:

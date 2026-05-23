@@ -24,7 +24,7 @@ Wave 1 status: STUB.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
 from .base import BaseConnector, MemoryChunk, OAuthError, OAuthTokens
@@ -75,7 +75,7 @@ class SlackConnector(BaseConnector):
         opzionalmente ``authed_user.access_token`` (xoxp-...) per user.
         """
         logger.warning("slack handle_callback STUB — wave 2 pending")
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         # Slack bot tokens (xoxb-) NON scadono di default (unless rotation enabled)
         # ma codifichiamo expires_at lontano nel futuro per compatibilità schema.
         return OAuthTokens(
@@ -99,13 +99,12 @@ class SlackConnector(BaseConnector):
             raise OAuthError(
                 code="slack_rotation_disabled",
                 message=(
-                    "Token Slack scaduto e rotation non abilitata. "
-                    "Richiesta nuova autorizzazione."
+                    "Token Slack scaduto e rotation non abilitata. Richiesta nuova autorizzazione."
                 ),
                 provider=self.oauth_provider,
             )
         logger.warning("slack refresh STUB — wave 2 pending")
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return OAuthTokens(
             access_token="xoxb-STUB-REFRESHED",
             refresh_token=tokens.refresh_token,
@@ -126,7 +125,7 @@ class SlackConnector(BaseConnector):
             4. Risoluzione user_id → nome via /users.info (cache locale).
         """
         logger.warning("slack fetch_data STUB — wave 2 pending")
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return [
             MemoryChunk(
                 external_id="slack_msg_stub_001",
