@@ -18,7 +18,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, WindowEvent};
+use tauri::{AppHandle, Emitter, WindowEvent};
 use tracing::{error, info, warn};
 
 mod backend_manager;
