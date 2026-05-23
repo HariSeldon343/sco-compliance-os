@@ -13,8 +13,16 @@ ENTRY = Path("sco_compliance_os") / "main.py"
 
 # Hidden imports: tutte le transitive che PyInstaller statico puo' perdere
 hiddenimports = [
-    # Claude Agent SDK + MCP
-    "claude_agent_sdk",
+    # Anthropic SDK direct (v0.1.2+: rimosso claude_agent_sdk)
+    "anthropic",
+    "anthropic._client",
+    "anthropic._streaming",
+    "anthropic.types",
+    "anthropic.types.message",
+    "anthropic.lib.streaming",
+    "anthropic.lib.streaming._messages",
+    "httpx_sse",
+    "certifi",
     "mcp",
     "mcp.client",
     "mcp.server",

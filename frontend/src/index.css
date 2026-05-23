@@ -1,5 +1,32 @@
-/* SCO Compliance OS — CSS variables brand SCO + reset base + scrollbar custom */
+/* SCO Compliance OS — Tailwind 4 + CSS variables brand SCO + reset + scrollbar */
 @import "tailwindcss";
+
+/*
+ * Tailwind 4: @theme directive registra le custom colors come utility classes.
+ * Pattern @theme inline + var() consente switch dark/light a runtime via classe `.dark` su <html>.
+ * Naming convention: --color-NOME → utility bg-NOME / text-NOME / border-NOME.
+ */
+@theme inline {
+  --color-sco-navy: var(--sco-navy);
+  --color-sco-blue: var(--sco-blue);
+  --color-sco-amber: var(--sco-amber);
+  --color-sco-bg: var(--sco-bg);
+  --color-sco-bg-dark: var(--sco-bg-dark);
+  --color-sco-text: var(--sco-text);
+  --color-sco-text-dark: var(--sco-text-dark);
+  --color-sco-surface: var(--sco-surface);
+  --color-sco-surface-elevated: var(--sco-surface-elevated);
+  --color-sco-border: var(--sco-border);
+  --color-sco-muted: var(--sco-muted);
+  --color-sco-muted-foreground: var(--sco-muted-foreground);
+
+  --font-sans:
+    "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono:
+    "Source Code Pro", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --container-chat: 48rem;
+}
 
 @layer base {
   :root {
@@ -23,13 +50,13 @@
 
   .dark {
     /* Override per dark mode */
-    --sco-bg: #1a1a2e;
+    --sco-bg: #0f0f1e;
     --sco-text: #f5f5f5;
 
-    --sco-surface: #1f1f38;
-    --sco-surface-elevated: #2a2a4a;
+    --sco-surface: #1a1a2e;
+    --sco-surface-elevated: #252540;
     --sco-border: #3a3a5a;
-    --sco-muted: #2a2a4a;
+    --sco-muted: #252540;
     --sco-muted-foreground: #a1a1aa;
   }
 
@@ -51,6 +78,8 @@
       sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    background: var(--sco-bg);
+    color: var(--sco-text);
   }
 
   /* Scrollbar custom (palette navy) */

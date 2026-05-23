@@ -45,7 +45,7 @@ wheels = [
 
 [[package]]
 name = "anthropic"
-version = "0.104.0"
+version = "0.104.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -57,9 +57,9 @@ dependencies = [
     { name = "sniffio" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/0f/01/8bfa68b886aa436775325a108700f7da39e290870199ce9251934de3e4aa/anthropic-0.104.0.tar.gz", hash = "sha256:1ae8ef4709e90cc2068c8e8a63c1ecb63cc5360d325a4bef8b296aad76148be3", size = 849329, upload-time = "2026-05-21T20:02:05.346Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/22/c7/7a655b948916f777354648ce979f68b94d5b8dbdb5f61fed1f37fad9378c/anthropic-0.104.1.tar.gz", hash = "sha256:17362b6c45f527afcc9b0fdf62011ffd359726ab2ebcb1978ea0cc41bd8d8d40", size = 850081, upload-time = "2026-05-22T15:36:57.432Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/72/6c/595f1893352dbb4d88f1c2f0983296638783936b2063564aca9abb189990/anthropic-0.104.0-py3-none-any.whl", hash = "sha256:18f73ba3429aab237cdd146a486d20b4da3c008fb4a3ba83f237b27793e884c7", size = 832920, upload-time = "2026-05-21T20:02:07.853Z" },
+    { url = "https://files.pythonhosted.org/packages/b8/12/d9ab42790494d7c428391a46cd28492395566a6a8ccb138d681978594455/anthropic-0.104.1-py3-none-any.whl", hash = "sha256:35c8cb456f5a4405aafe1f10f03f6fcc54fa51fa8ec01d655cc4b437d120e9b7", size = 832996, upload-time = "2026-05-22T15:36:59.519Z" },
 ]
 
 [[package]]
@@ -293,24 +293,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/7a/1d/29d32e0fb40864b1f878c7f5a0b343ae676c6e2b271a2d55cc3a152391da/charset_normalizer-3.4.7-cp314-cp314t-win_amd64.whl", hash = "sha256:03853ed82eeebbce3c2abfdbc98c96dc205f32a79627688ac9a27370ea61a49c", size = 174168, upload-time = "2026-04-02T09:27:49.795Z" },
     { url = "https://files.pythonhosted.org/packages/de/32/d92444ad05c7a6e41fb2036749777c163baf7a0301a040cb672d6b2b1ae9/charset_normalizer-3.4.7-cp314-cp314t-win_arm64.whl", hash = "sha256:c35abb8bfff0185efac5878da64c45dafd2b37fb0383add1be155a763c1f083d", size = 153018, upload-time = "2026-04-02T09:27:51.116Z" },
     { url = "https://files.pythonhosted.org/packages/db/8f/61959034484a4a7c527811f4721e75d02d653a35afb0b6054474d8185d4c/charset_normalizer-3.4.7-py3-none-any.whl", hash = "sha256:3dce51d0f5e7951f8bb4900c257dad282f49190fdbebecd4ba99bcc41fef404d", size = 61958, upload-time = "2026-04-02T09:28:37.794Z" },
-]
-
-[[package]]
-name = "claude-agent-sdk"
-version = "0.2.85"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "anyio" },
-    { name = "mcp" },
-    { name = "sniffio" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/48/db/45b505c472ba11f9434b8f1b77197a465c7dbfca3766ee945159b496734a/claude_agent_sdk-0.2.85.tar.gz", hash = "sha256:179251b285a288e9702fd9af414943c9cd8dc85e4dd86ff8b42cf116523d856f", size = 252062, upload-time = "2026-05-22T01:32:20.694Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/32/d0/5d9fa96d3c8e94d6a4055d1ad1ac7c38d247cc20cd65a7f5225448594cd3/claude_agent_sdk-0.2.85-py3-none-macosx_11_0_arm64.whl", hash = "sha256:bbd3ba4bbee6e3878f19c41bfb6855537f9756f522015aca1416398e718f4740", size = 62708299, upload-time = "2026-05-22T01:32:24.548Z" },
-    { url = "https://files.pythonhosted.org/packages/b8/4e/f4d50a8700759bd468a051d18dbfa00283c6be5da6a5dd74434973628f5d/claude_agent_sdk-0.2.85-py3-none-macosx_11_0_x86_64.whl", hash = "sha256:69d2cf2978472aa0d739250a7d20a77fdfb17fedea96c9bda44348b83b92cc45", size = 64753900, upload-time = "2026-05-22T01:32:28.467Z" },
-    { url = "https://files.pythonhosted.org/packages/8e/7a/0f08adee7f9a3d85b496fe6f4a1a88b1ac2ada7b97e2d8bfd582100ec2d2/claude_agent_sdk-0.2.85-py3-none-manylinux_2_17_aarch64.whl", hash = "sha256:521a13fbb448ab9fff5fe423a2137ba9482d1e8d76d75f40fa5ed28460955c7e", size = 72391913, upload-time = "2026-05-22T01:32:32.026Z" },
-    { url = "https://files.pythonhosted.org/packages/03/50/cbda24a9cb87ec65f21e4c390d84e83aaaedaee2a3d48bd4d2d136763e84/claude_agent_sdk-0.2.85-py3-none-manylinux_2_17_x86_64.whl", hash = "sha256:6f136e24212cb7baa46e1f5153233acfa0ed3da94c13e73e16dbc647ebb7a338", size = 72560984, upload-time = "2026-05-22T01:32:36.175Z" },
-    { url = "https://files.pythonhosted.org/packages/70/73/cc2abce5d1e82a40b8e2e8ce229e1615dabc24b77fcb5998689a7ebdc3af/claude_agent_sdk-0.2.85-py3-none-win_amd64.whl", hash = "sha256:c0b442b7daf96d6e85fe6783f693e6406bbc8a9f873b5f641464373ca7c327bb", size = 73198055, upload-time = "2026-05-22T01:32:40.494Z" },
 ]
 
 [[package]]
@@ -1116,11 +1098,11 @@ wheels = [
 
 [[package]]
 name = "more-itertools"
-version = "11.0.2"
+version = "11.1.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/a2/f7/139d22fef48ac78127d18e01d80cf1be40236ae489769d17f35c3d425293/more_itertools-11.0.2.tar.gz", hash = "sha256:392a9e1e362cbc106a2457d37cabf9b36e5e12efd4ebff1654630e76597df804", size = 144659, upload-time = "2026-04-09T15:01:33.297Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/de/1d/f4da6f02cdffe04d6362210b807146a26044c88d839208aec273bb0d9184/more_itertools-11.1.0.tar.gz", hash = "sha256:48e8f4d9e7e5878571ecf6f2b4e57634f93cd474cc8cfbd2376f2d11b396e30d", size = 145772, upload-time = "2026-05-22T14:14:29.909Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/cb/98/6af411189d9413534c3eb691182bff1f5c6d44ed2f93f2edfe52a1bbceb8/more_itertools-11.0.2-py3-none-any.whl", hash = "sha256:6e35b35f818b01f691643c6c611bc0902f2e92b46c18fffa77ae1e7c46e912e4", size = 71939, upload-time = "2026-04-09T15:01:32.21Z" },
+    { url = "https://files.pythonhosted.org/packages/e8/3d/1087453384dbde46a8c7f9356eead2c58be8a7bf156bca40243377c85715/more_itertools-11.1.0-py3-none-any.whl", hash = "sha256:4b65538ae22f6fed0ce4874efd317463a7489796a0939fa66824dd542125a192", size = 72226, upload-time = "2026-05-22T14:14:28.824Z" },
 ]
 
 [[package]]
@@ -1466,11 +1448,11 @@ wheels = [
 
 [[package]]
 name = "pypdf"
-version = "6.12.0"
+version = "6.12.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/a2/ba/f82d1cb35b04041b5f796d4eedbaecafcbf99e83b7a2542b44a936959dd7/pypdf-6.12.0.tar.gz", hash = "sha256:061f135db8934503ed301c2d4cfaccb12f0a2ef1db11c5d0768a72a5ab4097d8", size = 6466074, upload-time = "2026-05-21T09:21:42.621Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/54/4d/39e48f5294a5a6bb78313839aae820666c2d30daeadb652ed50bd46cafac/pypdf-6.12.1.tar.gz", hash = "sha256:3953a097b9f26d4e0ead5ff95943d9971377557662a91d8872186053cd71d30a", size = 6467595, upload-time = "2026-05-22T10:07:59.979Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f4/fa/3597fb3fb28f40bf8291fdddbc4dcd51ce52fccaf1cbfca10ee9db09c69a/pypdf-6.12.0-py3-none-any.whl", hash = "sha256:a8e104ab950e655d0bcf5fa5e71317c06474bc707987335da44a210f73a8883b", size = 343457, upload-time = "2026-05-21T09:21:40.852Z" },
+    { url = "https://files.pythonhosted.org/packages/5e/aa/4d17fe9ff165d1341878c570b14f5b7291106d63411adf640942a7e638aa/pypdf-6.12.1-py3-none-any.whl", hash = "sha256:8fa2a2321cf16247ed848bd7c97f193a60c08670d04abed5b0138327e51c43b0", size = 343787, upload-time = "2026-05-22T10:07:57.801Z" },
 ]
 
 [[package]]
@@ -1885,12 +1867,11 @@ wheels = [
 
 [[package]]
 name = "sco-compliance-os-backend"
-version = "0.1.0"
+version = "0.1.2"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },
     { name = "anthropic" },
-    { name = "claude-agent-sdk" },
     { name = "email-validator" },
     { name = "fastapi" },
     { name = "google-api-python-client" },
@@ -1937,7 +1918,6 @@ requires-dist = [
     { name = "aiosqlite", specifier = ">=0.20.0" },
     { name = "anthropic", specifier = ">=0.96.0" },
     { name = "black", marker = "extra == 'dev'", specifier = ">=24.10.0" },
-    { name = "claude-agent-sdk", specifier = ">=0.2.82" },
     { name = "email-validator", specifier = ">=2.2.0" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "google-api-python-client", specifier = ">=2.158.0" },

@@ -16,8 +16,9 @@ import {
 import { useChatStore } from "@/store/chat-store";
 import { cn } from "@/lib/cn";
 
-// Versione app (TODO Conv. 48: leggere da backend /api/meta/version, NON hardcodare)
-const APP_VERSION_PLACEHOLDER = "0.1.0-scaffold";
+// Versione app — bumped manualmente con bump version script ogni release Conv. 47.
+// TODO v0.2.0: fetch dinamico da backend /health endpoint (rimuove hardcode).
+const APP_VERSION_PLACEHOLDER = "0.1.2";
 
 interface NavItem {
   to: string;

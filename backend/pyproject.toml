@@ -9,7 +9,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "sco-compliance-os-backend"
-version = "0.1.1"
+version = "0.1.2"
 description = "Backend FastAPI per l'app desktop SCO Compliance OS, AI assistant brandata per compliance e consulenza normativa."
 readme = "../README.md"
 requires-python = ">=3.12,<4.0"
@@ -30,9 +30,10 @@ dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
     "python-multipart>=0.0.20",
-    # Anthropic + Agent SDK + MCP
+    # Anthropic SDK direct (v0.1.2+: rimosso claude-agent-sdk perché richiedeva
+    # claude.exe CLI npm-installed - bug CLINotFoundError MSI v0.1.0-alpha.7).
+    # Routing via SaaS proxy SCO con base_url custom + Bearer license_key.
     "anthropic>=0.96.0",
-    "claude-agent-sdk>=0.2.82",
     "mcp>=1.27.0",
     # Modello dati + settings
     "pydantic>=2.9.0",
