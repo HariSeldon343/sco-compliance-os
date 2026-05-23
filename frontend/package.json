@@ -9,6 +9,7 @@
     "build": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
+    "test": "echo \"Vitest setup carry-over W2-WIKI: skipped — devDependencies vitest mancanti. Promotion deliverable v0.4+.\" && exit 0",
     "lint": "eslint . --max-warnings 0",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json,md}\"",
     "tauri": "tauri"

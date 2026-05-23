@@ -33,7 +33,11 @@ pub fn enriched_env() -> HashMap<String, String> {
     let mut env: HashMap<String, String> = std::env::vars().collect();
 
     // Estrae PATH corrente, fa append delle directory aggiuntive specifiche per OS
-    let path_sep = if cfg!(target_os = "windows") { ';' } else { ':' };
+    let path_sep = if cfg!(target_os = "windows") {
+        ';'
+    } else {
+        ':'
+    };
     let current_path = env.get("PATH").cloned().unwrap_or_default();
     let mut path_parts: Vec<String> = current_path
         .split(path_sep)

@@ -65,10 +65,7 @@ async fn get_backend_status(state: tauri::State<'_, AppState>) -> Result<Backend
 /// backend è in stato error e l'utente vuole forzare il restart senza
 /// chiudere l'app intera.
 #[tauri::command]
-async fn restart_backend(
-    app: AppHandle,
-    state: tauri::State<'_, AppState>,
-) -> Result<(), String> {
+async fn restart_backend(app: AppHandle, state: tauri::State<'_, AppState>) -> Result<(), String> {
     info!("[SCO] Restart backend richiesto dall'utente");
     let mut manager = state.backend.lock().await;
     manager.restart(&app).map_err(|e| e.to_string())?;
@@ -161,8 +158,7 @@ fn get_app_data_dir() -> Result<String, String> {
 /// la lettura passa solo se il path rientra in $APPCONFIG/$APPDATA/$HOME.
 #[tauri::command]
 fn read_text_file(path: String) -> Result<String, String> {
-    std::fs::read_to_string(&path)
-        .map_err(|e| format!("Impossibile leggere {path}: {e}"))
+    std::fs::read_to_string(&path).map_err(|e| format!("Impossibile leggere {path}: {e}"))
 }
 
 /// Scrittura file di testo. Stesso scope enforcement della read_text_file.
@@ -204,7 +200,10 @@ pub fn run() {
         .with_target(true)
         .try_init();
 
-    info!("[SCO] Compliance OS startup, version {}", env!("CARGO_PKG_VERSION"));
+    info!(
+        "[SCO] Compliance OS startup, version {}",
+        env!("CARGO_PKG_VERSION")
+    );
 
     let backend_manager = Arc::new(Mutex::new(BackendManager::new()));
     let backend_for_setup = Arc::clone(&backend_manager);

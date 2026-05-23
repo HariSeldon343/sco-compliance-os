@@ -83,7 +83,10 @@ pub fn from_system_path() -> Option<PathBuf> {
         #[cfg(not(target_os = "windows"))]
         candidate.push(SIDECAR_NAME);
         if candidate.exists() {
-            debug!("[path_resolution] PATH lookup trovato: {}", candidate.display());
+            debug!(
+                "[path_resolution] PATH lookup trovato: {}",
+                candidate.display()
+            );
             return Some(candidate);
         }
     }
