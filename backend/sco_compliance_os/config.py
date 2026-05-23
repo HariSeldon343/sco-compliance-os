@@ -89,6 +89,25 @@ class Settings(BaseSettings):
         description="Email cliente associata alla license key.",
     )
 
+    # ----- Subconscious tick loop (Wave 1 v0.2.0, blueprint OpenHuman replica) -----
+    # Default OFF v0.2.0 (privacy enforcement, opt-in esplicito).
+    subconscious_enabled: bool = Field(
+        default=False,
+        description=(
+            "Abilita il Subconscious tick loop 5 min. Default OFF (privacy "
+            "opt-in v0.2.0). Quando True, il lifespan avvia automaticamente "
+            "il loop a startup."
+        ),
+    )
+    subconscious_interval_seconds: int = Field(
+        default=300,
+        ge=300,
+        description=(
+            "Intervallo tick subconscious in secondi. Hard floor 300s (5 min, "
+            "vincolo OpenHuman docs). Valori inferiori vengono clampati dal loop."
+        ),
+    )
+
     # ----- Storage paths derivati -----
     @property
     def memory_tree_db_path(self) -> Path:

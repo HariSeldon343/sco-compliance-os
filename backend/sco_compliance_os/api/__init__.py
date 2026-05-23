@@ -6,6 +6,7 @@ Routers:
 - memory_routes: /api/memory — memory tree + ingest + search.
 - integrations_routes: /api/integrations — connettori OAuth (Gmail, Drive, ecc.).
 - onboarding_routes: /api/onboarding — stato EULA/Privacy/Demo/Tutorial.
+- subconscious_routes: /api/subconscious — tick loop subconscious 5 min (Wave 1 v0.2.0).
 """
 
 from __future__ import annotations

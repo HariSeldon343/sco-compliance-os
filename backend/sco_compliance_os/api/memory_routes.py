@@ -140,3 +140,111 @@ async def get_memory_stats() -> dict[str, Any]:
         "last_ingest_at": None,
         "stub": True,
     }
+
+
+# ----- Wave 1 OpenHuman replica: tree + hotness endpoints -----
+
+
+class TreeSummaryItem(BaseModel):
+    """Item di response per GET /api/memory/tree (Wave 1 OpenHuman)."""
+
+    id: str
+    level: int
+    source: str
+    topic: str | None = None
+    day: str | None = None
+    content_preview: str = ""
+    token_count: int = 0
+    children_ids: list[str] = Field(default_factory=list)
+    parent_id: str | None = None
+    created_at: str = ""
+
+
+class HotnessItem(BaseModel):
+    """Item di response per GET /api/memory/hotness/top."""
+
+    chunk_id: str
+    hotness: float
+    last_accessed: str | None = None
+    access_count: int = 0
+    days_since_access: float | None = None
+
+
+@router.get("/tree-summaries", response_model=list[TreeSummaryItem])
+async def get_memory_tree_summaries(
+    source: str | None = Query(default=None, description="Filtra per source identifier."),
+    level: int | None = Query(default=None, ge=0, le=2, description="Filtra per level (0/1/2)."),
+    topic: str | None = Query(default=None, description="Filtra per topic."),
+    day: str | None = Query(
+        default=None,
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="Filtra per data ISO YYYY-MM-DD.",
+    ),
+    limit: int = Query(default=50, ge=1, le=500, description="Max risultati."),
+) -> list[TreeSummaryItem]:
+    """Wave 1 OpenHuman: ritorna lista summaries L1/L2 con filtri arbitrari.
+
+    Pattern: TreeBuilder.list_summaries_by_filter — single source of truth da
+    tabella `summaries` (migration 0002).
+
+    Endpoint distinto da `/tree` legacy per evitare breaking changes su contratto
+    response (MemoryTreeResponse legacy vs list[TreeSummaryItem] Wave 1).
+    """
+    from sco_compliance_os.services.memory.tree_builder import TreeBuilder
+
+    logger.info(
+        "memory.tree_summaries.requested",
+        source=source,
+        level=level,
+        topic=topic,
+        day=day,
+        limit=limit,
+    )
+    builder = TreeBuilder()
+    nodes = await builder.list_summaries_by_filter(
+        source=source,
+        level=level,
+        topic=topic,
+        day=day,
+        limit=limit,
+    )
+    return [
+        TreeSummaryItem(
+            id=n.id,
+            level=n.level,
+            source=n.source,
+            topic=n.topic,
+            day=n.day,
+            content_preview=n.content_preview,
+            token_count=n.token_count,
+            children_ids=n.children_ids,
+            parent_id=n.parent_id,
+            created_at=n.created_at,
+        )
+        for n in nodes
+    ]
+
+
+@router.get("/hotness/top", response_model=list[HotnessItem])
+async def get_top_hotness(
+    n: int = Query(default=20, ge=1, le=200, description="Numero top chunks."),
+) -> list[HotnessItem]:
+    """Wave 1 OpenHuman: ritorna top-N chunks per hotness con decay applicato.
+
+    Pattern: hotness.get_top_hot_chunks — decay 0.95/day sul tempo trascorso
+    da last_accessed, re-rank in memoria post-decay.
+    """
+    from sco_compliance_os.services.memory.hotness import get_top_hot_chunks
+
+    logger.info("memory.hotness.top.requested", n=n)
+    snapshots = await get_top_hot_chunks(n=n)
+    return [
+        HotnessItem(
+            chunk_id=s.chunk_id,
+            hotness=s.hotness,
+            last_accessed=s.last_accessed,
+            access_count=s.access_count,
+            days_since_access=s.days_since_access,
+        )
+        for s in snapshots
+    ]

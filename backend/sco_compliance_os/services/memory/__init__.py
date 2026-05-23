@@ -22,4 +22,9 @@ __all__ = [
     "store",
     "summarizer",
     "ingest",
+    # Wave 1 OpenHuman replica additions (subagent W1-MEMORY 23/05/2026)
+    "tree_builder",
+    "openhuman_scorer",
+    "hotness",
+    "cascade",
 ]

@@ -35,13 +35,19 @@ from sco_compliance_os.api import (
     license_routes,
     memory_routes,
     onboarding_routes,
+    subconscious_routes,
     vault_routes,
 )
 from sco_compliance_os.config import get_settings
 from sco_compliance_os.core.logging_setup import configure_logging, set_request_id
+from sco_compliance_os.core.migrations import apply_migrations
 from sco_compliance_os.core.store import get_store
 from sco_compliance_os.services.integrations.scheduler import ConnectorScheduler
 from sco_compliance_os.services.memory.store import init_schema as init_memory_schema
+from sco_compliance_os.services.subconscious.tick_loop import (
+    SubconsciousTickLoop,
+    set_active_loop,
+)
 
 # Carica .env override=True (Conv. 44 enforcement: override valori già in env)
 load_dotenv(override=True)
@@ -49,6 +55,7 @@ load_dotenv(override=True)
 
 # Global ref scheduler per shutdown pulito
 _active_scheduler: ConnectorScheduler | None = None
+_subconscious_loop: SubconsciousTickLoop | None = None
 
 
 @asynccontextmanager
@@ -58,7 +65,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     Pattern Subconscio OpenHuman: scheduler ConnectorScheduler auto-start a 20 min
     interval su connettori attivi (token presenti nel keyring). Idempotente.
     """
-    global _active_scheduler
+    global _active_scheduler, _subconscious_loop
     settings = get_settings()
     settings.ensure_data_dir()
 
@@ -69,6 +76,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Init Memory Tree DB schema (chunks per Subconscio)
     await init_memory_schema()
 
+    # Apply migrations OpenHuman replica (W1-MEMORY: 0002_openhuman_features.sql)
+    # Idempotente IF NOT EXISTS, sicuro da rieseguire ad ogni startup.
+    try:
+        migration_result = await apply_migrations()
+        applied_count = len(migration_result.get("applied", []))
+        if applied_count > 0:
+            structlog.get_logger(__name__).info(
+                "backend.startup.migrations_applied",
+                count=applied_count,
+                files=migration_result.get("applied", []),
+            )
+    except Exception as mig_err:
+        structlog.get_logger(__name__).warning(
+            "backend.startup.migration_failed",
+            error=str(mig_err),
+            note="migration apply failed but startup continues",
+        )
+
     # Avvia auto-fetch scheduler se license_key presente (= cliente attivato)
     # Per ora scheduler disabilitato di default — abilitabile via env SCO_AUTO_FETCH_ENABLED=1
     auto_fetch_enabled = os.environ.get("SCO_AUTO_FETCH_ENABLED", "0") == "1"
@@ -77,6 +102,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         _active_scheduler = ConnectorScheduler(user_id=user_id)
         await _active_scheduler.start()
 
+    # Inizializza Subconscious tick loop sempre (registra ref globale per le route).
+    # Avvia background task SOLO se settings.subconscious_enabled (default OFF privacy).
+    _subconscious_loop = SubconsciousTickLoop(
+        interval_seconds=settings.subconscious_interval_seconds,
+        context_provider=None,  # context provider cabling -> Wave 2 (Memory Tree wiring)
+    )
+    set_active_loop(_subconscious_loop)
+    if settings.subconscious_enabled:
+        await _subconscious_loop.start()
+
     logger = structlog.get_logger(__name__)
     logger.info(
         "backend.startup.complete",
@@ -84,10 +119,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         port=settings.backend_port,
         data_dir=str(settings.data_dir),
         scheduler_active=_active_scheduler is not None,
+        subconscious_enabled=settings.subconscious_enabled,
+        subconscious_running=_subconscious_loop.is_running(),
         user_id=user_id,
     )
 
     yield
+
+    # Shutdown pulito subconscious loop
+    if _subconscious_loop is not None:
+        await _subconscious_loop.stop()
+        set_active_loop(None)
+        _subconscious_loop = None
 
     # Shutdown pulito scheduler
     if _active_scheduler is not None:
@@ -189,6 +232,7 @@ def create_app() -> FastAPI:
     app.include_router(integrations_routes.router)
     app.include_router(onboarding_routes.router)
     app.include_router(license_routes.router)
+    app.include_router(subconscious_routes.router)
 
     return app
 
