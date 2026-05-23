@@ -1,4 +1,4 @@
-// SCO Compliance OS — area chat principale: WelcomeHero + bubbles + markdown + widget AskUserQuestion
+// SCO Compliance OS — area chat principale: WelcomeHero centrato + bubbles polished + widget AskUserQuestion
 import { useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -8,7 +8,7 @@ import {
   ScanSearch,
   HeartPulse,
   AlertTriangle,
-  Sparkles,
+  ArrowUpRight,
 } from "lucide-react";
 
 import { useChatStore } from "@/store/chat-store";
@@ -16,35 +16,43 @@ import type { MessageItem } from "@/types/api";
 import { cn } from "@/lib/cn";
 import { ThinkingIndicator } from "@/components/ThinkingIndicator";
 
-// 4 suggestion card branded compliance
+// 4 suggestion card branded compliance — 2x2 grid stile OpenHuman / Claude Desktop
 const SUGGESTIONS = [
   {
     icon: ShieldCheck,
     title: "Audit ISO 27001",
+    description: "Checklist Annex A per cliente sanitario",
     prompt:
       "Prepara una checklist audit ISO 27001:2022 Annex A per cliente sanitario, includendo i controlli A.5–A.18.",
-    accent: "text-sco-navy",
+    accent: "text-sco-blue",
+    iconBg: "bg-sco-blue/10",
   },
   {
     icon: ScanSearch,
     title: "Gap analysis NIS 2",
+    description: "D.Lgs. 138/2024 art. per art. per fornitore PA",
     prompt:
       "Esegui una gap analysis del D.Lgs. 138/2024 per un fornitore ICT verso PA, articolo per articolo.",
-    accent: "text-sco-blue",
+    accent: "text-sco-navy dark:text-sco-text-dark",
+    iconBg: "bg-sco-navy/10 dark:bg-sco-text-dark/10",
   },
   {
     icon: HeartPulse,
     title: "Procedura sanitaria",
+    description: "ISO 9001:2015 cartelle cliniche IRCCS",
     prompt:
       "Redigi una procedura SGQ ISO 9001:2015 per gestione cartelle cliniche in IRCCS, sezione 7 e 8.",
     accent: "text-sco-amber",
+    iconBg: "bg-sco-amber/10",
   },
   {
     icon: AlertTriangle,
-    title: "Risk assessment",
+    title: "Risk assessment cloud",
+    description: "ISO 27005:2022 matrice probabilità × impatto",
     prompt:
       "Conduci un risk assessment ISO 27005:2022 su infrastruttura cloud Azure, con matrice probabilità × impatto.",
-    accent: "text-red-600",
+    accent: "text-red-500",
+    iconBg: "bg-red-500/10",
   },
 ];
 
@@ -59,23 +67,27 @@ export function ChatArea() {
     [activeId, messagesByConv],
   );
 
-  // Welcome hero quando nessuna conversation o conversation vuota
+  // ===== Welcome hero (state vuoto) =====
   if (!activeId || messages.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center px-6">
-        <div className="flex max-w-chat flex-col items-center text-center">
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-sco-navy text-white">
-            <Sparkles size={28} />
+      <div className="flex h-full flex-col items-center justify-center overflow-y-auto px-6 py-12">
+        <div className="flex w-full max-w-3xl flex-col items-center text-center">
+          {/* Logo accento decorativo (sfumatura discreta) */}
+          <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-sco-navy via-sco-blue to-sco-amber shadow-lg">
+            <span className="text-2xl font-bold text-white">S</span>
           </div>
-          <h2 className="text-2xl font-semibold text-sco-navy dark:text-sco-text-dark">
-            Cosa devi fare oggi?
-          </h2>
-          <p className="mt-2 text-sm text-sco-muted-foreground">
-            Sono il tuo Personal AI di compliance italiana. Audit, gap analysis,
-            procedure, risk assessment.
+
+          {/* Titolo grande stile Claude Desktop */}
+          <h1 className="text-3xl font-semibold tracking-tight text-sco-text dark:text-sco-text-dark md:text-4xl">
+            Cosa lavoriamo oggi?
+          </h1>
+          <p className="mt-3 max-w-xl text-sm leading-relaxed text-sco-muted-foreground md:text-base">
+            Sono il Personal AI di Antonio per compliance italiana. Audit,
+            procedure, gap analysis, risk assessment.
           </p>
 
-          <div className="mt-8 grid w-full grid-cols-1 gap-3 md:grid-cols-2">
+          {/* 4 card quick action — 2x2 grid */}
+          <div className="mt-10 grid w-full grid-cols-1 gap-3 md:grid-cols-2">
             {SUGGESTIONS.map((s) => {
               const Icon = s.icon;
               return (
@@ -83,28 +95,48 @@ export function ChatArea() {
                   key={s.title}
                   type="button"
                   onClick={() => sendMessage(s.prompt)}
-                  className="group rounded-lg border border-sco-border bg-sco-surface-elevated p-4 text-left transition-all hover:border-sco-blue hover:shadow-md"
+                  className="group relative flex items-start gap-3 overflow-hidden rounded-xl border border-sco-border bg-sco-surface-elevated p-4 text-left transition-all duration-150 hover:border-sco-blue/60 hover:shadow-md"
                 >
-                  <div className="flex items-center gap-2">
-                    <Icon size={18} className={s.accent} />
-                    <span className="text-sm font-semibold">{s.title}</span>
+                  <div
+                    className={cn(
+                      "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg",
+                      s.iconBg,
+                    )}
+                  >
+                    <Icon size={20} className={s.accent} />
                   </div>
-                  <p className="mt-2 line-clamp-2 text-xs text-sco-muted-foreground group-hover:text-sco-text">
-                    {s.prompt}
-                  </p>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-semibold text-sco-text dark:text-sco-text-dark">
+                        {s.title}
+                      </span>
+                      <ArrowUpRight
+                        size={14}
+                        className="shrink-0 text-sco-muted-foreground/0 transition-all duration-150 group-hover:text-sco-blue group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+                      />
+                    </div>
+                    <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-sco-muted-foreground">
+                      {s.description}
+                    </p>
+                  </div>
                 </button>
               );
             })}
           </div>
+
+          {/* Tagline footer */}
+          <p className="mt-12 text-xs italic text-sco-muted-foreground/70">
+            Privato. Tuo. Italiano.
+          </p>
         </div>
       </div>
     );
   }
 
-  // Lista messaggi
+  // ===== Lista messaggi (state attivo) =====
   return (
-    <div className="flex h-full flex-col overflow-y-auto px-6 py-6">
-      <div className="mx-auto flex w-full max-w-chat flex-col gap-6">
+    <div className="h-full overflow-y-auto">
+      <div className="mx-auto flex w-full max-w-chat flex-col gap-5 px-6 py-8">
         {messages.map((m) => (
           <MessageBubble key={m.id} message={m} />
         ))}
@@ -127,22 +159,27 @@ function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === "user";
 
   return (
-    <div className={cn("flex", isUser ? "justify-end" : "justify-start")}>
+    <div
+      className={cn(
+        "flex",
+        isUser ? "justify-end" : "justify-start",
+      )}
+    >
       <div
         className={cn(
-          "max-w-[85%] rounded-2xl px-4 py-3 text-sm",
+          "rounded-2xl px-4 py-3 text-sm shadow-sm",
           isUser
-            ? "bg-sco-navy text-white"
-            : "border border-sco-border bg-sco-surface-elevated text-sco-text dark:text-sco-text-dark",
+            ? "max-w-[80%] bg-sco-navy text-white"
+            : "max-w-[85%] border border-sco-border bg-sco-surface-elevated text-sco-text dark:text-sco-text-dark",
         )}
       >
         {/* Markdown body: user = plain text whitespace-pre, agent = full markdown */}
         {isUser ? (
-          <div className="whitespace-pre-wrap break-words text-white">
+          <div className="whitespace-pre-wrap break-words leading-relaxed text-white">
             {message.content}
           </div>
         ) : (
-          <div className="prose prose-sm max-w-none dark:prose-invert">
+          <div className="prose prose-sm max-w-none leading-relaxed dark:prose-invert prose-p:my-2 prose-headings:mt-3 prose-headings:mb-2 prose-pre:my-2 prose-pre:bg-sco-bg prose-pre:border prose-pre:border-sco-border prose-code:text-sco-blue dark:prose-code:text-sco-amber">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               rehypePlugins={[rehypeHighlight]}
@@ -158,12 +195,14 @@ function MessageBubble({ message }: MessageBubbleProps) {
             {message.tool_calls.map((tc) => (
               <div
                 key={tc.id}
-                className="font-mono text-xs text-sco-muted-foreground"
+                className="flex items-start gap-1.5 font-mono text-[11px] text-sco-muted-foreground"
               >
-                <span className="text-sco-blue">[{tc.tool_name}]</span>{" "}
-                {tc.display}
+                <span className="shrink-0 rounded bg-sco-blue/10 px-1.5 py-0.5 text-sco-blue">
+                  {tc.tool_name}
+                </span>
+                <span className="break-all">{tc.display}</span>
                 {tc.status === "error" && tc.error && (
-                  <span className="text-red-500"> — {tc.error}</span>
+                  <span className="text-red-500">— {tc.error}</span>
                 )}
               </div>
             ))}
@@ -172,39 +211,47 @@ function MessageBubble({ message }: MessageBubbleProps) {
 
         {/* Widget AskUserQuestion (Conv. 48 — persistito in DB lato backend) */}
         {message.ask_user_question && (
-          <div className="mt-3 rounded-md border border-sco-blue/40 bg-sco-blue/5 p-3">
-            <div className="mb-2 text-sm font-medium text-sco-navy dark:text-sco-text-dark">
-              {message.ask_user_question.prompt}
+          <div className="mt-3 overflow-hidden rounded-lg border border-sco-blue/30 bg-sco-blue/5">
+            <div className="border-b border-sco-blue/20 bg-sco-blue/10 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-sco-blue">
+              Domanda
             </div>
-            <div className="flex flex-col gap-1">
-              {message.ask_user_question.options.map((opt) => {
-                const isAnswered =
-                  message.ask_user_question?.state === "answered";
-                const isSelected =
-                  message.ask_user_question?.answer_id === opt.id;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    disabled={isAnswered}
-                    onClick={() => answerAskUserQuestion(message.id, opt.id)}
-                    className={cn(
-                      "rounded-md border px-3 py-2 text-left text-sm transition-colors",
-                      isAnswered
-                        ? "cursor-not-allowed border-sco-border bg-sco-muted text-sco-muted-foreground"
-                        : "border-sco-border bg-sco-bg hover:border-sco-blue hover:bg-sco-blue/10",
-                      isSelected && "border-sco-amber bg-sco-amber/10",
-                    )}
-                  >
-                    <span className="font-medium">{opt.label}</span>
-                    {opt.description && (
-                      <span className="ml-2 text-xs text-sco-muted-foreground">
-                        — {opt.description}
+            <div className="p-3">
+              <div className="mb-3 text-sm font-medium text-sco-text dark:text-sco-text-dark">
+                {message.ask_user_question.prompt}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {message.ask_user_question.options.map((opt) => {
+                  const isAnswered =
+                    message.ask_user_question?.state === "answered";
+                  const isSelected =
+                    message.ask_user_question?.answer_id === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      disabled={isAnswered}
+                      onClick={() => answerAskUserQuestion(message.id, opt.id)}
+                      className={cn(
+                        "rounded-md border px-3 py-2 text-left text-sm transition-all duration-150",
+                        isAnswered
+                          ? "cursor-not-allowed border-sco-border bg-sco-muted text-sco-muted-foreground"
+                          : "border-sco-border bg-sco-bg hover:border-sco-blue hover:bg-sco-blue/10 hover:shadow-sm",
+                        isSelected &&
+                          "border-sco-amber bg-sco-amber/10 ring-1 ring-sco-amber/40",
+                      )}
+                    >
+                      <span className="font-medium text-sco-text dark:text-sco-text-dark">
+                        {opt.label}
                       </span>
-                    )}
-                  </button>
-                );
-              })}
+                      {opt.description && (
+                        <span className="ml-2 text-xs text-sco-muted-foreground">
+                          — {opt.description}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}

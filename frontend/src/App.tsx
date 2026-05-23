@@ -51,12 +51,14 @@ export default function App() {
     return () => clearInterval(id);
   }, [fetchLicenseStatus]);
 
-  // Fetch iniziale ancora in corso: spinner minimale (no flash di contenuto)
+  // Fetch iniziale ancora in corso: spinner minimale (no flash di contenuto).
+  // Bg sco-bg per rispettare dark mode default — niente flash bianco.
   if (!initialFetchDone) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
-        <div className="text-sm text-slate-500 dark:text-slate-400">
-          Verifica license...
+      <div className="flex h-screen w-screen items-center justify-center bg-sco-bg">
+        <div className="flex items-center gap-3 text-sm text-sco-muted-foreground">
+          <span className="h-2 w-2 animate-pulse-soft rounded-full bg-sco-blue" />
+          <span>Verifica license...</span>
         </div>
       </div>
     );
@@ -68,11 +70,11 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-sco-bg text-sco-text">
-      {/* Sidebar sinistra */}
+    <div className="flex h-screen w-screen overflow-hidden bg-sco-bg text-sco-text dark:text-sco-text-dark">
+      {/* Sidebar sinistra ricca stile Claude Desktop */}
       <Sidebar />
 
-      {/* Colonna destra: header + content */}
+      {/* Colonna destra: header minimale + content */}
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header />
 

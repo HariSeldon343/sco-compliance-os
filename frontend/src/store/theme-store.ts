@@ -21,7 +21,9 @@ function resolveSystemTheme(): "light" | "dark" {
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set, get) => ({
-      theme: "system",
+      // Default dark mode — reference Claude Desktop / OpenHuman.
+      // L'utente può sempre passare a light/system dal selettore in Settings.
+      theme: "dark",
 
       setTheme: (theme) => {
         set({ theme });
@@ -44,6 +46,15 @@ export const useThemeStore = create<ThemeState>()(
       name: "sco-theme",
       // Persiste solo il valore `theme`, non l'azione
       partialize: (state) => ({ theme: state.theme }),
+      // Bump version per invalidare LocalStorage di utenti early-access:
+      // chi aveva "system" persistito prima del 23/05/2026 viene ri-defaultato su "dark".
+      version: 2,
+      migrate: (persisted: unknown, fromVersion: number) => {
+        if (fromVersion < 2) {
+          return { theme: "dark" } as { theme: Theme };
+        }
+        return persisted as { theme: Theme };
+      },
     },
   ),
 );
