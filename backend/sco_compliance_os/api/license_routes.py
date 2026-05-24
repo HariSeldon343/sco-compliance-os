@@ -62,8 +62,9 @@ class LicenseStatusResponse(BaseModel):
     plan: str = ""
     validated_at: str = ""
     error_message: str = ""
-    # Version backend (Conv. 47 enforcement single source of truth)
-    backend_version: str = "0.1.0-alpha"
+    # Version backend (Conv. 47 enforcement single source of truth v0.7.1).
+    # Override runtime con __version__ in costruzione response, NON usare default.
+    backend_version: str = ""
 
 
 # ----- Helpers -----
@@ -106,7 +107,13 @@ def _load_active_license(settings: Settings) -> dict[str, Any] | None:
 
 
 def _result_to_response(result: LicenseValidationResult) -> LicenseStatusResponse:
-    """Mappa LicenseValidationResult → response Pydantic."""
+    """Mappa LicenseValidationResult → response Pydantic.
+
+    Conv. 47 enforcement v0.7.1: backend_version popolata da __version__ runtime
+    (mai usare default hardcoded "0.1.0-alpha" che era drift di 6 release).
+    """
+    from sco_compliance_os import __version__
+
     return LicenseStatusResponse(
         status=result.status.value,
         is_valid=result.is_valid,
@@ -117,6 +124,7 @@ def _result_to_response(result: LicenseValidationResult) -> LicenseStatusRespons
         plan=result.plan,
         validated_at=result.validated_at,
         error_message=result.error_message,
+        backend_version=__version__,
     )
 
 
@@ -158,6 +166,8 @@ async def get_license_status(
     settings: Settings = Depends(get_settings),
 ) -> LicenseStatusResponse:
     """Stato corrente license attiva (da cache + ping SaaS se TTL scaduto)."""
+    from sco_compliance_os import __version__
+
     active = _load_active_license(settings)
     if not active:
         # Nessuna license attivata → status UNKNOWN
@@ -165,6 +175,7 @@ async def get_license_status(
             status=LicenseStatus.UNKNOWN.value,
             is_valid=False,
             error_message="Nessuna license attivata. Inserisci email + license key.",
+            backend_version=__version__,
         )
 
     email = active.get("email", "")
@@ -174,6 +185,7 @@ async def get_license_status(
             status=LicenseStatus.INVALID.value,
             is_valid=False,
             error_message="File license corrotto. Re-inserire credenziali.",
+            backend_version=__version__,
         )
 
     # Valida via SaaS (con cache 24h)

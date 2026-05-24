@@ -1,5 +1,5 @@
 // SCO Compliance OS — sidebar 280px collapsible stile Claude Desktop / OpenHuman
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
   MessageSquare,
@@ -17,11 +17,12 @@ import {
 } from "lucide-react";
 
 import { useChatStore } from "@/store/chat-store";
+import { useVaultStore } from "@/store/vault-store";
 import { cn } from "@/lib/cn";
 
-// Versione app — bumped manualmente con bump version script ogni release Conv. 47.
-// TODO v0.2.0: fetch dinamico da backend /health endpoint (rimuove hardcode).
-const APP_VERSION_PLACEHOLDER = "0.3.0";
+// Fallback version se backend /health non risponde. Conv. 47 enforcement:
+// fonte autoritativa = backend_version da GET /health (vedi useBackendVersion hook).
+const APP_VERSION_FALLBACK = "0.7.1";
 
 interface NavItem {
   to: string;
@@ -82,12 +83,35 @@ function relativeTimestamp(iso: string): string {
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [vaultMenuOpen, setVaultMenuOpen] = useState(false);
+  const [backendVersion, setBackendVersion] = useState<string>(APP_VERSION_FALLBACK);
   const navigate = useNavigate();
 
   const conversations = useChatStore((s) => s.conversations);
   const activeId = useChatStore((s) => s.activeConversationId);
   const setActive = useChatStore((s) => s.setActiveConversation);
   const createConv = useChatStore((s) => s.createConversation);
+
+  // Conv. 47 enforcement v0.7.1: vault attivo + versione = single source of truth.
+  // Vault da useVaultStore (era hardcoded "Second Brain" pre-v0.7.1).
+  // Versione da backend /health (era hardcoded "0.3.0" pre-v0.7.1, drift cumulativo
+  // 4 release v0.4/v0.5/v0.6/v0.7 con display sbagliato).
+  const vaults = useVaultStore((s) => s.vaults);
+  const selectedVaultId = useVaultStore((s) => s.selectedVaultId);
+  const activeVaultName =
+    vaults.find((v) => v.id === selectedVaultId)?.name ?? "Nessun vault";
+
+  useEffect(() => {
+    const BACKEND_URL =
+      import.meta.env.VITE_BACKEND_URL ?? "http://127.0.0.1:7800";
+    fetch(`${BACKEND_URL}/health`)
+      .then((r) => r.json())
+      .then((data: { backend_version?: string }) => {
+        if (data.backend_version) setBackendVersion(data.backend_version);
+      })
+      .catch(() => {
+        // backend offline o /health non risponde: mantieni fallback
+      });
+  }, []);
 
   const conversationList = Object.values(conversations).sort((a, b) =>
     b.updated_at.localeCompare(a.updated_at),
@@ -181,7 +205,7 @@ export function Sidebar() {
                 className="shrink-0 text-sco-blue"
                 aria-hidden="true"
               />
-              <span className="truncate font-medium">Second Brain</span>
+              <span className="truncate font-medium">{activeVaultName}</span>
             </span>
             <ChevronDown
               size={13}
@@ -326,7 +350,7 @@ export function Sidebar() {
           collapsed ? "px-2 py-2 text-center" : "px-4 py-2",
         )}
       >
-        v{APP_VERSION_PLACEHOLDER}
+        v{backendVersion}
       </div>
     </aside>
   );

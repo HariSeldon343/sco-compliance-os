@@ -412,11 +412,17 @@ def create_app() -> FastAPI:
     # Health endpoint root-level
     @app.get("/health", tags=["meta"])
     async def health() -> dict[str, Any]:
-        """Health check semplice. Usato da Tauri sidecar per readiness probe."""
+        """Health check semplice. Usato da Tauri sidecar per readiness probe.
+
+        Conv. 47 enforcement v0.7.1: backend_version + version entrambi popolati
+        da __version__ single source of truth (fix display drift sidebar pre-v0.7.1
+        che mostrava "0.3.0" hardcoded su qualunque MSI installato).
+        """
         return {
             "status": "ok",
             "service": "sco-compliance-os-backend",
             "version": __version__,
+            "backend_version": __version__,
         }
 
     @app.get("/", tags=["meta"])
