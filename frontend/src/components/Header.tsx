@@ -1,11 +1,12 @@
 // SCO Compliance OS — top header minimale 56px stile Claude Desktop
 import { useState } from "react";
-import { Moon, Sun, Monitor, ChevronDown, LogOut, Cog } from "lucide-react";
+import { Moon, Sun, Monitor, ChevronDown, LogOut, Cog, Save } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { useThemeStore, type Theme } from "@/store/theme-store";
 import { useChatStore } from "@/store/chat-store";
 import { useLicenseStore } from "@/store/license-store";
+import { SessionEndDialog } from "@/components/SessionEndDialog";
 import { cn } from "@/lib/cn";
 
 // Conv. 47 enforcement v0.7.3: utente reale da useLicenseStore (email license attiva).
@@ -38,6 +39,9 @@ export function Header() {
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  // Fine sessione: dialog conferma + trigger os-ottimizzatore via chat-store
+  // (Conv. 47 + 48: backend single source of truth).
+  const [sessionEndOpen, setSessionEndOpen] = useState(false);
 
   // Titolo della conversation attiva — mostrato come breadcrumb minimale.
   const activeId = useChatStore((s) => s.activeConversationId);
@@ -75,8 +79,25 @@ export function Header() {
         </h1>
       </div>
 
-      {/* Cluster destro: theme toggle + user menu */}
+      {/* Cluster destro: fine sessione + theme toggle + user menu */}
       <div className="flex items-center gap-1">
+        {/* Fine sessione: trigger manutenzione vault con os-ottimizzatore.
+            Posto prima del theme toggle per prominenza UX (azione consulenziale
+            principale, non solo preferenza). Stile pill discreto, non destructive. */}
+        <button
+          type="button"
+          onClick={() => setSessionEndOpen(true)}
+          className="flex items-center gap-1.5 rounded-md border border-sco-border bg-sco-surface-elevated px-2.5 py-1.5 text-xs font-medium text-sco-muted-foreground transition-colors hover:border-sco-blue/40 hover:bg-sco-blue/5 hover:text-sco-text dark:hover:text-sco-text-dark"
+          title="Manutieni il vault con os-ottimizzatore prima di chiudere la sessione"
+          aria-label="Fine sessione: manutieni vault con os-ottimizzatore"
+        >
+          <Save size={13} />
+          <span className="hidden sm:inline">Fine sessione</span>
+        </button>
+
+        {/* Separator visivo */}
+        <span className="mx-1 h-5 w-px bg-sco-border" aria-hidden="true" />
+
         {/* Theme toggle (ciclico, compatto) */}
         <button
           type="button"
@@ -155,6 +176,12 @@ export function Header() {
           )}
         </div>
       </div>
+
+      {/* Dialog conferma "Fine sessione" + trigger os-ottimizzatore */}
+      <SessionEndDialog
+        open={sessionEndOpen}
+        onOpenChange={setSessionEndOpen}
+      />
     </header>
   );
 }

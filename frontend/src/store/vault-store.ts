@@ -188,6 +188,25 @@ export const useVaultStore = create<VaultState>((set, get) => ({
         selectedVaultId: entry.id,
         loading: false,
       });
+
+      // v1.0.2 fix sidebar visibility: notifica immediata utente + delayed
+      // auto-fetch chat-store per intercettare "Configurazione iniziale del
+      // vault X" creata dal skill loader backend (os-setup + os-ottimizzatore
+      // dispatch ~2-3s post-vault.registered). Lazy import sonner + chat-store
+      // per evitare circular deps + bundle bloat.
+      const { toast } = await import("sonner");
+      toast.info(
+        `Vault "${entry.name}" registrato. Configurazione automatica in corso...`,
+        { duration: 4500 },
+      );
+
+      // Polling 5s del chat-store sidebar coprirà il caso "+conversation comparsa",
+      // ma forziamo un ping esplicito dopo 4s per ridurre worst-case latenza UX.
+      setTimeout(async () => {
+        const { useChatStore } = await import("@/store/chat-store");
+        void useChatStore.getState().fetchConversations({ silent: false });
+      }, 4000);
+
       return entry;
     } catch (err) {
       set({

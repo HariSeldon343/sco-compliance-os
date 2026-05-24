@@ -35,6 +35,21 @@ export const useChatModeStore = create<ChatModeState>()(
   ),
 );
 
+/**
+ * Stato risposta a un widget AskUserQuestion inline (tag testuale dentro il
+ * content del messaggio assistant — v1.0.2 fix). Chiave: `${messageId}__${segmentIndex}`.
+ *
+ * Pattern Conv. 48: idealmente questo stato dovrebbe vivere lato backend e
+ * tornare con il messaggio. Finche l'endpoint non e' cablato, manteniamo lo
+ * stato qui per non perdere la selezione al re-render.
+ */
+export interface InlineAskAnswer {
+  value: string;
+  submitted_at: string; // ISO 8601
+  submitting?: boolean;
+  error?: string | null;
+}
+
 interface ChatState {
   // Mappa conversation_id -> ConversationItem
   conversations: Record<string, ConversationItem>;
@@ -44,6 +59,14 @@ interface ChatState {
   // Stato runtime
   isStreaming: boolean;
   error: string | null;
+  // v1.0.2 fix sidebar visibility: tracking auto-fetch + ID conversation già viste
+  // per intercettare "nuova conversation comparsa" (es. vault.registered → os-setup
+  // auto-crea "Configurazione iniziale del vault X") e auto-select + toast.
+  lastFetchAt: number | null;
+  knownConversationIds: Set<string>;
+  // Mappa "messageId__segmentIndex" -> InlineAskAnswer (Conv. 48 carry-over,
+  // stato widget inline ask question vive qui finche backend non cabla endpoint).
+  inlineAskAnswers: Record<string, InlineAskAnswer>;
 
   // Actions
   setActiveConversation: (id: string | null) => void;
@@ -51,7 +74,43 @@ interface ChatState {
   deleteConversation: (id: string) => void;
   sendMessage: (text: string, attachments?: string[]) => Promise<void>;
   answerAskUserQuestion: (messageId: string, optionId: string) => void;
+  /**
+   * Invia la scelta dell'utente per un widget AskUserQuestion inline
+   * (tag testuale `<ASK_USER_QUESTION>` dentro content). Tenta prima il POST
+   * verso `/api/chat/answer-ask-user-question` con body `{conversation_id,
+   * message_id, option_value}`. Se l'endpoint risponde 404 (carry-over:
+   * non ancora cablato lato backend al 2026-05-24), fa fallback inviando
+   * la `label` dell'opzione come messaggio utente normale dentro la
+   * conversation corrente via `sendMessage`, cosi che l'agente possa
+   * riprendere lo skill.
+   *
+   * Aggiorna `inlineAskAnswers[messageId__segmentIndex]` con il value
+   * selezionato per impedire ulteriori click sul widget post-risposta.
+   */
+  answerInlineAskQuestion: (params: {
+    messageId: string;
+    segmentIndex: number;
+    value: string;
+    label: string;
+  }) => Promise<void>;
+  /**
+   * Trigger manutenzione fine sessione via skill os-ottimizzatore.
+   * Esegue POST /api/skills/run con streaming SSE, persiste output assistant
+   * nella conversation creata dal backend, auto-naviga alla conversation.
+   *
+   * Conv. 47 + 48: backend è single source of truth (skill runner +
+   * conversation storage), frontend solo orchestra UX e legge il risultato.
+   */
+  endSession: (params?: { vaultPath?: string }) => Promise<{
+    success: boolean;
+    conversationId: string | null;
+    eventsCount: number;
+    errorMessage: string | null;
+  }>;
   clearError: () => void;
+  // v1.0.2 fix sidebar visibility: fetch conversations dal backend + merge + auto-select
+  // nuove "Configurazione iniziale del vault X" + toast notifica utente.
+  fetchConversations: (opts?: { silent?: boolean }) => Promise<ConversationItem[]>;
 }
 
 // Conv. 47 enforcement v0.7.2: conversations vivono ESCLUSIVAMENTE backend SQLite
@@ -72,8 +131,40 @@ export const useChatStore = create<ChatState>()(
       activeConversationId: null,
       isStreaming: false,
       error: null,
+      lastFetchAt: null,
+      knownConversationIds: new Set<string>(),
+      inlineAskAnswers: {},
 
-      setActiveConversation: (id) => set({ activeConversationId: id }),
+      setActiveConversation: (id) => {
+        set({ activeConversationId: id });
+        // v1.0.2 fix sidebar visibility / widget render: fetch messaggi backend al
+        // momento della selezione se non già in memoria. Conv. 48 single source of
+        // truth: stato widget ask_user_question vive in DB messages, frontend lo
+        // deduce SOLO dal fetch, non da optimistic UI memory.
+        if (!id) return;
+        const state = get();
+        const isOptimisticConv = id.startsWith("stub-") || id.startsWith("conv-");
+        const cached = state.messagesByConv[id] ?? [];
+        const conv = state.conversations[id];
+        const isConfigWelcome =
+          conv?.title?.startsWith("Configurazione iniziale del vault") ?? false;
+        // Conv backend + (no cache OPPURE è "Configurazione iniziale" che potrebbe
+        // avere messaggi nuovi aggiunti dal skill loader post-vault.registered)
+        if (!isOptimisticConv && (cached.length === 0 || isConfigWelcome)) {
+          void apiClient
+            .getConversationMessages(id)
+            .then((msgs) => {
+              set((s) => ({
+                messagesByConv: { ...s.messagesByConv, [id]: msgs },
+              }));
+            })
+            .catch((err) => {
+              set({
+                error: `Errore fetch messaggi: ${err instanceof Error ? err.message : err}`,
+              });
+            });
+        }
+      },
 
       createConversation: (title = "Nuova conversazione") => {
         const id = `conv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -215,7 +306,302 @@ export const useChatStore = create<ChatState>()(
         });
       },
 
+      answerInlineAskQuestion: async ({ messageId, segmentIndex, value, label }) => {
+        const key = `${messageId}__${segmentIndex}`;
+        const state = get();
+
+        // Guard: gia' risposto -> no-op (impedisce doppio click in race)
+        if (state.inlineAskAnswers[key]?.value) return;
+
+        const conversationId = state.activeConversationId;
+        if (!conversationId) {
+          set((s) => ({
+            inlineAskAnswers: {
+              ...s.inlineAskAnswers,
+              [key]: {
+                value,
+                submitted_at: new Date().toISOString(),
+                error: "Nessuna conversation attiva",
+              },
+            },
+          }));
+          return;
+        }
+
+        // Optimistic lock UI: marca submitting
+        const submittedAt = new Date().toISOString();
+        set((s) => ({
+          inlineAskAnswers: {
+            ...s.inlineAskAnswers,
+            [key]: { value, submitted_at: submittedAt, submitting: true },
+          },
+        }));
+
+        // 1) Primary: POST verso endpoint dedicato (quando backend lo cablera')
+        try {
+          await apiClient.answerAskUserQuestion({
+            conversation_id: conversationId,
+            message_id: messageId,
+            option_value: value,
+          });
+          set((s) => ({
+            inlineAskAnswers: {
+              ...s.inlineAskAnswers,
+              [key]: { value, submitted_at: submittedAt, submitting: false },
+            },
+          }));
+          return;
+        } catch (err) {
+          // Stato 404 / endpoint non cablato -> fallback graceful via sendMessage
+          // Pattern Conv. 35 RESEARCH-BEFORE-ACT: l'endpoint non esiste ancora
+          // lato backend (verificato 2026-05-24), fallback obbligatorio per non
+          // bloccare l'utente. Quando backend lo cablera', il path primario
+          // sopra coprira' il caso e questo fallback non sara' raggiunto.
+          const isMissingEndpoint =
+            err instanceof Error &&
+            /404|Not Found|answer_ask_user_question_error/i.test(err.message);
+
+          if (!isMissingEndpoint) {
+            // Errore generico -> registra ma NON fallback (non sappiamo cosa abbia
+            // gia' fatto il backend, evitiamo doppio invio)
+            set((s) => ({
+              inlineAskAnswers: {
+                ...s.inlineAskAnswers,
+                [key]: {
+                  value,
+                  submitted_at: submittedAt,
+                  submitting: false,
+                  error: err instanceof Error ? err.message : String(err),
+                },
+              },
+              error: `Errore invio risposta widget: ${err instanceof Error ? err.message : err}`,
+            }));
+            return;
+          }
+        }
+
+        // 2) Fallback: invia la label come messaggio utente normale
+        try {
+          await get().sendMessage(label);
+          set((s) => ({
+            inlineAskAnswers: {
+              ...s.inlineAskAnswers,
+              [key]: { value, submitted_at: submittedAt, submitting: false },
+            },
+          }));
+        } catch (err) {
+          set((s) => ({
+            inlineAskAnswers: {
+              ...s.inlineAskAnswers,
+              [key]: {
+                value,
+                submitted_at: submittedAt,
+                submitting: false,
+                error: err instanceof Error ? err.message : String(err),
+              },
+            },
+            error: `Errore fallback sendMessage: ${err instanceof Error ? err.message : err}`,
+          }));
+        }
+      },
+
+      // Manutenzione fine sessione: trigger skill os-ottimizzatore via POST
+      // /api/skills/run (streaming SSE). Conv. 47+48 enforcement.
+      // Backend crea automaticamente una conversation "Skill os-ottimizzatore"
+      // e ritorna l'ID nel response header X-Conversation-Id. Persiste output
+      // assistant a fine stream. Frontend: legge l'ID, auto-naviga.
+      endSession: async (params) => {
+        const vaultPath = params?.vaultPath;
+        let conversationId: string | null = null;
+        let eventsCount = 0;
+        const buffer: string[] = [];
+        let errorMessage: string | null = null;
+
+        try {
+          // Lazy import fetchWithRetry per robustezza race startup sidecar (v1.0.1 pattern).
+          const { fetchWithRetry } = await import("@/api/retry");
+          const backendUrl =
+            import.meta.env.VITE_BACKEND_URL ?? "http://127.0.0.1:7800";
+
+          const res = await fetchWithRetry(`${backendUrl}/api/skills/run`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "text/event-stream",
+            },
+            body: JSON.stringify({
+              name: "os-ottimizzatore",
+              vault_path: vaultPath,
+              context: {
+                trigger: "session_end",
+                interactive: false,
+              },
+            }),
+            maxRetries: 3,
+            baseMs: 500,
+          });
+
+          if (!res.ok) {
+            const body = await res.text().catch(() => "");
+            throw new Error(`HTTP ${res.status} ${body}`);
+          }
+
+          // Backend ritorna X-Conversation-Id (vedi skills_routes.py:200).
+          conversationId = res.headers.get("X-Conversation-Id");
+
+          if (!res.body) {
+            throw new Error("Response senza body SSE");
+          }
+
+          // Parse SSE eventi
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder("utf-8");
+          let parseBuffer = "";
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            parseBuffer += decoder.decode(value, { stream: true });
+
+            let nlIndex = parseBuffer.indexOf("\n\n");
+            while (nlIndex !== -1) {
+              const ev = parseBuffer.slice(0, nlIndex);
+              parseBuffer = parseBuffer.slice(nlIndex + 2);
+              const dataLine = ev.split("\n").find((l) => l.startsWith("data: "));
+              if (dataLine) {
+                const payload = dataLine.slice(6);
+                if (payload === "[DONE]") break;
+                try {
+                  const parsed: { kind: string; data: Record<string, unknown> } =
+                    JSON.parse(payload);
+                  eventsCount += 1;
+                  if (parsed.kind === "text_delta") {
+                    const chunk = String(parsed.data?.text ?? "");
+                    if (chunk) buffer.push(chunk);
+                  } else if (parsed.kind === "error") {
+                    errorMessage = String(
+                      (parsed.data as { message?: string })?.message ??
+                        "errore stream skill",
+                    );
+                  }
+                } catch {
+                  // chunk malformato: ignora
+                }
+              }
+              nlIndex = parseBuffer.indexOf("\n\n");
+            }
+          }
+
+          // Re-fetch lista conversations dal backend per intercettare la nuova
+          // "Skill os-ottimizzatore" + auto-select (riusa fetchConversations
+          // logic v1.0.2: merge + diff knownConversationIds + auto-navigate).
+          const fetchedList = await get().fetchConversations({ silent: true });
+
+          // Se backend ha restituito X-Conversation-Id, auto-select esplicito
+          // via setActiveConversation (che auto-fetcha i messaggi backend per
+          // mostrare il report skill, Conv. 48 enforcement).
+          // Altrimenti, fetchConversations già auto-seleziona la nuova via diff.
+          if (conversationId) {
+            const exists = fetchedList.some((c) => c.id === conversationId);
+            if (exists) {
+              get().setActiveConversation(conversationId);
+            }
+          }
+
+          return {
+            success: errorMessage === null,
+            conversationId,
+            eventsCount,
+            errorMessage,
+          };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return {
+            success: false,
+            conversationId,
+            eventsCount,
+            errorMessage: message,
+          };
+        }
+      },
+
       clearError: () => set({ error: null }),
+
+      // v1.0.2 fix sidebar visibility: pull esplicito + merge con state corrente.
+      // Pattern Conv. 47/48: backend single source of truth. Auto-detect nuove
+      // "Configurazione iniziale del vault X" → toast + auto-select se non c'è
+      // active conversation in corso (no preempt UX se utente sta lavorando altrove).
+      fetchConversations: async (opts) => {
+        const silent = opts?.silent ?? true;
+        try {
+          const list = await apiClient.listConversations();
+          const state = get();
+          const known = state.knownConversationIds;
+
+          // Detect nuove conversations comparse dal backend post-vault.registered
+          const newOnes = list.filter((c) => !known.has(c.id) && !state.conversations[c.id]);
+          const configWelcome = newOnes.find((c) =>
+            c.title.startsWith("Configurazione iniziale del vault"),
+          );
+
+          // Merge: backend è autoritativo per shape/title/updated_at; preserva messagesByConv
+          const newConvs: Record<string, ConversationItem> = { ...state.conversations };
+          for (const conv of list) {
+            newConvs[conv.id] = conv;
+          }
+
+          const nextKnown = new Set<string>(known);
+          for (const conv of list) nextKnown.add(conv.id);
+
+          // Auto-select nuova "Configurazione iniziale" SOLO se non c'è active
+          // conversation in corso (rispetta scelta utente in altri contesti).
+          const shouldAutoSelect =
+            configWelcome && !state.activeConversationId && !state.isStreaming;
+
+          set({
+            conversations: newConvs,
+            knownConversationIds: nextKnown,
+            lastFetchAt: Date.now(),
+          });
+
+          // Se auto-select scattato → chiama setActiveConversation (NON set diretto)
+          // così triggera anche il fetch messaggi della conversation appena creata
+          // (Conv. 48: backend single source of truth dei messaggi).
+          if (shouldAutoSelect && configWelcome) {
+            get().setActiveConversation(configWelcome.id);
+          }
+
+          // Toast notifica nuova conversation di configurazione (lazy import sonner
+          // per evitare overhead bundle in chunk store; sonner è già caricato
+          // da main.tsx in chunk principale via Toaster, l'import è dedup-ed).
+          if (!silent && configWelcome) {
+            const { toast } = await import("sonner");
+            toast.success(
+              `Configurazione vault completata: nuova conversazione "${configWelcome.title}"`,
+              {
+                duration: 6000,
+                action: shouldAutoSelect
+                  ? undefined
+                  : {
+                      label: "Apri",
+                      onClick: () => {
+                        get().setActiveConversation(configWelcome.id);
+                      },
+                    },
+              },
+            );
+          }
+
+          return list;
+        } catch (err) {
+          // Best-effort silent: il polling non deve generare toast errore ogni 5s.
+          // Surface solo via state.error per debug.
+          set({
+            error: `Errore fetch conversations: ${err instanceof Error ? err.message : err}`,
+          });
+          return [];
+        }
+      },
     }),
     {
       name: "sco-chat",
@@ -248,10 +634,17 @@ export const useChatStore = create<ChatState>()(
         }
         return persistedState;
       },
+      // NB v1.0.2: knownConversationIds (Set) NON va in localStorage (no JSON
+      // serializzabile + comunque ricostruito dal primo fetchConversations al mount).
+      // lastFetchAt non persiste per forzare refresh ogni cold start.
       partialize: (s) => ({
         conversations: s.conversations,
         messagesByConv: s.messagesByConv,
         activeConversationId: s.activeConversationId,
+        // v1.0.2: persist inlineAskAnswers per non perdere selezione widget
+        // al reload (carry-over finche backend non cabla endpoint dedicato e
+        // restituisce stato widget come parte del payload messaggio).
+        inlineAskAnswers: s.inlineAskAnswers,
       }),
     },
   ),

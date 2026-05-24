@@ -35,6 +35,7 @@ crea solo le cartelle/file MANCANTI lasciando intoccato il resto.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -1050,5 +1051,933 @@ def complete_missing_structure(
         files_created=tuple(files_created),
         files_skipped=tuple(files_skipped),
         missing_before=missing_before,
+        errors=tuple(errors),
+    )
+
+
+# ----- DEV-AUTO-SCAFFOLD v1.0.2: auto-organize completo per vault qualsiasi -----
+#
+# Convenzione 41 tracciatura + Conv. 44 lesson 1 CircuitBreaker su file ops +
+# Conv. 47 single source of truth (riusa _BASE_DIRECTORIES + _seed_for_template).
+#
+# Differenza con complete_missing_structure():
+#   - complete_missing_structure(): crea SOLO cartelle/file mancanti, niente
+#     re-classify dei file esistenti, niente seed entity/concepts/glossario.
+#   - auto_organize_vault(): operazione COMPLETA. Esegue 5 fasi:
+#       1. Backup file esistenti (lazy, solo se subiranno spostamento) in
+#          _archivio_pre_v1.0.2/<filename>
+#       2. Crea TUTTE le cartelle canoniche + sotto-cartelle wiki/raw + log/
+#       3. Re-classify file .md esistenti con mapping cartelle non-SCO -> SCO
+#          (Context->Contesto, Daily->Giornaliero/YYYY-MM/, Resources->Libreria/,
+#           Projects->Progetti/, Intelligence->Libreria/ricerca/, Skills->Skill/)
+#          o per frontmatter type:source/entity/concept/synthesis/cliente
+#       4. Crea AGENTS.md template + README.md welcome (idempotent, no overwrite)
+#       5. Popola entity seed (8 normative italiane comuni) + 4 concepts comuni +
+#          glossario tabellare 35+ sigle in wiki/glossari/_index.md
+#   - Idempotente: chiamata ripetuta su vault gia auto-organizzato non
+#     ri-crea file gia presenti, non ri-sposta file gia in posizione SCO.
+
+
+# Mapping cartelle non-SCO -> SCO (chiavi: source folder name root vault,
+# valori: destination folder name relative to vault root).
+# Pattern Conv. 47: il mapping vive in un solo posto, non duplicato.
+_NON_SCO_FOLDER_MAP: dict[str, str] = {
+    "Context": "Contesto",
+    "Daily": "Giornaliero",
+    "Resources": "Libreria",
+    "Projects": "Progetti",
+    "Intelligence": "Libreria/ricerca",
+    "Skills": "Skill",
+}
+
+
+# Pattern regex semplice per identificare file daily YYYY-MM-DD.md (Conv. 35
+# verifica fonti vault: pattern noto del session-lifecycle SCO).
+_DAILY_FILENAME_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})\.md$")
+
+
+# Entity seed addizionali per popolamento completo SOC vault (3 oltre i 5 cyber)
+_EXTRA_SEED_AUTO_ORGANIZE: tuple[EntitySeed, ...] = (
+    EntitySeed(
+        slug="reg-ue-2016-679-gdpr",
+        title="Reg. UE 2016/679 — GDPR",
+        entity_type="atto-normativo",
+        entity_subtype="regolamento-ue",
+        ambito_canonico="privacy-protezione-dati",
+        sintesi=(
+            "Regolamento generale sulla protezione dei dati personali, "
+            "applicabile direttamente in tutti gli Stati membri dal "
+            "25 maggio 2018. Definisce diritti dell'interessato, obblighi "
+            "del titolare e del responsabile del trattamento, principi di "
+            "trattamento (liceita, correttezza, trasparenza, minimizzazione, "
+            "limitazione conservazione, integrita e riservatezza, "
+            "accountability). Designa il Garante Privacy come autorita "
+            "nazionale italiana. Sanzioni fino al 4% del fatturato annuo "
+            "globale o 20 milioni EUR."
+        ),
+        tags=("entity", "atto-normativo", "regolamento-ue", "privacy-protezione-dati"),
+    ),
+    EntitySeed(
+        slug="iso-9001-2015",
+        title="ISO 9001:2015 — Sistema di gestione per la qualita",
+        entity_type="standard-tecnico",
+        entity_subtype="iso",
+        ambito_canonico="qualita-sgq",
+        sintesi=(
+            "Standard internazionale per la progettazione e implementazione di "
+            "un Sistema di Gestione della Qualita (SGQ). Applicabile a "
+            "organizzazioni di qualsiasi dimensione e settore industriale o "
+            "dei servizi. Certificabile da Organismo di Certificazione "
+            "accreditato. Struttura HLS Annex SL (High Level Structure) "
+            "comune a tutti gli standard ISO MSS, integrabile con ISO 14001 "
+            "e ISO 45001 in sistemi integrati."
+        ),
+        tags=("entity", "standard-tecnico", "iso", "qualita-sgq"),
+    ),
+    EntitySeed(
+        slug="reg-ue-2024-1689-ai-act",
+        title="Reg. UE 2024/1689 — AI Act",
+        entity_type="atto-normativo",
+        entity_subtype="regolamento-ue",
+        ambito_canonico="governance-ai",
+        sintesi=(
+            "Regolamento europeo sull'intelligenza artificiale (AI Act), "
+            "primo quadro normativo organico al mondo. Applicabilita "
+            "progressiva: 02/02/2025 pratiche vietate Art. 5, "
+            "02/08/2025 GPAI + governance, 02/08/2026 sistemi alto rischio "
+            "Allegato III, 02/08/2027 sistemi alto rischio Allegato I. "
+            "Classifica i sistemi IA in 4 categorie di rischio (vietato, "
+            "alto, limitato, minimo) con obblighi differenziati per "
+            "provider e deployer. AGENAS designata autorita di vigilanza "
+            "per IA sanitaria in Italia."
+        ),
+        tags=("entity", "atto-normativo", "regolamento-ue", "governance-ai"),
+    ),
+)
+
+
+# Concept seed — pagine wiki/concepts/ comuni cross-standard.
+@dataclass(frozen=True)
+class ConceptSeed:
+    """Definizione concept seed cross-standard."""
+
+    slug: str
+    title: str
+    sintesi: str
+    related_entities: tuple[str, ...]
+    tags: tuple[str, ...]
+
+
+_CONCEPT_SEEDS: tuple[ConceptSeed, ...] = (
+    ConceptSeed(
+        slug="analisi-dei-rischi",
+        title="Analisi dei rischi",
+        sintesi=(
+            "Processo sistematico di identificazione, analisi e valutazione "
+            "dei rischi che possono compromettere il raggiungimento degli "
+            "obiettivi dell'organizzazione. In ambito SGSI segue ISO/IEC "
+            "27005:2022 + ISO 31000:2018. In ambito qualita segue il "
+            "principio del risk-based thinking di ISO 9001:2015 cap. 6.1. "
+            "In ambito NIS 2 e' obbligo esplicito Art. 24 c. 2 lett. a del "
+            "D.Lgs. 138/2024. Output tipici: registro rischi, matrice "
+            "probabilita-impatto, piano di trattamento dei rischi."
+        ),
+        related_entities=(
+            "iso-iec-27001-2022",
+            "iso-9001-2015",
+            "d-lgs-138-2024",
+        ),
+        tags=("concept", "risk-management", "cross-standard"),
+    ),
+    ConceptSeed(
+        slug="audit-interno",
+        title="Audit interno",
+        sintesi=(
+            "Processo sistematico, indipendente e documentato per ottenere "
+            "evidenze di audit e valutarle oggettivamente al fine di "
+            "stabilire in che misura sono soddisfatti i criteri di audit. "
+            "Riferimento normativo: ISO 19011:2018 (linee guida audit "
+            "sistemi di gestione) + clausola 9.2 ISO 9001/27001/14001/42001. "
+            "Pianificato annualmente nel Programma di Audit con copertura "
+            "dei processi su un ciclo triennale. Output tipici: piano "
+            "audit, lista di riscontro, rapporto di audit, NC e SM "
+            "riscontrate."
+        ),
+        related_entities=(
+            "iso-iec-27001-2022",
+            "iso-9001-2015",
+        ),
+        tags=("concept", "audit", "cross-standard"),
+    ),
+    ConceptSeed(
+        slug="riesame-direzione",
+        title="Riesame della direzione",
+        sintesi=(
+            "Riesame periodico (tipicamente annuale) del sistema di "
+            "gestione da parte dell'alta direzione per assicurare la sua "
+            "continua idoneita, adeguatezza ed efficacia. Riferimento "
+            "normativo: clausola 9.3 ISO 9001/27001/14001/42001/20000-1. "
+            "Input obbligatori: esiti audit interni, feedback parti "
+            "interessate, performance dei processi, conformita prodotti/"
+            "servizi, stato azioni correttive, esito riesame precedente, "
+            "cambiamenti contestuali. Output: decisioni su miglioramento "
+            "+ risorse + cambiamenti del sistema."
+        ),
+        related_entities=(
+            "iso-iec-27001-2022",
+            "iso-9001-2015",
+        ),
+        tags=("concept", "governance", "cross-standard"),
+    ),
+    ConceptSeed(
+        slug="non-conformita",
+        title="Non conformita",
+        sintesi=(
+            "Mancato soddisfacimento di un requisito (definizione ISO "
+            "9000:2015). Classificata per gravita: NC Maggiore (NC_E "
+            "esterna o NC_I interna) implica assenza o carenza grave nel "
+            "sistema; NC Minore (NC) implica deviazione puntuale gestibile "
+            "con azione correttiva; Spunto di Miglioramento (SM) e' "
+            "osservazione non vincolante. Trattamento: registrazione, "
+            "analisi cause radice (5 Why, Ishikawa, FMEA), pianificazione "
+            "azione correttiva, verifica efficacia. Riferimento: ISO "
+            "9001 cl. 10.2, ISO/IEC 27001 cl. 10.2."
+        ),
+        related_entities=(
+            "iso-iec-27001-2022",
+            "iso-9001-2015",
+        ),
+        tags=("concept", "non-conformita", "azione-correttiva"),
+    ),
+    ConceptSeed(
+        slug="trattamento-dei-rischi",
+        title="Trattamento dei rischi",
+        sintesi=(
+            "Fase del processo di gestione del rischio in cui si "
+            "selezionano e implementano le opzioni per modificare il "
+            "rischio. Quattro opzioni canoniche: evitare il rischio "
+            "(eliminare la fonte), modificare il rischio (mitigare con "
+            "controlli), trasferire il rischio (assicurazione, contratto), "
+            "accettare il rischio (residuo entro soglia di tollerabilita). "
+            "Per ciascun controllo selezionato deve essere documentato in "
+            "SoA (Statement of Applicability) la giustificazione e lo "
+            "stato di implementazione. Riferimento ISO/IEC 27001 cl. 6.1.3."
+        ),
+        related_entities=(
+            "iso-iec-27001-2022",
+            "d-lgs-138-2024",
+        ),
+        tags=("concept", "risk-treatment", "soa"),
+    ),
+)
+
+
+def _render_concept_stub(seed: ConceptSeed) -> str:
+    """Crea wiki/concepts/<slug>.md stub con sintesi + related entities."""
+    tags_str = ", ".join(seed.tags)
+    related_block = "\n".join(
+        f"- [[wiki/entities/{slug}]]" for slug in seed.related_entities
+    ) or "(da popolare)"
+    return f"""---
+type: concept
+title: "{seed.title}"
+status: stub
+last_reviewed: null
+related_entities: [{", ".join(seed.related_entities)}]
+tags: [{tags_str}]
+parent: "[[wiki/concepts/_index]]"
+---
+
+# {seed.title}
+
+## Sintesi
+
+{seed.sintesi}
+
+## Entity correlate
+
+{related_block}
+
+## Note
+
+Concept creato come **stub seed** dallo scaffolder vault SCO (auto-organize v1.0.2). Da arricchire in ingest successivi.
+
+Part of [[wiki/concepts/_index]]
+"""
+
+
+# Glossario seed: 35+ sigle canoniche SCO (cyber + sanita + privacy + lavoro
+# + qualita). Pattern Conv. 29 SOP "consulta-glossario-prima-di-espandere-sigla".
+_GLOSSARIO_SEED_ROWS: tuple[tuple[str, str, str], ...] = (
+    # (sigla, espansione canonica, dominio)
+    ("ACN", "Agenzia per la Cybersicurezza Nazionale", "cyber"),
+    ("AgID", "Agenzia per l'Italia Digitale", "cyber"),
+    ("AGENAS", "Agenzia Nazionale per i Servizi Sanitari Regionali", "sanita"),
+    ("AI Act", "Reg. UE 2024/1689 — Artificial Intelligence Act", "governance-ai"),
+    ("ASR", "Accordo Stato-Regioni", "lavoro"),
+    ("BIA", "Business Impact Analysis", "cyber"),
+    ("BCP", "Business Continuity Plan", "cyber"),
+    ("CSIRT", "Computer Security Incident Response Team", "cyber"),
+    ("DPO", "Data Protection Officer", "privacy"),
+    ("DPIA", "Data Protection Impact Assessment", "privacy"),
+    ("DRP", "Disaster Recovery Plan", "cyber"),
+    ("DVR", "Documento di Valutazione dei Rischi", "lavoro"),
+    ("DUVRI", "Documento Unico di Valutazione dei Rischi Interferenziali", "lavoro"),
+    ("ECM", "Educazione Continua in Medicina", "sanita"),
+    ("ENISA", "European Union Agency for Cybersecurity", "cyber"),
+    ("GDPR", "General Data Protection Regulation — Reg. UE 2016/679", "privacy"),
+    ("IRCCS", "Istituto di Ricovero e Cura a Carattere Scientifico", "sanita"),
+    ("ISO 9001", "Standard internazionale Sistema Gestione Qualita", "qualita"),
+    ("ISO 14001", "Standard internazionale Sistema Gestione Ambientale", "gestione-ambientale"),
+    ("ISO/IEC 27001", "Standard internazionale Sistema Gestione Sicurezza Informazioni", "cyber"),
+    ("ISO/IEC 42001", "Standard internazionale Sistema Gestione Intelligenza Artificiale", "governance-ai"),
+    ("LG", "Linee Guida", "cross"),
+    ("MFA", "Multi Factor Authentication", "cyber"),
+    ("NC", "Non Conformita", "qualita"),
+    ("NC_E", "Non Conformita Maggiore Esterna", "qualita"),
+    ("NC_I", "Non Conformita Maggiore Interna", "qualita"),
+    ("NIS 2", "Direttiva 2022/2555 + D.Lgs. 138/2024 — Network and Information Security 2", "cyber"),
+    ("OdC", "Organismo di Certificazione", "qualita"),
+    ("RPD", "Responsabile della Protezione dei Dati (DPO in italiano)", "privacy"),
+    ("RSPP", "Responsabile del Servizio di Prevenzione e Protezione", "lavoro"),
+    ("RLS", "Rappresentante dei Lavoratori per la Sicurezza", "lavoro"),
+    ("SGSI", "Sistema di Gestione della Sicurezza delle Informazioni", "cyber"),
+    ("SGQ", "Sistema di Gestione per la Qualita", "qualita"),
+    ("SM", "Spunto di Miglioramento", "qualita"),
+    ("SOA", "Statement of Applicability (SGSI 27001)", "cyber"),
+    ("SOC", "Security Operations Center", "cyber"),
+    ("VAR", "Valutazione Audit di Ricertificazione", "qualita"),
+)
+
+
+def _render_glossario_index(vault_name: str) -> str:
+    """Crea wiki/glossari/_index.md con tabella sigle canoniche."""
+    rows_md = "\n".join(
+        f"| {sigla} | {espansione} | {dominio} |"
+        for sigla, espansione, dominio in _GLOSSARIO_SEED_ROWS
+    )
+    return f"""---
+type: glossario
+title: "Glossario canonico SCO — sigle aziendali e di settore"
+status: active
+last_reviewed: null
+tags: [wiki, glossari, glossario, canonical]
+parent: "[[wiki/_index]]"
+---
+
+# Glossario canonico SCO — {vault_name}
+
+Glossario unico tabellare di sigle aziendali e di settore. Pattern Conv. 29 SOP "consulta-glossario-prima-di-espandere-sigla": quando si esplicita una sigla, **prima** consultare questa tabella per usare l'espansione canonica registrata. Mai inferire dal modello di linguaggio.
+
+## Tabella sigle
+
+| Sigla | Espansione canonica | Dominio |
+|-------|---------------------|---------|
+{rows_md}
+
+## Estensioni
+
+Quando emerge una sigla non glossata, Claude **dichiara in chat** "sigla X non glossata, suggerisco verifica con utente" e propone l'aggiunta via `AskUserQuestion` prima di esplicitare l'espansione. Mai inferire l'espansione dal modello di linguaggio.
+
+Part of [[wiki/_index]]
+"""
+
+
+def _render_agents_md(vault_name: str) -> str:
+    """Crea AGENTS.md charter QI 190 + 9 modalita operative SCO."""
+    return f"""---
+tags: [agents, charter]
+parent: "[[CLAUDE]]"
+---
+
+# AGENTS.md — Charter operativo agenti SCO per vault {vault_name}
+
+## Postura cognitiva — QI 190 baseline
+
+Ogni interazione con agenti AI in questo vault DEVE rispettare la postura QI 190 minima cristallizzata in CLAUDE.md sezione "QI 190 BASELINE". Doppio enforcement cerimoniale:
+
+1. **Apertura sessione**: blocco `[Postura QI 190 — apertura sessione <data>]` con 3-5 punti di prova osservabile (anticipazione edge case + correzione ipotesi imprecise + distinzione fatto/ipotesi/opinione + tassonomia coerente + anticipazione criticita normativa/tecnica/operativa).
+2. **Chiusura sessione**: blocco `[Postura QI 190 — chiusura sessione <data>]` con 3-5 punti di prova osservabile sulla sessione conclusa (scelta tecnica controintuitiva + ipotesi smentita o riformulata + edge case anticipato + decisione di trade-off + correlazione cross-cliente o cross-framework scoperta in corsa).
+
+## Le 9 modalita operative SCO
+
+| Modalita | Trigger | Descrittore breve |
+|----------|---------|-------------------|
+| INGEST | utente deposita file in raw/ | Lettura fonte raw -> sintesi -> creazione wiki/sources/ + aggiornamento entities/concepts. Max 15 file modificati per ingest, no batch senza supervisione. |
+| QUERY | utente chiede risposta consulenziale | Lettura wiki/_index.md -> apertura pagine rilevanti -> risposta con citazioni puntuali a wiki + raw. Logging in log/YYYY-MM.md per query >10 min o richiamo >=3 entity. |
+| LINT | domenica O su richiesta esplicita | Audit settimanale: pagine orfane + contraddizioni + claim stale + concetti senza pagina + cross-reference mancanti + gap stub + entity active senza fonte raw. |
+| SCAFFOLD | nuovo vault da template OR cartelle SCO mancanti | Materializza struttura SCO (9 cartelle + sotto-cartelle wiki/raw + entity seed) o completa incrementale senza overwrite. |
+| AUTO-ORGANIZE | vault esistente con struttura non-SCO | Backup pre-operazione + re-classify file esistenti con mapping cartelle non-SCO -> SCO + seed entity/concepts/glossario. Idempotente. |
+| OPTIMIZE | utente chiede miglioramento vault | Skill os-ottimizzatore: profilo + analisi + raccomandazioni. Opera sul context vault_inspect del payload runtime. |
+| AUDIT-DRIFT | sigla aziendale rilevata in deliverable | Pattern Conv. 38 fix-it-once: catturato drift su 1 file -> audit massiva sulla filiera documentale impattata + fix coerente cross-file. |
+| MULTI-AGENT | richiesta esplicita "subagent paralleli" | Pattern Conv. 33+34: research subagents in parallelo + main agent per write + spot check obbligatorio post-multi-agent (fact-check + vocabolario chiuso + dichiarazione incertezza). |
+| VERIFY-OR-REDO | dopo ogni fix/cambio sostantivo | Pattern VERIFY-OR-REDO LOOP: 1.Understand 2.Execute 3.Verify like the user would 4.Loop until pass 5.Only then confirm. Anti-pattern proofreading != verifying. |
+
+## Regole permanenti applicate in questo vault
+
+- Conv. 29 SOP consulta-glossario-prima-di-espandere-sigla
+- Conv. 35 verifica fonti vault + WebSearch istituzionali
+- Conv. 38 sigle aziendali drift fix-it-once
+- Conv. 39 three-layer SCO preservation
+- Conv. 41 PROTOCOLLO TRACCIATURA SESSIONE (skill + passi + assunzioni vs verifiche)
+- Conv. 46 SMOKE TEST E2E PRIMA DEL TAG (per software e deliverable)
+- Conv. 47 single source of truth (per costanti version e schema)
+- Convenzioni tipografiche permanenti 03/05/2026 (humanizer + virgolette dritte + "al punto" + font uniforme + grassetto preciso + placeholder italiano professionale)
+
+Per il dettaglio completo delle regole consulta `CLAUDE.md`.
+
+Part of [[CLAUDE]]
+"""
+
+
+# Cartelle target del re-classify (per ognuna serve _archivio_pre_v1.0.2/
+# come backup pre-operazione).
+_BACKUP_DIR_NAME = "_archivio_pre_v1.0.2"
+
+
+@dataclass(frozen=True)
+class AutoOrganizeResult:
+    """Esito di ``auto_organize_vault()``.
+
+    Attributes:
+        organized: True se almeno un file/cartella creato o spostato.
+        directories_created: lista cartelle nuove create.
+        files_created: lista file nuovi (entity seed, concepts, glossario, AGENTS.md).
+        files_moved: lista (src, dest) coppie file spostati nel re-classify.
+        files_backed_up: lista path backup creati in _archivio_pre_v1.0.2/.
+        files_skipped: lista path saltati (gia in posizione, no overwrite).
+        errors: lista errori non bloccanti.
+    """
+
+    organized: bool
+    directories_created: tuple[str, ...]
+    files_created: tuple[str, ...]
+    files_moved: tuple[tuple[str, str], ...]
+    files_backed_up: tuple[str, ...]
+    files_skipped: tuple[str, ...]
+    errors: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "organized": self.organized,
+            "directories_created": list(self.directories_created),
+            "files_created": list(self.files_created),
+            "files_moved": [
+                {"src": src, "dest": dest} for src, dest in self.files_moved
+            ],
+            "files_backed_up": list(self.files_backed_up),
+            "files_skipped": list(self.files_skipped),
+            "errors": list(self.errors),
+        }
+
+
+def _read_frontmatter_type(md_path: Path) -> str | None:
+    """Legge frontmatter YAML di un file .md e ritorna il campo ``type`` se presente.
+
+    Pure function: solo open + read primi 4 KiB. Robusto a errori di parsing
+    YAML (ritorna None senza sollevare). Pattern Conv. 44 lesson 1: errori
+    file ops isolati, non bloccano il caller.
+    """
+    try:
+        with md_path.open("r", encoding="utf-8") as f:
+            head = f.read(4096)
+    except (OSError, UnicodeDecodeError):
+        return None
+
+    if not head.startswith("---"):
+        return None
+
+    # Estrai blocco frontmatter (tra primi due delimitatori ---).
+    lines = head.split("\n")
+    end_idx = -1
+    for i, line in enumerate(lines[1:], start=1):
+        if line.strip() == "---":
+            end_idx = i
+            break
+    if end_idx == -1:
+        return None
+
+    frontmatter_text = "\n".join(lines[1:end_idx])
+    # Parsing minimale linea-per-linea per evitare dipendenza yaml qui (gia
+    # importata dal loader.py ma teniamo questa funzione self-contained).
+    for line in frontmatter_text.split("\n"):
+        line = line.strip()
+        if line.startswith("type:"):
+            value = line.split(":", 1)[1].strip().strip('"').strip("'")
+            return value or None
+    return None
+
+
+def _classify_md_for_reorganize(
+    md_path: Path,
+    vault_root: Path,
+) -> Path | None:
+    """Determina destinazione SCO per un file .md esistente.
+
+    Pure function: NO IO write, solo lettura frontmatter eventuale.
+
+    Strategia:
+        1. Se il file e' nella root del vault -> resta in root (es. CLAUDE.md).
+        2. Se il file e' gia dentro una cartella SCO canonica -> resta (skip).
+        3. Filename pattern YYYY-MM-DD.md -> Giornaliero/YYYY-MM/YYYY-MM-DD.md
+           (anche se gia in Giornaliero/ ma non in sub YYYY-MM/).
+        4. Frontmatter type:source -> wiki/sources/<basename>
+        5. Frontmatter type:entity -> wiki/entities/<basename>
+        6. Frontmatter type:concept -> wiki/concepts/<basename>
+        7. Frontmatter type:synthesis -> wiki/synthesis/<basename>
+        8. Frontmatter type:cliente -> Business/clienti/<basename>
+        9. Parent folder name in _NON_SCO_FOLDER_MAP -> map[parent] / <basename>
+           (es. Context/identity.md -> Contesto/identity.md)
+        10. Altrimenti None (lascia in posizione corrente).
+
+    Args:
+        md_path: file .md da classificare.
+        vault_root: radice vault.
+
+    Returns:
+        Path destinazione assoluta nuova, oppure None se il file va lasciato
+        in posizione corrente.
+    """
+    try:
+        rel = md_path.relative_to(vault_root)
+    except ValueError:
+        return None
+
+    parts = rel.parts
+    basename = md_path.name
+
+    # 1. File in root vault -> resta (es. CLAUDE.md, README.md, AGENTS.md).
+    if len(parts) == 1:
+        return None
+
+    # 2. Skip file in cartelle SCO canoniche gia (e relative sotto-cartelle).
+    sco_canonical_roots = {
+        "Contesto",
+        "Business",
+        "Giornaliero",
+        "Libreria",
+        "Skill",
+        "Progetti",
+        "Team",
+        "raw",
+        "wiki",
+        "log",
+        ".claude",
+        ".obsidian",
+        _BACKUP_DIR_NAME,
+    }
+    if parts[0] in sco_canonical_roots:
+        # 3. Filename daily pattern: se in Giornaliero/ ma NON in sub YYYY-MM/
+        # -> sposta in sub YYYY-MM/.
+        if parts[0] == "Giornaliero" and _DAILY_FILENAME_RE.match(basename):
+            year, month, _day = _DAILY_FILENAME_RE.match(basename).groups()  # type: ignore[union-attr]
+            target_rel = Path("Giornaliero") / f"{year}-{month}" / basename
+            target_abs = vault_root / target_rel
+            if target_abs == md_path:
+                return None
+            return target_abs
+        # Altrimenti file gia in cartella SCO: skip.
+        return None
+
+    # 3. Filename daily pattern (es. 2026-05-19.md in cartella Daily) -> Giornaliero/YYYY-MM/
+    daily_match = _DAILY_FILENAME_RE.match(basename)
+    if daily_match:
+        year, month, _day = daily_match.groups()
+        return vault_root / "Giornaliero" / f"{year}-{month}" / basename
+
+    # 4-8. Frontmatter type-based routing.
+    fm_type = _read_frontmatter_type(md_path)
+    type_to_folder: dict[str, str] = {
+        "source": "wiki/sources",
+        "entity": "wiki/entities",
+        "concept": "wiki/concepts",
+        "synthesis": "wiki/synthesis",
+        "cliente": "Business/clienti",
+    }
+    if fm_type in type_to_folder:
+        return vault_root / type_to_folder[fm_type] / basename
+
+    # 9. Parent folder name in _NON_SCO_FOLDER_MAP -> map[parent] / <basename>.
+    parent_root = parts[0]
+    if parent_root in _NON_SCO_FOLDER_MAP:
+        sco_folder = _NON_SCO_FOLDER_MAP[parent_root]
+        # Preserva l'eventuale sub-path successivo (es. Resources/templates/x.md
+        # -> Libreria/templates/x.md).
+        sub_rel = Path(*parts[1:]) if len(parts) > 1 else Path(basename)
+        return vault_root / sco_folder / sub_rel
+
+    # 10. Default: nessuno spostamento.
+    return None
+
+
+def auto_organize_vault(
+    vault_path: Path,
+    *,
+    vault_name: str | None = None,
+    auto_apply: bool = True,
+) -> AutoOrganizeResult:
+    """Auto-completa struttura SCO + re-classify file esistenti + popola seed.
+
+    Cinque fasi sequenziali (con CircuitBreaker per fase, Conv. 44 lesson 1):
+        1. Crea TUTTE le cartelle canoniche SCO (riusa scaffold_vault logic).
+        2. Backup file in posizione di spostamento -> _archivio_pre_v1.0.2/.
+        3. Re-classify file .md esistenti (mapping non-SCO -> SCO o per
+           frontmatter type:...).
+        4. Crea AGENTS.md + README.md template + _index.md per cartelle nuove.
+        5. Popola entity seed (8 normative italiane comuni) + 5 concepts + glossario
+           tabellare 35+ sigle.
+
+    Idempotente: chiamata ripetuta non ri-sposta file gia in posizione SCO,
+    non ri-crea entity gia presenti, non ri-fa backup.
+
+    Args:
+        vault_path: directory esistente del vault da organizzare.
+        vault_name: nome leggibile per CLAUDE.md/README/AGENTS.md
+            (default ``vault_path.name``).
+        auto_apply: se True (default), applica realmente le modifiche.
+            Se False, ritorna lo stesso AutoOrganizeResult ma in dry-run
+            (zero IO write, solo simulazione). Utile per audit pre-conferma.
+
+    Returns:
+        AutoOrganizeResult con counters e liste di operazioni eseguite.
+
+    Note:
+        - Pattern Conv. 41 tracciatura: log dettagliato di ogni fase + ogni
+          file backup/spostato/creato.
+        - Pattern Conv. 44 lesson 1 CircuitBreaker: errori file ops isolati
+          per fase, non bloccano fasi successive.
+        - Pattern Conv. 47 single source of truth: riusa _BASE_DIRECTORIES +
+          _seed_for_template + _render_index per coerenza con scaffold_vault.
+        - Pattern SCO "no edit retroattivo" (Conv. 39): MAI sovrascrive file
+          esistenti, sempre backup pre-spostamento.
+    """
+    import shutil
+
+    vault_path = Path(vault_path).expanduser().resolve()
+
+    if not vault_path.exists() or not vault_path.is_dir():
+        return AutoOrganizeResult(
+            organized=False,
+            directories_created=(),
+            files_created=(),
+            files_moved=(),
+            files_backed_up=(),
+            files_skipped=(),
+            errors=(f"vault_path {vault_path} non esiste o non e' directory",),
+        )
+
+    effective_vault_name = (vault_name or vault_path.name).strip() or vault_path.name
+
+    directories_created: list[str] = []
+    files_created: list[str] = []
+    files_moved: list[tuple[str, str]] = []
+    files_backed_up: list[str] = []
+    files_skipped: list[str] = []
+    errors: list[str] = []
+
+    logger.info(
+        "auto_organize.start",
+        path=str(vault_path),
+        vault_name=effective_vault_name,
+        auto_apply=auto_apply,
+    )
+
+    # ----- FASE 1: Crea cartelle canoniche SCO -----
+    # CircuitBreaker: errori in mkdir loggati ma non bloccano fasi successive.
+    for rel in _BASE_DIRECTORIES:
+        target = vault_path / rel
+        if target.exists():
+            continue
+        if not auto_apply:
+            directories_created.append(f"{rel}/")
+            continue
+        try:
+            target.mkdir(parents=True, exist_ok=True)
+            directories_created.append(f"{rel}/")
+            logger.debug("auto_organize.dir_created", path=str(target))
+        except OSError as exc:
+            err = f"FASE 1 mkdir {rel}/ failed: {exc}"
+            errors.append(err)
+            logger.warning("auto_organize.dir_create_failed", folder=rel, error=str(exc))
+
+    # ----- FASE 2 + 3: Re-classify file esistenti con backup -----
+    # CircuitBreaker per file: ogni errore singolo non blocca gli altri.
+    # Iteriamo SOLO file .md (raw fonti immutabili non vengono toccate per Conv. 39).
+    backup_dir = vault_path / _BACKUP_DIR_NAME
+    candidate_files: list[Path] = []
+    try:
+        for md_file in vault_path.rglob("*.md"):
+            # Skip file gia nel backup dir, .claude, .obsidian.
+            try:
+                rel = md_file.relative_to(vault_path)
+            except ValueError:
+                continue
+            if rel.parts and rel.parts[0] in {
+                _BACKUP_DIR_NAME,
+                ".claude",
+                ".obsidian",
+                ".git",
+            }:
+                continue
+            candidate_files.append(md_file)
+    except OSError as exc:
+        err = f"FASE 2 rglob *.md failed: {exc}"
+        errors.append(err)
+        logger.error("auto_organize.rglob_failed", error=str(exc))
+
+    for md_file in candidate_files:
+        try:
+            dest = _classify_md_for_reorganize(md_file, vault_path)
+        except (OSError, UnicodeDecodeError) as exc:
+            errors.append(f"FASE 3 classify {md_file.name} failed: {exc}")
+            continue
+        if dest is None:
+            continue
+        # Se dest esiste gia: SKIP (no overwrite, Conv. 39).
+        if dest.exists():
+            try:
+                files_skipped.append(str(dest.relative_to(vault_path)))
+            except ValueError:
+                files_skipped.append(str(dest))
+            continue
+
+        if not auto_apply:
+            try:
+                src_rel = str(md_file.relative_to(vault_path))
+                dest_rel = str(dest.relative_to(vault_path))
+            except ValueError:
+                src_rel = str(md_file)
+                dest_rel = str(dest)
+            files_moved.append((src_rel, dest_rel))
+            continue
+
+        # Backup pre-spostamento (Conv. 39 + Conv. 42 backup PRE-REDAZIONE).
+        try:
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            # Backup name include subpath per evitare collisioni
+            # (Context/identity.md vs Identity.md altro percorso).
+            try:
+                src_rel = md_file.relative_to(vault_path)
+                backup_name = "__".join(src_rel.parts)
+            except ValueError:
+                backup_name = md_file.name
+            backup_path = backup_dir / backup_name
+            if not backup_path.exists():
+                shutil.copy2(str(md_file), str(backup_path))
+                files_backed_up.append(f"{_BACKUP_DIR_NAME}/{backup_name}")
+                logger.info(
+                    "auto_organize.backup_created",
+                    src=str(md_file),
+                    backup=str(backup_path),
+                )
+        except OSError as exc:
+            errors.append(f"FASE 2 backup {md_file.name} failed: {exc}")
+            # Non bloccare lo spostamento se backup fallisce — il file
+            # rimane comunque sotto controllo di Git nel vault.
+
+        # Spostamento.
+        try:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(md_file), str(dest))
+            try:
+                src_rel = str(md_file.relative_to(vault_path))
+                dest_rel = str(dest.relative_to(vault_path))
+            except ValueError:
+                src_rel = str(md_file)
+                dest_rel = str(dest)
+            files_moved.append((src_rel, dest_rel))
+            logger.info(
+                "auto_organize.file_moved",
+                src=str(md_file),
+                dest=str(dest),
+            )
+        except (OSError, shutil.Error) as exc:
+            errors.append(f"FASE 3 move {md_file.name} -> {dest.name} failed: {exc}")
+            logger.warning(
+                "auto_organize.move_failed",
+                src=str(md_file),
+                dest=str(dest),
+                error=str(exc),
+            )
+
+    # ----- FASE 4: AGENTS.md + README.md + _index.md per cartelle nuove -----
+    # AGENTS.md (idempotent, no overwrite).
+    agents_md = vault_path / "AGENTS.md"
+    if not agents_md.exists():
+        if auto_apply:
+            try:
+                agents_md.write_text(
+                    _render_agents_md(effective_vault_name),
+                    encoding="utf-8",
+                )
+                files_created.append("AGENTS.md")
+                logger.info("auto_organize.agents_md_created", path=str(agents_md))
+            except OSError as exc:
+                errors.append(f"FASE 4 write AGENTS.md failed: {exc}")
+        else:
+            files_created.append("AGENTS.md")
+
+    # README.md (idempotent).
+    readme_md = vault_path / "README.md"
+    if not readme_md.exists():
+        if auto_apply:
+            try:
+                readme_md.write_text(
+                    _render_readme(effective_vault_name, "vuoto"),
+                    encoding="utf-8",
+                )
+                files_created.append("README.md")
+            except OSError as exc:
+                errors.append(f"FASE 4 write README.md failed: {exc}")
+        else:
+            files_created.append("README.md")
+
+    # _index.md per ogni cartella canonica (idempotent).
+    for rel in _BASE_DIRECTORIES:
+        index_path = vault_path / rel / "_index.md"
+        if index_path.exists():
+            continue
+        if auto_apply:
+            try:
+                index_path.write_text(
+                    _render_index(rel, effective_vault_name),
+                    encoding="utf-8",
+                )
+                files_created.append(f"{rel}/_index.md")
+            except OSError as exc:
+                errors.append(f"FASE 4 write {rel}/_index.md failed: {exc}")
+        else:
+            files_created.append(f"{rel}/_index.md")
+
+    # Contesto/chi-sono.md + strategia.md placeholder (idempotent).
+    contesto_files = [
+        ("Contesto/chi-sono.md", _render_contesto_chi_sono()),
+        ("Contesto/strategia.md", _render_contesto_strategia()),
+    ]
+    for rel_str, content in contesto_files:
+        target = vault_path / rel_str
+        if target.exists():
+            continue
+        if auto_apply:
+            try:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(content, encoding="utf-8")
+                files_created.append(rel_str)
+            except OSError as exc:
+                errors.append(f"FASE 4 write {rel_str} failed: {exc}")
+        else:
+            files_created.append(rel_str)
+
+    # Giornaliero/attivi.md (idempotent).
+    attivi = vault_path / "Giornaliero" / "attivi.md"
+    if not attivi.exists():
+        if auto_apply:
+            try:
+                attivi.parent.mkdir(parents=True, exist_ok=True)
+                attivi.write_text(_render_attivi(), encoding="utf-8")
+                files_created.append("Giornaliero/attivi.md")
+            except OSError as exc:
+                errors.append(f"FASE 4 write Giornaliero/attivi.md failed: {exc}")
+        else:
+            files_created.append("Giornaliero/attivi.md")
+
+    # ----- FASE 5: Entity seed + Concepts + Glossario -----
+    # Entity: merge cyber + sanita + extra (8+ entity totali, dedupe by slug).
+    all_seed_entities: dict[str, EntitySeed] = {}
+    for seed in (*_SEED_CYBER, *_EXTRA_SEED_AUTO_ORGANIZE):
+        all_seed_entities.setdefault(seed.slug, seed)
+
+    for slug, seed in all_seed_entities.items():
+        entity_path = vault_path / "wiki" / "entities" / f"{slug}.md"
+        if entity_path.exists():
+            continue
+        if auto_apply:
+            try:
+                entity_path.parent.mkdir(parents=True, exist_ok=True)
+                entity_path.write_text(_render_entity_stub(seed), encoding="utf-8")
+                files_created.append(f"wiki/entities/{slug}.md")
+                logger.info(
+                    "auto_organize.entity_seeded",
+                    slug=slug,
+                    ambito=seed.ambito_canonico,
+                )
+            except OSError as exc:
+                errors.append(f"FASE 5 write wiki/entities/{slug}.md failed: {exc}")
+        else:
+            files_created.append(f"wiki/entities/{slug}.md")
+
+    # Concepts seed.
+    for concept in _CONCEPT_SEEDS:
+        concept_path = vault_path / "wiki" / "concepts" / f"{concept.slug}.md"
+        if concept_path.exists():
+            continue
+        if auto_apply:
+            try:
+                concept_path.parent.mkdir(parents=True, exist_ok=True)
+                concept_path.write_text(_render_concept_stub(concept), encoding="utf-8")
+                files_created.append(f"wiki/concepts/{concept.slug}.md")
+            except OSError as exc:
+                errors.append(
+                    f"FASE 5 write wiki/concepts/{concept.slug}.md failed: {exc}"
+                )
+        else:
+            files_created.append(f"wiki/concepts/{concept.slug}.md")
+
+    # Glossario canonico (sovrascrive _index.md placeholder se gia creato vuoto
+    # in FASE 4: Conv. 47 single source of truth = glossario sostantivo > placeholder).
+    glossario_path = vault_path / "wiki" / "glossari" / "_index.md"
+    glossario_content = _render_glossario_index(effective_vault_name)
+    # Sovrascrivi SOLO se contenuto attuale e' il placeholder generico (linea
+    # "Indice della cartella `wiki/glossari/`"). Altrimenti rispetta esistente.
+    should_write_glossario = False
+    if not glossario_path.exists():
+        should_write_glossario = True
+    else:
+        try:
+            current = glossario_path.read_text(encoding="utf-8")
+            if "Indice della cartella `wiki/glossari/`" in current:
+                should_write_glossario = True
+        except (OSError, UnicodeDecodeError):
+            pass
+
+    if should_write_glossario:
+        if auto_apply:
+            try:
+                glossario_path.parent.mkdir(parents=True, exist_ok=True)
+                glossario_path.write_text(glossario_content, encoding="utf-8")
+                files_created.append("wiki/glossari/_index.md")
+                logger.info(
+                    "auto_organize.glossario_created",
+                    path=str(glossario_path),
+                    rows=len(_GLOSSARIO_SEED_ROWS),
+                )
+            except OSError as exc:
+                errors.append(f"FASE 5 write wiki/glossari/_index.md failed: {exc}")
+        else:
+            files_created.append("wiki/glossari/_index.md")
+
+    organized = bool(
+        directories_created or files_created or files_moved
+    )
+
+    logger.info(
+        "auto_organize.complete",
+        path=str(vault_path),
+        organized=organized,
+        directories_created_count=len(directories_created),
+        files_created_count=len(files_created),
+        files_moved_count=len(files_moved),
+        files_backed_up_count=len(files_backed_up),
+        files_skipped_count=len(files_skipped),
+        errors_count=len(errors),
+    )
+
+    return AutoOrganizeResult(
+        organized=organized,
+        directories_created=tuple(directories_created),
+        files_created=tuple(files_created),
+        files_moved=tuple(files_moved),
+        files_backed_up=tuple(files_backed_up),
+        files_skipped=tuple(files_skipped),
         errors=tuple(errors),
     )

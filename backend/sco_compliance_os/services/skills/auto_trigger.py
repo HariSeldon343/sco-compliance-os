@@ -43,7 +43,10 @@ from sco_compliance_os.core.events import EventBus
 from sco_compliance_os.core.logging_setup import get_logger
 from sco_compliance_os.core.store import get_store
 from sco_compliance_os.services.skills.runner import execute_skill
-from sco_compliance_os.services.vault.scaffolder import inspect_missing_components
+from sco_compliance_os.services.vault.scaffolder import (
+    auto_organize_vault,
+    inspect_missing_components,
+)
 
 logger = get_logger(__name__)
 
@@ -316,6 +319,86 @@ async def handle_vault_registered(payload: dict[str, Any]) -> None:
         )
         return
 
+    # 5b. DEV-AUTO-SCAFFOLD v1.0.2: auto-organize vault PRIMA di os-ottimizzatore.
+    # Antonio vuole che il sistema AUTO-COMPLETI la struttura SENZA chiedere
+    # conferma per OGNI vault (vuoto o pieno). Riusa scaffolder.auto_organize_vault
+    # in modalita auto_apply=True. Idempotente: chiamata ripetuta safe (skip su
+    # file/cartelle gia presenti, backup pre-spostamento per file riclassificati).
+    # Pattern Conv. 41 tracciatura + Conv. 44 lesson 1 CircuitBreaker:
+    # errori non bloccano os-ottimizzatore successivo.
+    auto_organize_summary_line = ""
+    try:
+        organize_result = auto_organize_vault(
+            vault_root,
+            vault_name=vault_name,
+            auto_apply=True,
+        )
+        logger.info(
+            "auto_trigger.auto_organize_completed",
+            vault_id=vault_id,
+            conv_id=conv_id,
+            organized=organize_result.organized,
+            directories_created=len(organize_result.directories_created),
+            files_created=len(organize_result.files_created),
+            files_moved=len(organize_result.files_moved),
+            files_backed_up=len(organize_result.files_backed_up),
+            errors=len(organize_result.errors),
+        )
+        # Snippet sintetico da appendere alla conversation come tracciatura
+        # visibile all'utente (Conv. 41 traceability).
+        if organize_result.organized:
+            auto_organize_summary_line = (
+                f"\n\n---\n\n**Auto-organize struttura SCO eseguito** "
+                f"({len(organize_result.directories_created)} cartelle create, "
+                f"{len(organize_result.files_created)} file template, "
+                f"{len(organize_result.files_moved)} file riclassificati, "
+                f"{len(organize_result.files_backed_up)} backup in "
+                f"`_archivio_pre_v1.0.2/`)."
+            )
+    except Exception as exc:
+        logger.exception(
+            "auto_trigger.auto_organize_failed",
+            vault_id=vault_id,
+            conv_id=conv_id,
+            error=str(exc),
+        )
+        organize_result = None
+
+    # Aggiorna context per os-ottimizzatore con esito auto-organize, cosi'
+    # la skill puo' riportare l'esito al posto di proporre interattivamente
+    # il completamento (gia eseguito).
+    if organize_result is not None:
+        base_context["auto_organize_applied"] = True
+        base_context["auto_organize_organized"] = organize_result.organized
+        base_context["auto_organize_dirs_created"] = list(
+            organize_result.directories_created
+        )
+        base_context["auto_organize_files_created"] = list(
+            organize_result.files_created
+        )
+        base_context["auto_organize_files_moved"] = [
+            {"src": s, "dest": d} for s, d in organize_result.files_moved
+        ]
+        base_context["auto_organize_files_backed_up"] = list(
+            organize_result.files_backed_up
+        )
+        # Refresh vault_inspect post-organize: la struttura e' cambiata.
+        try:
+            fresh_inspect = inspect_missing_components(vault_root)
+            base_context["vault_inspect"] = {
+                "is_sco_structure": fresh_inspect["is_sco_structure"],
+                "missing_folders": fresh_inspect["missing_folders"],
+                "missing_auto": fresh_inspect["missing_auto"],
+                "missing_opt_in": fresh_inspect["missing_opt_in"],
+                "present_folders": fresh_inspect["present_folders"],
+            }
+        except Exception as exc:
+            logger.warning(
+                "auto_trigger.inspect_refresh_failed",
+                vault_id=vault_id,
+                error=str(exc),
+            )
+
     # 6. Esegui os-ottimizzatore nello stesso conv_id (solo se vault da ottimizzare).
     ottimizzatore_chunks: list[str] = []
 
@@ -349,6 +432,11 @@ async def handle_vault_registered(payload: dict[str, Any]) -> None:
     ottimizzatore_text = (
         ottimizzatore_result.assistant_text or "".join(ottimizzatore_chunks)
     )
+    # Conv. 41 traceability: appende il summary line dell'auto-organize al
+    # messaggio assistant cosi' che l'utente veda in chat cosa e' stato fatto
+    # in autonomia dal sistema (struttura SCO completata + file riclassificati).
+    if auto_organize_summary_line:
+        ottimizzatore_text = (ottimizzatore_text or "") + auto_organize_summary_line
     if ottimizzatore_text:
         try:
             await store.append_message(

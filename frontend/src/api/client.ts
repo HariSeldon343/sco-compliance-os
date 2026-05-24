@@ -99,6 +99,43 @@ export const apiClient = {
     return res.json() as Promise<ConversationItem>;
   },
 
+  /**
+   * Invia la scelta dell'utente in risposta a un widget AskUserQuestion
+   * emesso inline dal backend (tag `<ASK_USER_QUESTION>` nel content del
+   * messaggio assistant, vedi `lib/parseInlineWidgets.ts`).
+   *
+   * Endpoint: `POST /api/chat/answer-ask-user-question`. Body:
+   * `{conversation_id, message_id, option_value}`. Risposta attesa:
+   * 2xx → vuoto o `{status: "ok"}`.
+   *
+   * IMPORTANTE (bug v1.0.2): l'endpoint backend NON e' ancora cablato al
+   * 2026-05-24. La chiamata HTTP fallira' con 404. Il caller deve gestire
+   * il fallback inviando la risposta come messaggio utente normale via
+   * `sendChatMessage`. Vedi `useChatStore.answerInlineAskQuestion`.
+   *
+   * Una volta cablato lato backend, questo metodo diventera' il path
+   * primario senza modifiche alla firma.
+   */
+  async answerAskUserQuestion(params: {
+    conversation_id: string;
+    message_id: string;
+    option_value: string;
+  }): Promise<void> {
+    const res = await fetch(`${BACKEND_URL}/api/chat/answer-ask-user-question`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new ApiError(
+        res.status,
+        "answer_ask_user_question_error",
+        `HTTP ${res.status} ${body || "answer endpoint failed"}`,
+      );
+    }
+  },
+
   // ---- Chat stream (SSE) ----
   // Backend field name è "message" (non "content"). Eventi SSE backend hanno
   // formato {kind, data, seq} (NON {type, delta} come ChatStreamChunk legacy).

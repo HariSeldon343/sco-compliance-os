@@ -22,7 +22,7 @@ import { cn } from "@/lib/cn";
 
 // Fallback version se backend /health non risponde. Conv. 47 enforcement:
 // fonte autoritativa = backend_version da GET /health (vedi useBackendVersion hook).
-const APP_VERSION_FALLBACK = "1.0.1";
+const APP_VERSION_FALLBACK = "0.8.0";
 
 interface NavItem {
   to: string;
@@ -90,6 +90,21 @@ export function Sidebar() {
   const activeId = useChatStore((s) => s.activeConversationId);
   const setActive = useChatStore((s) => s.setActiveConversation);
   const createConv = useChatStore((s) => s.createConversation);
+  const fetchConversations = useChatStore((s) => s.fetchConversations);
+
+  // v1.0.2 fix sidebar visibility: auto-fetch al mount + polling 5s.
+  // Backend è single source of truth (Conv. 47): la sidebar deve riflettere
+  // SEMPRE lo stato corrente del DB, anche per conversation auto-create dal
+  // skill loader post-vault.registered (os-setup → "Configurazione iniziale del vault X").
+  useEffect(() => {
+    // Mount immediato: silent=false per mostrare toast su nuove "Configurazione iniziale"
+    void fetchConversations({ silent: false });
+    // Polling 5s: silent=true per non bombardare di toast (solo merge state).
+    const intervalId = setInterval(() => {
+      void fetchConversations({ silent: false });
+    }, 5000);
+    return () => clearInterval(intervalId);
+  }, [fetchConversations]);
 
   // Conv. 47 enforcement v0.7.1: vault attivo + versione = single source of truth.
   // Vault da useVaultStore (era hardcoded "Second Brain" pre-v0.7.1).

@@ -9,6 +9,9 @@ import {
   HeartPulse,
   AlertTriangle,
   ArrowUpRight,
+  Wrench,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 
 import { useChatStore } from "@/store/chat-store";
@@ -16,6 +19,13 @@ import type { MessageItem } from "@/types/api";
 import { cn } from "@/lib/cn";
 import { ThinkingIndicator } from "@/components/ThinkingIndicator";
 import { AudioPlayer } from "@/components/voice/AudioPlayer";
+import { AskQuestionCard } from "@/components/AskQuestionCard";
+import {
+  parseInlineWidgets,
+  type ContentSegment,
+  type InlineToolCallPayload,
+  type InlineToolResultPayload,
+} from "@/lib/parseInlineWidgets";
 
 // 4 suggestion card branded compliance — 2x2 grid stile OpenHuman / Claude Desktop
 const SUGGESTIONS = [
@@ -158,7 +168,30 @@ interface MessageBubbleProps {
 
 function MessageBubble({ message }: MessageBubbleProps) {
   const answerAskUserQuestion = useChatStore((s) => s.answerAskUserQuestion);
+  const answerInlineAskQuestion = useChatStore(
+    (s) => s.answerInlineAskQuestion,
+  );
+  const inlineAskAnswers = useChatStore((s) => s.inlineAskAnswers);
   const isUser = message.role === "user";
+
+  // Parser inline tag (v1.0.2 fix bug widget AskUserQuestion non renderizzato).
+  // Esegui SOLO per messaggi assistant: i messaggi utente sono plain text e
+  // non contengono tag emessi dal backend. Memoizzato sul content stringa.
+  const segments = useMemo<ContentSegment[]>(
+    () => (isUser ? [{ kind: "text", text: message.content }] : parseInlineWidgets(message.content)),
+    [isUser, message.content],
+  );
+
+  // Testo "pulito" per il TTS (rimuove i tag inline, mantiene solo i text segments)
+  const ttsText = useMemo(
+    () =>
+      segments
+        .filter((s): s is { kind: "text"; text: string } => s.kind === "text")
+        .map((s) => s.text)
+        .join("")
+        .trim(),
+    [segments],
+  );
 
   return (
     <div
@@ -175,36 +208,90 @@ function MessageBubble({ message }: MessageBubbleProps) {
             : "max-w-[85%] border border-sco-border bg-sco-surface-elevated text-sco-text dark:text-sco-text-dark",
         )}
       >
-        {/* Markdown body: user = plain text whitespace-pre, agent = full markdown */}
+        {/* Markdown body: user = plain text whitespace-pre, agent = segmenti misti */}
         {isUser ? (
           <div className="whitespace-pre-wrap break-words leading-relaxed text-white">
             {message.content}
           </div>
         ) : (
           <>
-            <div className="prose prose-sm max-w-none leading-relaxed dark:prose-invert prose-p:my-2 prose-headings:mt-3 prose-headings:mb-2 prose-pre:my-2 prose-pre:bg-sco-bg prose-pre:border prose-pre:border-sco-border prose-code:text-sco-blue dark:prose-code:text-sco-amber">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                rehypePlugins={[rehypeHighlight]}
-              >
-                {message.content}
-              </ReactMarkdown>
+            <div className="space-y-2">
+              {segments.map((seg, idx) => {
+                if (seg.kind === "text") {
+                  // Salta segmenti di solo whitespace (artefatto dello split fra tag)
+                  if (!seg.text.trim()) return null;
+                  return (
+                    <div
+                      key={`text-${idx}`}
+                      className="prose prose-sm max-w-none leading-relaxed dark:prose-invert prose-p:my-2 prose-headings:mt-3 prose-headings:mb-2 prose-pre:my-2 prose-pre:bg-sco-bg prose-pre:border prose-pre:border-sco-border prose-code:text-sco-blue dark:prose-code:text-sco-amber"
+                    >
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        rehypePlugins={[rehypeHighlight]}
+                      >
+                        {seg.text}
+                      </ReactMarkdown>
+                    </div>
+                  );
+                }
+                if (seg.kind === "ask") {
+                  const key = `${message.id}__${seg.index}`;
+                  const answer = inlineAskAnswers[key];
+                  return (
+                    <AskQuestionCard
+                      key={`ask-${seg.index}`}
+                      payload={seg.payload}
+                      state={answer?.value ? "answered" : "pending"}
+                      answer_value={answer?.value}
+                      isSubmitting={!!answer?.submitting}
+                      onAnswer={(value) => {
+                        const opt = seg.payload.options.find(
+                          (o) => o.value === value,
+                        );
+                        void answerInlineAskQuestion({
+                          messageId: message.id,
+                          segmentIndex: seg.index,
+                          value,
+                          label: opt?.label ?? value,
+                        });
+                      }}
+                    />
+                  );
+                }
+                if (seg.kind === "tool_call") {
+                  return (
+                    <InlineToolCallBadge
+                      key={`tc-${seg.index}`}
+                      payload={seg.payload}
+                    />
+                  );
+                }
+                if (seg.kind === "tool_result") {
+                  return (
+                    <InlineToolResultBadge
+                      key={`tr-${seg.index}`}
+                      payload={seg.payload}
+                    />
+                  );
+                }
+                return null;
+              })}
             </div>
             {/* TTS player on-device (visibile solo se ttsEnabled in Settings) */}
-            {message.content.trim().length > 0 && (
+            {ttsText.length > 0 && (
               <div className="mt-1 flex items-center gap-1">
-                <AudioPlayer text={message.content} />
+                <AudioPlayer text={ttsText} />
               </div>
             )}
           </>
         )}
 
-        {/* Tool calls inline (Read/Grep/Write ...) */}
+        {/* Tool calls inline (Read/Grep/Write ...) — payload strutturato Conv. 48 */}
         {message.tool_calls && message.tool_calls.length > 0 && (
           <div className="mt-3 space-y-1 border-t border-sco-border pt-2">
-            {message.tool_calls.map((tc) => (
+            {message.tool_calls.map((tc, tcIdx) => (
               <div
-                key={tc.id}
+                key={tc.id ?? `tc-${tcIdx}`}
                 className="flex items-start gap-1.5 font-mono text-[11px] text-sco-muted-foreground"
               >
                 <span className="shrink-0 rounded bg-sco-blue/10 px-1.5 py-0.5 text-sco-blue">
@@ -219,7 +306,10 @@ function MessageBubble({ message }: MessageBubbleProps) {
           </div>
         )}
 
-        {/* Widget AskUserQuestion (Conv. 48 — persistito in DB lato backend) */}
+        {/* Widget AskUserQuestion strutturato (Conv. 48 — persistito in DB lato
+           backend nel campo ask_user_question_json). Ha priorita su quello inline:
+           se il backend ha popolato il payload strutturato, lo usiamo come
+           fonte di verita autoritativa. */}
         {message.ask_user_question && (
           <div className="mt-3 overflow-hidden rounded-lg border border-sco-blue/30 bg-sco-blue/5">
             <div className="border-b border-sco-blue/20 bg-sco-blue/10 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-sco-blue">
@@ -267,5 +357,60 @@ function MessageBubble({ message }: MessageBubbleProps) {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Badge compatto per tag inline `<TOOL_CALL>` emesso dall'agente.
+ *
+ * Mostra un'icona wrench + nome tool + JSON args collapsable via <details>.
+ * Variante mute della pill `tool_calls` strutturata in fondo al messaggio.
+ */
+function InlineToolCallBadge({ payload }: { payload: InlineToolCallPayload }) {
+  const toolName = payload.tool_name ?? "tool";
+  const hasArgs = payload.args && Object.keys(payload.args).length > 0;
+  return (
+    <details className="group rounded-md border border-sco-border bg-sco-bg/50 text-xs">
+      <summary className="flex cursor-pointer items-center gap-2 px-2.5 py-1.5 font-mono text-sco-muted-foreground hover:bg-sco-bg">
+        <Wrench size={12} className="text-sco-blue" />
+        <span className="font-semibold text-sco-blue">Tool:</span>
+        <span className="text-sco-text dark:text-sco-text-dark">{toolName}</span>
+      </summary>
+      {hasArgs && (
+        <pre className="mt-1 max-h-40 overflow-auto border-t border-sco-border px-2.5 py-1.5 text-[11px] leading-snug text-sco-muted-foreground">
+          {JSON.stringify(payload.args, null, 2)}
+        </pre>
+      )}
+    </details>
+  );
+}
+
+/**
+ * Badge compatto per tag inline `<TOOL_RESULT>` emesso dall'agente.
+ *
+ * Mostra check verde se ok, x rossa se errore, + payload collapsable.
+ */
+function InlineToolResultBadge({ payload }: { payload: InlineToolResultPayload }) {
+  const toolName = payload.tool_name ?? "tool";
+  const isError = payload.is_error === true;
+  return (
+    <details className="group rounded-md border border-sco-border bg-sco-bg/50 text-xs">
+      <summary className="flex cursor-pointer items-center gap-2 px-2.5 py-1.5 font-mono text-sco-muted-foreground hover:bg-sco-bg">
+        {isError ? (
+          <XCircle size={12} className="text-red-500" />
+        ) : (
+          <CheckCircle2 size={12} className="text-green-600" />
+        )}
+        <span className={cn("font-semibold", isError ? "text-red-500" : "text-green-700")}>
+          Risultato:
+        </span>
+        <span className="text-sco-text dark:text-sco-text-dark">{toolName}</span>
+      </summary>
+      <pre className="mt-1 max-h-40 overflow-auto border-t border-sco-border px-2.5 py-1.5 text-[11px] leading-snug text-sco-muted-foreground">
+        {typeof payload.result === "string"
+          ? payload.result
+          : JSON.stringify(payload.result, null, 2)}
+      </pre>
+    </details>
   );
 }

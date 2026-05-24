@@ -6,6 +6,10 @@ auto-ingest fire-and-forget al register + integrazione VaultWatcher.
 v1.0.0 DEV-OPTIMIZER-AUTO: estensione con endpoint complete-structure per
 scaffolding incrementale di vault esistenti con struttura SCO INCOMPLETA.
 
+v1.0.2 DEV-AUTO-SCAFFOLD: estensione con endpoint auto-organize per re-classify
+file esistenti + popolamento entity seed/concepts/glossario in vault qualsiasi
+(vuoto o pieno) SENZA chiedere conferma utente.
+
 Endpoints:
     GET    /api/vault/list                          -> lista vault registrati
     POST   /api/vault/add                           -> aggiungi vault (fire-and-forget sync + watcher)
@@ -15,6 +19,7 @@ Endpoints:
     POST   /api/vault/{id}/sync                     -> trigger re-sync sincrono (timeout 5min)
     GET    /api/vault/{id}/sync-status              -> stato sync corrente + counts DB
     POST   /api/vault/{id}/complete-structure       -> crea cartelle/file SCO mancanti (incrementale, no overwrite)
+    POST   /api/vault/{id}/auto-organize            -> auto-organize completa 5 fasi (mkdir + backup + re-classify + seed)
 """
 
 from __future__ import annotations
@@ -43,6 +48,7 @@ from sco_compliance_os.services.vault.autoingest import (
 from sco_compliance_os.services.vault.scaffolder import (
     VALID_TEMPLATES,
     TemplateKind,
+    auto_organize_vault,
     complete_missing_structure,
     inspect_missing_components,
     scaffold_vault,
@@ -141,6 +147,34 @@ class VaultCompleteStructureRequest(BaseModel):
             "Se True, crea anche cartelle/file opt-in (Contesto/, Business/, "
             "raw/, wiki/, CLAUDE.md). Se False (default), crea solo auto-create "
             "(Giornaliero/, Libreria/, Skill/, Progetti/, Team/, log/)."
+        ),
+    )
+
+
+class VaultAutoOrganizeRequest(BaseModel):
+    """Richiesta auto-organize vault SCO completa (5 fasi).
+
+    DEV-AUTO-SCAFFOLD v1.0.2: endpoint per esecuzione manuale dell'auto-organize
+    completa (gia eseguita automaticamente al register se vault non-SCO via
+    auto_trigger). Riusato per re-run idempotente o per vault gia registrati
+    pre-v1.0.2.
+
+    Pipeline 5 fasi:
+        1. Crea TUTTE le cartelle canoniche SCO + sotto-cartelle wiki/raw + log/
+        2. Backup file in posizione di spostamento -> _archivio_pre_v1.0.2/
+        3. Re-classify file .md esistenti (mapping non-SCO -> SCO o per frontmatter type:...)
+        4. AGENTS.md + README.md + _index.md per cartelle nuove
+        5. Popola entity seed (8 normative italiane comuni) + 5 concepts + glossario 35+ sigle
+
+    Idempotente: chiamata ripetuta safe (skip su file/cartelle gia presenti).
+    """
+
+    auto_apply: bool = Field(
+        default=True,
+        description=(
+            "Se True (default), applica realmente le modifiche al filesystem. "
+            "Se False, ritorna lo stesso AutoOrganizeResult ma in dry-run "
+            "(zero IO write). Utile per audit pre-conferma."
         ),
     )
 
@@ -739,6 +773,168 @@ async def complete_vault_structure(
         )
 
     return result.to_dict()
+
+
+# ----- DEV-AUTO-SCAFFOLD v1.0.2 background task -----
+
+
+async def _background_auto_organize(
+    vault_id: str,
+    vault_path: Path,
+    vault_name: str,
+    auto_apply: bool,
+) -> dict[str, Any]:
+    """Fire-and-forget task: auto-organize vault SCO completa.
+
+    Pattern Conv. 41 tracciatura: log dettagliato.
+    Pattern Conv. 44 lesson 1: errori catturati senza propagare al client.
+    """
+    try:
+        logger.info(
+            "background_auto_organize.start",
+            vault_id=vault_id,
+            path=str(vault_path),
+            auto_apply=auto_apply,
+        )
+        result = auto_organize_vault(
+            vault_path, vault_name=vault_name, auto_apply=auto_apply
+        )
+        logger.info(
+            "background_auto_organize.complete",
+            vault_id=vault_id,
+            organized=result.organized,
+            directories_created=len(result.directories_created),
+            files_created=len(result.files_created),
+            files_moved=len(result.files_moved),
+            files_backed_up=len(result.files_backed_up),
+            errors=len(result.errors),
+        )
+        return result.to_dict()
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "background_auto_organize.error",
+            vault_id=vault_id,
+            error=str(exc),
+        )
+        return {"organized": False, "errors": [str(exc)]}
+
+
+@router.post("/{vault_id}/auto-organize", status_code=200)
+async def auto_organize_vault_endpoint(
+    vault_id: str,
+    request: Request,
+    payload: VaultAutoOrganizeRequest | None = None,
+    settings: Settings = Depends(get_settings),
+) -> dict[str, Any]:
+    """Auto-organize vault SCO completa (5 fasi pipeline, idempotente).
+
+    DEV-AUTO-SCAFFOLD v1.0.2: endpoint REST per esecuzione manuale dell'auto-organize.
+    Quando ``auto_apply=True`` (default), esegue le modifiche IN MODO SINCRONO
+    sul vault (tipicamente pochi secondi per vault con <100 .md). Il client
+    riceve l'esito completo. Per chiamata fire-and-forget asincrona (utile per
+    vault molto grandi), passare ``background=true`` nel query param (non
+    presente in MVP, carry-over v1.0.3).
+
+    Per dry-run audit pre-conferma, passare ``auto_apply=False``: ritorna la
+    stessa response simulata ma senza IO write.
+
+    Pattern Conv. 41 tracciatura: log dettagliato di tutte le fasi nel response.
+    Pattern Conv. 44 lesson 1 CircuitBreaker: errori per fase isolati, response
+    contiene comunque counters parziali.
+    Pattern Conv. 47 single source of truth: response coerente con
+    AutoOrganizeResult.to_dict() del scaffolder.
+
+    Response:
+        {
+            "organized": bool,
+            "directories_created": list[str],
+            "files_created": list[str],
+            "files_moved": [{"src": str, "dest": str}, ...],
+            "files_backed_up": list[str],
+            "files_skipped": list[str],
+            "errors": list[str],
+            "vault_id": str,
+            "vault_path": str
+        }
+    """
+    settings.ensure_data_dir()
+    entry = _find_vault_in_registry(settings, vault_id)
+    vault_path = Path(entry["path"])
+    vault_name = entry.get("name", vault_path.name)
+    auto_apply = bool(payload.auto_apply) if payload else True
+
+    logger.info(
+        "vault.auto_organize.request",
+        vault_id=vault_id,
+        path=str(vault_path),
+        auto_apply=auto_apply,
+    )
+
+    # Esecuzione sincrona (sub-pochi-secondi per vault tipici).
+    try:
+        result = auto_organize_vault(
+            vault_path, vault_name=vault_name, auto_apply=auto_apply
+        )
+    except OSError as exc:
+        logger.error(
+            "vault.auto_organize.filesystem_error",
+            vault_id=vault_id,
+            path=str(vault_path),
+            error=str(exc),
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Errore filesystem durante auto-organize: {exc}",
+        ) from exc
+
+    logger.info(
+        "vault.auto_organize.completed",
+        vault_id=vault_id,
+        organized=result.organized,
+        files_created_count=len(result.files_created),
+        files_moved_count=len(result.files_moved),
+        files_backed_up_count=len(result.files_backed_up),
+        errors_count=len(result.errors),
+    )
+
+    # Aggiorna registry con flag struttura post-organize (la struttura SCO e'
+    # cambiata se auto_apply=True, e' invariata se dry-run).
+    if auto_apply and result.organized:
+        meta_after = _inspect_vault(vault_path)
+        entries = _load_registry(settings.vault_registry_path)
+        for e in entries:
+            if e.get("id") == vault_id:
+                e["is_sco_structure"] = meta_after["is_sco_structure"]
+                e["has_claude_md"] = meta_after["has_claude_md"]
+                e["has_wiki_dir"] = meta_after["has_wiki_dir"]
+                e["has_raw_dir"] = meta_after["has_raw_dir"]
+                e["has_agents_md"] = meta_after["has_agents_md"]
+                e["md_files_count"] = meta_after["md_files_count"]
+        _save_registry(settings.vault_registry_path, entries)
+        logger.info(
+            "vault.auto_organize.registry_updated",
+            vault_id=vault_id,
+            new_is_sco_structure=meta_after["is_sco_structure"],
+        )
+
+    # Lancia re-sync fire-and-forget post-organize cosi' i nuovi file
+    # (entity seed + concepts + glossario) entrano in mem_tree_chunks
+    # per essere subito interrogabili dall'agente.
+    if auto_apply and result.organized:
+        background_tasks: set[asyncio.Task] = getattr(
+            request.app.state, "background_tasks", set()
+        )
+        sync_task = asyncio.create_task(
+            _background_sync_and_watch(vault_id, vault_path),
+            name=f"resync-after-auto-organize-{vault_id}",
+        )
+        background_tasks.add(sync_task)
+        sync_task.add_done_callback(background_tasks.discard)
+
+    response = result.to_dict()
+    response["vault_id"] = vault_id
+    response["vault_path"] = str(vault_path)
+    return response
 
 
 # ----- Callback registrato dal lifespan per gestire eventi watcher -----

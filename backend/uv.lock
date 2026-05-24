@@ -2148,7 +2148,7 @@ wheels = [
 
 [[package]]
 name = "sco-compliance-os-backend"
-version = "1.0.1"
+version = "0.8.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },
