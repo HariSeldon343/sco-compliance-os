@@ -16,6 +16,7 @@ import { toast } from "sonner";
 
 import { useChatStore, useChatModeStore, type ChatMode } from "@/store/chat-store";
 import { cn } from "@/lib/cn";
+import { MicButton } from "@/components/voice/MicButton";
 
 const MAX_CHARS = 8000;
 
@@ -101,6 +102,26 @@ export function ChatInput() {
 
   const handleSlashCommand = () => {
     toast.info("Slash commands: in arrivo (skill registry stub)");
+  };
+
+  // Callback STT: appende il testo trascritto al contenuto corrente del textarea.
+  // Pattern: se input vuoto, sostituisce; se gia' contenuto, appende con spazio.
+  const handleTranscript = (text: string) => {
+    setValue((cur) => {
+      const trimmed = cur.trim();
+      const next = trimmed ? `${cur}${cur.endsWith(" ") ? "" : " "}${text}` : text;
+      // Auto-grow textarea dopo l'append
+      requestAnimationFrame(() => {
+        const el = textareaRef.current;
+        if (el) {
+          el.style.height = "auto";
+          el.style.height = `${Math.min(el.scrollHeight, 240)}px`;
+          el.focus();
+          el.setSelectionRange(next.length, next.length);
+        }
+      });
+      return next;
+    });
   };
 
   const currentMode = MODES.find((m) => m.value === mode) ?? MODES[2];
@@ -270,6 +291,12 @@ export function ChatInput() {
               >
                 {charCount}/{MAX_CHARS}
               </span>
+              {/* Microfono push-to-talk (visibile solo se sttEnabled in Settings).
+                  Hotkey globale Ctrl+Shift+Space gestito internamente. */}
+              <MicButton
+                onTranscript={handleTranscript}
+                disabled={isStreaming}
+              />
               <button
                 type="button"
                 onClick={handleSend}

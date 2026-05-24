@@ -19,6 +19,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { AuthGate } from "@/components/AuthGate";
 import { AppBackground } from "@/components/AppBackground";
+import { MascotOverlay } from "@/components/mascot/MascotOverlay";
 import { CommandPalette } from "@/components/commands/CommandPalette";
 import { useDefaultCommands } from "@/components/commands/useDefaultCommands";
 import { BottomTabBar } from "@/components/nav/BottomTabBar";
@@ -51,6 +52,9 @@ export default function App() {
     <AuthGate>
       {/* MeshGradient WebGL background — fixed inset-0 z-0, opacity bassa, no interaction */}
       <AppBackground opacity={0.08} />
+
+      {/* Mascot 2D SVG floating overlay top-right — opt-in da Settings, default OFF */}
+      <MascotOverlay />
 
       {/* Command Palette overlay globale ⌘K/Ctrl+K */}
       <CommandPalette />

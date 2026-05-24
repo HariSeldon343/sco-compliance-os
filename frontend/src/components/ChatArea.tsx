@@ -15,6 +15,7 @@ import { useChatStore } from "@/store/chat-store";
 import type { MessageItem } from "@/types/api";
 import { cn } from "@/lib/cn";
 import { ThinkingIndicator } from "@/components/ThinkingIndicator";
+import { AudioPlayer } from "@/components/voice/AudioPlayer";
 
 // 4 suggestion card branded compliance — 2x2 grid stile OpenHuman / Claude Desktop
 const SUGGESTIONS = [
@@ -179,14 +180,22 @@ function MessageBubble({ message }: MessageBubbleProps) {
             {message.content}
           </div>
         ) : (
-          <div className="prose prose-sm max-w-none leading-relaxed dark:prose-invert prose-p:my-2 prose-headings:mt-3 prose-headings:mb-2 prose-pre:my-2 prose-pre:bg-sco-bg prose-pre:border prose-pre:border-sco-border prose-code:text-sco-blue dark:prose-code:text-sco-amber">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={[rehypeHighlight]}
-            >
-              {message.content}
-            </ReactMarkdown>
-          </div>
+          <>
+            <div className="prose prose-sm max-w-none leading-relaxed dark:prose-invert prose-p:my-2 prose-headings:mt-3 prose-headings:mb-2 prose-pre:my-2 prose-pre:bg-sco-bg prose-pre:border prose-pre:border-sco-border prose-code:text-sco-blue dark:prose-code:text-sco-amber">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeHighlight]}
+              >
+                {message.content}
+              </ReactMarkdown>
+            </div>
+            {/* TTS player on-device (visibile solo se ttsEnabled in Settings) */}
+            {message.content.trim().length > 0 && (
+              <div className="mt-1 flex items-center gap-1">
+                <AudioPlayer text={message.content} />
+              </div>
+            )}
+          </>
         )}
 
         {/* Tool calls inline (Read/Grep/Write ...) */}

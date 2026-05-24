@@ -9,7 +9,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "sco-compliance-os-backend"
-version = "0.6.0"
+version = "0.7.0"
 description = "Backend FastAPI per l'app desktop SCO Compliance OS, AI assistant brandata per compliance e consulenza normativa."
 readme = "../README.md"
 requires-python = ">=3.12,<4.0"
@@ -71,6 +71,11 @@ dependencies = [
     "sse-starlette>=2.2.0",
     "watchdog>=6.0.0",
     "openpyxl>=3.1.5",
+    # v0.7.0 multi-LLM router: OpenAI + Gemini SDKs.
+    # Ollama provider usa solo httpx (zero deps extra).
+    # SDK leggeri: openai ~150KB + google-generativeai ~300KB.
+    "openai>=1.40.0",
+    "google-generativeai>=0.8.0",
 ]
 
 [project.optional-dependencies]
@@ -78,6 +83,9 @@ dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=6.0.0",
+    # Integration test framework v0.7.0 DEV-AUTOTEST-E2E (Conv. 46 enforcement)
+    "pytest-httpx>=0.32.0",
+    "pytest-html>=4.1.0",
     "ruff>=0.8.0",
     "black>=24.10.0",
     "mypy>=1.13.0",

@@ -35,6 +35,7 @@ from sco_compliance_os.api import (
     chat_routes,
     integrations_routes,
     license_routes,
+    llm_routes,
     memory_routes,
     onboarding_routes,
     profile_routes,
@@ -42,6 +43,7 @@ from sco_compliance_os.api import (
     subconscious_routes,
     tokenjuice_routes,
     vault_routes,
+    voice_routes,
     wiki_routes,
 )
 from sco_compliance_os.config import get_settings
@@ -450,6 +452,8 @@ def create_app() -> FastAPI:
     app.include_router(autofetch_routes.router)
     app.include_router(profile_routes.router)
     app.include_router(skills_routes.router)
+    app.include_router(voice_routes.router)
+    app.include_router(llm_routes.router)
 
     return app
 

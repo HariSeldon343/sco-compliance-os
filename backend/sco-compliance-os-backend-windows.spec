@@ -98,6 +98,22 @@ hiddenimports = [
     "aiosqlite",
     # PyJWT (future license JWT)
     "jwt",
+    # v0.7.0 multi-LLM router providers (Conv. 44 lesson 3 enforcement)
+    "openai",
+    "openai._client",
+    "openai._streaming",
+    "openai.types",
+    "openai.types.chat",
+    "google",
+    "google.generativeai",
+    "google.generativeai.types",
+    "google.ai",
+    "google.ai.generativelanguage",
+    # v0.7.0 vault auto-ingest deps
+    "openpyxl",
+    "watchdog",
+    "watchdog.observers",
+    "watchdog.events",
 ]
 
 # File dati statici (config, prompt templates, skill SKILL.md bundled)

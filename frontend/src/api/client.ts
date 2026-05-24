@@ -187,4 +187,83 @@ export const apiClient = {
     const n = params.n ?? 20;
     return request<HotnessItem[]>(`/api/memory/hotness/top?n=${n}`);
   },
+
+  // ---- Voice (STT + TTS, on-device) ----
+  // Privacy hard requirement: nessun dato lascia il dispositivo.
+  // Pattern Conv. 47 single source of truth: tooling + modelli vivono lato
+  // backend (~/.sco-compliance-os/voice-*). Frontend interroga via /status.
+
+  /** STT: trascrive audio bytes (WebM Opus / WAV / MP3 / M4A) in testo. */
+  async transcribeAudio(params: {
+    audio: Blob;
+    language?: string;
+    filename?: string;
+  }): Promise<{ text: string; duration_ms: number; model: string; language: string }> {
+    const { audio, language = "it", filename = "recording.webm" } = params;
+    const form = new FormData();
+    form.append("audio", audio, filename);
+    form.append("language", language);
+
+    const res = await fetch(`${BACKEND_URL}/api/voice/transcribe`, {
+      method: "POST",
+      body: form,
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      let code = "transcribe_error";
+      let message = `HTTP ${res.status}`;
+      try {
+        const parsed = JSON.parse(body);
+        code = parsed.code ?? code;
+        message = parsed.detail ?? parsed.message ?? message;
+      } catch {
+        message = body || message;
+      }
+      throw new ApiError(res.status, code, message);
+    }
+    return res.json() as Promise<{
+      text: string;
+      duration_ms: number;
+      model: string;
+      language: string;
+    }>;
+  },
+
+  /** TTS: sintetizza testo in WAV blob. */
+  async synthesizeText(params: {
+    text: string;
+    voice?: string;
+  }): Promise<Blob> {
+    const { text, voice = "it_IT-paola-medium" } = params;
+    const res = await fetch(`${BACKEND_URL}/api/voice/synthesize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, voice }),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new ApiError(res.status, "synthesize_error", body || `HTTP ${res.status}`);
+    }
+    return res.blob();
+  },
+
+  /** Lista voci TTS disponibili (con flag installed). */
+  async listVoices(): Promise<{
+    voices: Array<{
+      id: string;
+      language: string;
+      size_mb: string;
+      installed: string;
+    }>;
+  }> {
+    return request("/api/voice/voices");
+  },
+
+  /** Diagnostica tooling voice (binari + modelli). */
+  async voiceStatus(): Promise<{
+    stt: { ffmpeg: boolean; whisper_cli: boolean; model_base: boolean; model_base_en: boolean };
+    tts: { piper_bin: boolean; voice_it_paola: boolean; voice_en_libritts: boolean };
+  }> {
+    return request("/api/voice/status");
+  },
 };

@@ -17,7 +17,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from sco_compliance_os.config import Settings, get_settings
-from sco_compliance_os.core.agent_sdk_runner import build_runner
+from sco_compliance_os.core.agent_sdk_runner import _DEFAULT_SYSTEM_PROMPT
 from sco_compliance_os.core.logging_setup import get_logger
 from sco_compliance_os.core.post_turn_hook import schedule_on_turn_complete
 from sco_compliance_os.core.store import get_store
@@ -25,6 +25,13 @@ from sco_compliance_os.services.learning.profile_renderer import (
     render_profile_markdown,
 )
 from sco_compliance_os.services.learning.profile_store import list_preferences
+from sco_compliance_os.services.llm.provider import ProviderError
+from sco_compliance_os.services.llm.router import (
+    Tier,
+    get_tenant_llm_config,
+    record_failure,
+    route,
+)
 
 logger = get_logger(__name__)
 
@@ -46,6 +53,14 @@ class ChatStreamRequest(BaseModel):
     agent: str | None = Field(
         default=None,
         description="Nome agent/subagent da usare (es. compliance-os, dev, etc).",
+    )
+    tier: str | None = Field(
+        default=None,
+        description=(
+            "Tier workload v0.7.0 multi-LLM router: reasoning-v1 | fast-v1 | "
+            "agentic-v1 | coding-v1 | summarization-v1. Default 'agentic-v1' "
+            "(backward-compat chat). Override model_slug ha priorità su tier."
+        ),
     )
 
 
@@ -118,7 +133,11 @@ async def chat_stream(
         content=payload.message,
     )
 
-    model_slug = payload.model_slug or settings.model_default
+    # Note: payload.model_slug se valorizzato fa short-circuit a Anthropic con
+    # quel modello nel router; altrimenti il router applica tier+chain.
+    # settings.model_default rimane disponibile come fallback semantico (non usato
+    # attivamente, il router ha le sue default chain).
+    _ = settings.model_default  # backward-compat marker
 
     # Profile injection: fetch preferenze profilo + render markdown da
     # prepend al system prompt LLM (single source of truth backend, Conv. 47).
@@ -178,17 +197,77 @@ async def chat_stream(
             profile_markdown = memory_context_markdown
 
     async def event_generator() -> AsyncIterator[str]:
-        """Yield SSE events in formato `data: {json}\\n\\n`."""
-        runner = await build_runner(
-            model_slug=model_slug,
-            profile_markdown=profile_markdown or None,
-        )
+        """Yield SSE events in formato `data: {json}\\n\\n`.
+
+        v0.7.0 multi-LLM router: invece di hard-codare Anthropic via build_runner,
+        risolvi tier+provider via route() con tenant_config. Backward-compat:
+        tenant_config vuoto -> default chain -> Anthropic Sonnet 4.6 (agentic-v1).
+        Override model_slug nella request: forza Anthropic con quel modello.
+        """
         assistant_text_buf: list[str] = []
         ask_user_question_payload: dict[str, Any] | None = None
         tool_calls_buf: list[dict[str, Any]] = []
+        active_provider_name = "unknown"
+
+        # Combina profile + memory + default system prompt Antonio Amodeo
+        effective_system_prompt = _DEFAULT_SYSTEM_PROMPT
+        if profile_markdown:
+            effective_system_prompt = (
+                f"{profile_markdown}\n\n{_DEFAULT_SYSTEM_PROMPT}"
+            )
+
+        # Risolvi tenant config + tier
+        tier_value: Tier = payload.tier if payload.tier else "agentic-v1"  # type: ignore[assignment]
+        try:
+            tenant_config = await get_tenant_llm_config(tenant_id="local")
+
+            # Override esplicito model_slug nella request: short-circuit a Anthropic
+            # con quel modello, bypassando router per backward-compat.
+            if payload.model_slug:
+                from sco_compliance_os.services.llm.providers.anthropic import (
+                    build_anthropic_provider_from_license,
+                )
+
+                provider = build_anthropic_provider_from_license()
+                if provider is None:
+                    yield f"data: {json.dumps({'kind': 'error', 'data': {'message': 'Nessuna license attiva.'}})}\n\n"
+                    return
+                active_provider_name = "anthropic"
+                resolved_model = payload.model_slug
+            else:
+                decision = await route(
+                    tier=tier_value, tenant_config=tenant_config
+                )
+                provider = decision.provider
+                active_provider_name = decision.provider_name
+                resolved_model = decision.model
+                logger.info(
+                    "chat_stream.routing_decision",
+                    tier=tier_value,
+                    provider=decision.provider_name,
+                    model=decision.model,
+                    fallback_used=decision.fallback_used,
+                    attempted=decision.fallback_chain_attempted,
+                )
+        except ProviderError as perr:
+            logger.error("chat_stream.router_error", error=str(perr))
+            yield f"data: {json.dumps({'kind': 'error', 'data': {'message': str(perr), 'exc_type': perr.exc_type}})}\n\n"
+            return
+        except Exception as exc:
+            logger.exception("chat_stream.router_unexpected_error", error=str(exc))
+            yield f"data: {json.dumps({'kind': 'error', 'data': {'message': str(exc)}})}\n\n"
+            return
 
         try:
-            async for ev in runner.stream(payload.message):
+            messages_list: list[dict[str, Any]] = [
+                {"role": "user", "content": payload.message}
+            ]
+            async for ev in provider.stream(
+                messages=messages_list,
+                model=resolved_model,
+                max_tokens=4096,
+                system_prompt=effective_system_prompt,
+            ):
                 # Accumula contenuto per persistenza finale
                 if ev.kind == "text_delta":
                     assistant_text_buf.append(ev.data.get("text", ""))
@@ -196,12 +275,22 @@ async def chat_stream(
                     ask_user_question_payload = ev.data
                 elif ev.kind == "tool_use":
                     tool_calls_buf.append(ev.data)
+                elif ev.kind == "error":
+                    # Provider ha emesso error event -> registra failure per health scoring
+                    try:
+                        await record_failure(active_provider_name)  # type: ignore[arg-type]
+                    except Exception:
+                        pass
 
-                # Emit SSE
+                # Emit SSE (ChunkEvent.kind values matchano il set EventKind esistente)
                 event_payload = {"kind": ev.kind, "data": ev.data, "seq": ev.seq}
                 yield f"data: {json.dumps(event_payload, ensure_ascii=False)}\n\n"
         except Exception as exc:
             logger.error("chat_stream.error", error=str(exc), exc_info=True)
+            try:
+                await record_failure(active_provider_name)  # type: ignore[arg-type]
+            except Exception:
+                pass
             yield f"data: {json.dumps({'kind': 'error', 'data': {'message': str(exc)}})}\n\n"
         finally:
             # Persisti messaggio assistant con stato widget Conv. 48
