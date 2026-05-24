@@ -206,13 +206,17 @@ export function ChatInput() {
                   <>
                     {/* Backdrop click-out */}
                     <div
-                      className="fixed inset-0 z-40"
+                      className="fixed inset-0 z-[60]"
                       onClick={() => setModeOpen(false)}
                     />
+                    {/* v0.8.2 fix dropdown clipping: bottom-full ancora ma con
+                        z-index alto + position absolute relativo al wrapper
+                        che e' relative. Aggiungo min-w per garantire 3 opzioni
+                        visibili anche se viewport stretto. */}
                     <div
                       role="listbox"
                       aria-label="Modalita interazione agente"
-                      className="absolute bottom-full left-0 z-50 mb-1.5 w-80 max-h-96 overflow-y-auto rounded-lg border border-sco-border bg-sco-surface-elevated p-1 shadow-xl"
+                      className="absolute bottom-full left-0 z-[70] mb-2 w-80 min-w-[320px] max-h-[420px] overflow-y-auto rounded-lg border border-sco-border bg-sco-surface-elevated p-1 shadow-2xl"
                     >
                       <div className="border-b border-sco-border px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-sco-muted-foreground">
                         Come deve comportarsi l'agente
