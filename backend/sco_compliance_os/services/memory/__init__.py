@@ -11,7 +11,7 @@ Componenti:
     - ingest: pipeline end-to-end con provenance metadata (Conv. 43)
 
 Auto-popolato da connettori OAuth (email, calendar, drive) + user uploads.
-Complementare al Vault Karpathy (services/vault/) per dati freschi non curati.
+Complementare al Vault SCO (services/vault/) per dati freschi non curati.
 """
 
 from __future__ import annotations

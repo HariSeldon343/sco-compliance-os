@@ -7,9 +7,16 @@ import type {
   HotnessItem,
   IntegrationItem,
   MessageItem,
+  TreeChunkItem,
   TreeLevel,
+  TreeStatsResponse,
   TreeSummaryItem,
+  TreeSummaryItemV2,
   VaultItem,
+  WikiCategory,
+  WikiFileDetail,
+  WikiListResponse,
+  WikiStatsResponse,
 } from "@/types/api";
 
 // Backend URL: env Vite oppure default localhost (Tauri dev + bundle)
@@ -266,4 +273,165 @@ export const apiClient = {
   }> {
     return request("/api/voice/status");
   },
+
+  // ---- Wiki SCO (ALPHA v0.4.0) — endpoint nuovi v0.6.0+ ----
+  // 5 categorie: sources / entities / concepts / synthesis / glossari.
+  // Risoluzione vault attivo lato backend (registry sco-first).
+  // Pattern Conv. 47: shape stabile, mai duplicare schema frontmatter.
+
+  /** Conteggi per categoria nel vault attivo. */
+  async getWikiStats(params: { vault_path?: string } = {}): Promise<WikiStatsResponse> {
+    const search = new URLSearchParams();
+    if (params.vault_path) search.set("vault_path", params.vault_path);
+    const qs = search.toString();
+    return request<WikiStatsResponse>(qs ? `/api/wiki/stats?${qs}` : "/api/wiki/stats");
+  },
+
+  /** Lista schede wiki/sources/ del vault attivo. */
+  async listWikiSources(
+    params: {
+      vault_path?: string;
+      ambito_canonico?: string;
+      status?: string;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ): Promise<WikiListResponse> {
+    return request<WikiListResponse>(buildWikiQuery("/api/wiki/sources", params));
+  },
+
+  /** Lista entity wiki/entities/ con filtri tipizzati Ondate 2-3. */
+  async listWikiEntities(
+    params: {
+      vault_path?: string;
+      entity_type?: string;
+      ambito_canonico?: string;
+      status?: string;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ): Promise<WikiListResponse> {
+    return request<WikiListResponse>(buildWikiQuery("/api/wiki/entities", params));
+  },
+
+  /** Lista concepts wiki/concepts/ del vault attivo. */
+  async listWikiConcepts(
+    params: {
+      vault_path?: string;
+      ambito_canonico?: string;
+      status?: string;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ): Promise<WikiListResponse> {
+    return request<WikiListResponse>(buildWikiQuery("/api/wiki/concepts", params));
+  },
+
+  /** Lista synthesis wiki/synthesis/ del vault attivo. */
+  async listWikiSynthesis(
+    params: {
+      vault_path?: string;
+      ambito_canonico?: string;
+      status?: string;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ): Promise<WikiListResponse> {
+    return request<WikiListResponse>(buildWikiQuery("/api/wiki/synthesis", params));
+  },
+
+  /** Lista glossari wiki/glossari/ del vault attivo. */
+  async listWikiGlossari(
+    params: {
+      vault_path?: string;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ): Promise<WikiListResponse> {
+    return request<WikiListResponse>(buildWikiQuery("/api/wiki/glossari", params));
+  },
+
+  /** Singolo file wiki con frontmatter + body completo. */
+  async getWikiFile(
+    category: WikiCategory,
+    slug: string,
+    params: { vault_path?: string } = {},
+  ): Promise<WikiFileDetail> {
+    const search = new URLSearchParams();
+    if (params.vault_path) search.set("vault_path", params.vault_path);
+    const qs = search.toString();
+    const base = `/api/wiki/${encodeURIComponent(category)}/${encodeURIComponent(slug)}`;
+    return request<WikiFileDetail>(qs ? `${base}?${qs}` : base);
+  },
+
+  // ---- Memory Tree bucket-seal Fase 4 (DEV-MEMORY-TREE v0.6.0) ----
+  // Endpoint nuovi distinti da `/tree-summaries` legacy Wave 1 (tabella `summaries`
+  // mai migrata in v0.6.0+). Niente HTTP 500 "no such table".
+
+  /** Lista chunks Memory Tree con filtri bucket-seal. */
+  async getMemoryTreeChunks(
+    params: {
+      source_kind?: string;
+      status?: string;
+      source_id?: string;
+      owner?: string;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ): Promise<TreeChunkItem[]> {
+    const search = new URLSearchParams();
+    if (params.source_kind) search.set("source_kind", params.source_kind);
+    if (params.status) search.set("status", params.status);
+    if (params.source_id) search.set("source_id", params.source_id);
+    if (params.owner) search.set("owner", params.owner);
+    if (params.limit !== undefined) search.set("limit", String(params.limit));
+    if (params.offset !== undefined) search.set("offset", String(params.offset));
+    const qs = search.toString();
+    return request<TreeChunkItem[]>(
+      qs ? `/api/memory/tree/chunks?${qs}` : "/api/memory/tree/chunks",
+    );
+  },
+
+  /** Lista summaries L1/L2/L3 Memory Tree (Fase 4 v0.6.0 nuovo schema). */
+  async getMemoryTreeSummariesNew(
+    params: {
+      tree_kind?: string;
+      tree_id?: string;
+      level?: number;
+      owner?: string;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ): Promise<TreeSummaryItemV2[]> {
+    const search = new URLSearchParams();
+    if (params.tree_kind) search.set("tree_kind", params.tree_kind);
+    if (params.tree_id) search.set("tree_id", params.tree_id);
+    if (params.level !== undefined) search.set("level", String(params.level));
+    if (params.owner) search.set("owner", params.owner);
+    if (params.limit !== undefined) search.set("limit", String(params.limit));
+    if (params.offset !== undefined) search.set("offset", String(params.offset));
+    const qs = search.toString();
+    return request<TreeSummaryItemV2[]>(
+      qs ? `/api/memory/tree/summaries?${qs}` : "/api/memory/tree/summaries",
+    );
+  },
+
+  /** Statistiche aggregate Memory Tree bucket-seal (count by status + source_kind). */
+  async getMemoryTreeStats(): Promise<TreeStatsResponse> {
+    return request<TreeStatsResponse>("/api/memory/tree/stats");
+  },
 };
+
+/** Builder URL query con stripping campi undefined/null (helper interno wiki endpoints). */
+function buildWikiQuery(
+  base: string,
+  params: Record<string, string | number | undefined>,
+): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "") continue;
+    search.set(key, String(value));
+  }
+  const qs = search.toString();
+  return qs ? `${base}?${qs}` : base;
+}

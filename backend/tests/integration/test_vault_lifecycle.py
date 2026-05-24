@@ -26,14 +26,14 @@ async def test_vault_list_initial_empty(client: AsyncClient) -> None:
 async def test_vault_inspect_temp_vault(
     client: AsyncClient, temp_vault: Path
 ) -> None:
-    """POST /api/vault/inspect su temp_vault → is_karpathy=True + md_files_count>=3."""
+    """POST /api/vault/inspect su temp_vault → is_sco_structure=True + md_files_count>=3."""
     response = await client.post(
         "/api/vault/inspect",
         json={"path": str(temp_vault)},
     )
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["is_karpathy"] is True
+    assert body["is_sco_structure"] is True
     assert body["has_claude_md"] is True
     assert body["has_wiki_dir"] is True
     assert body["has_raw_dir"] is True
@@ -60,7 +60,7 @@ async def test_vault_add_and_list(client: AsyncClient, temp_vault: Path) -> None
     assert add_response.status_code == 201, add_response.text
     entry = add_response.json()
     assert entry["name"] == "test-vault-001"
-    assert entry["is_karpathy"] is True
+    assert entry["is_sco_structure"] is True
     assert "id" in entry
     vault_id = entry["id"]
 

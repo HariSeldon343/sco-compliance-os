@@ -54,7 +54,7 @@ export interface ConversationItem {
   message_count: number;
 }
 
-/** Vault registrato (cartella Obsidian collegata) */
+/** Vault registrato (cartella SCO collegata) */
 export interface VaultItem {
   id: Id;
   name: string;
@@ -119,4 +119,156 @@ export interface HotnessItem {
   last_accessed: string | null; // ISO 8601
   access_count: number;
   days_since_access: number | null;
+}
+
+// ===== Wiki SCO (ALPHA v0.4.0) — categorie sources/entities/concepts/synthesis/glossari =====
+// Allineato 1:1 al Pydantic backend `WikiSummaryItem` / `WikiListResponse` / `WikiStatsResponse`
+// (vedi backend/sco_compliance_os/api/wiki_routes.py righe 51-89).
+
+/** 5 categorie wiki SCO del vault attivo */
+export type WikiCategory =
+  | "sources"
+  | "entities"
+  | "concepts"
+  | "synthesis"
+  | "glossari";
+
+/** Vocabolario chiuso entity_type (vedi CLAUDE.md INGEST sezione tipizzata Ondata 2) */
+export type WikiEntityType =
+  | "atto-normativo"
+  | "standard-tecnico"
+  | "linea-guida"
+  | "autorita"
+  | "metodologia"
+  | "autore-prassi"
+  | "soggetto-obbligato"
+  | "scadenza";
+
+/** Vocabolario chiuso ambito_canonico (17 valori, vedi CLAUDE.md INGEST) */
+export type WikiAmbitoCanonico =
+  | "cybersicurezza"
+  | "governance-ai"
+  | "privacy-protezione-dati"
+  | "accreditamento-sanitario"
+  | "dispositivi-medici"
+  | "radioprotezione"
+  | "sicurezza-lavoro"
+  | "farmacovigilanza"
+  | "service-management-ict"
+  | "appalti-pubblici"
+  | "prevenzione-incendi"
+  | "compliance-231"
+  | "qualita-sgq"
+  | "gestione-ambientale"
+  | "sicurezza-alimentare"
+  | "responsabilita-sociale"
+  | "multi-dominio";
+
+/** Stato pagina wiki (vedi CLAUDE.md INGEST "Stato delle pagine wiki") */
+export type WikiStatus = "active" | "draft" | "stub" | "deprecated" | "archived";
+
+/** Item summary in una lista wiki (no body completo) */
+export interface WikiSummaryItem {
+  slug: string;
+  title: string;
+  status: string;
+  type: string;
+  entity_type: string | null;
+  entity_subtype: string | null;
+  ambito_canonico: string | null;
+  domini_applicabili: string[];
+  parent_entity: string;
+  tags: string[];
+  last_reviewed: string;
+  last_modified: string;
+  body_excerpt: string;
+  relationships_count: number;
+  applica_entity_count: number;
+}
+
+/** Response per /api/wiki/{sources|entities|concepts|synthesis|glossari} */
+export interface WikiListResponse {
+  category: string;
+  total: number;
+  limit: number;
+  offset: number;
+  items: WikiSummaryItem[];
+  vault_path: string;
+}
+
+/** Response per /api/wiki/stats — counts per categoria */
+export interface WikiStatsResponse {
+  vault_path: string;
+  wiki_dir_exists: boolean;
+  counts: Record<string, number>;
+  total: number;
+}
+
+/** Dettaglio singolo file wiki con body completo + frontmatter (response GET /api/wiki/{category}/{slug}) */
+export interface WikiFileDetail {
+  slug: string;
+  path: string;
+  type: string;
+  title: string;
+  status: string;
+  entity_type: string | null;
+  entity_subtype: string | null;
+  ambito_canonico: string | null;
+  domini_applicabili: string[];
+  parent_entity: string;
+  tags: string[];
+  last_reviewed: string;
+  last_modified: string;
+  frontmatter: Record<string, unknown>;
+  body_md: string;
+  relationships: Array<Record<string, unknown>>;
+  applica_entity: Array<Record<string, unknown>>;
+  pertinenza_in_verifica: Array<Record<string, unknown>>;
+  fornitore_di: Array<Record<string, unknown>>;
+  vault_path: string;
+}
+
+// ===== Memory Tree Fase 4 (DEV-MEMORY-TREE v0.6.0) — bucket-seal pipeline =====
+// Endpoint distinti da Wave 1 legacy (`/tree-summaries` su tabella `summaries` deprecata)
+// per evitare HTTP 500 quando le tabelle Wave 1 non sono migrate in v0.6.0+.
+
+/** Item TreeChunk per GET /api/memory/tree/chunks (Fase 1+2+3 bucket-seal) */
+export interface TreeChunkItem {
+  id: string;
+  source_kind: string; // chat | email | document | vault_file | note
+  source_id: string;
+  owner: string;
+  timestamp_ms: number;
+  tags: string[];
+  content_preview: string;
+  token_count: number;
+  seq_in_source: number;
+  created_at_ms: number;
+  status: string; // pending_extraction | admitted | buffered | sealed | dropped
+}
+
+/** Item summary L1/L2/L3 per GET /api/memory/tree/summaries (Fase 4 v0.6.0) */
+export interface TreeSummaryItemV2 {
+  id: string;
+  tree_kind: string; // source | topic | global
+  tree_id: string;
+  level: number; // 1 | 2 | 3
+  content_summary: string;
+  content_preview: string;
+  parent_summary_id: string | null;
+  children_chunk_ids: string[];
+  children_summary_ids: string[];
+  token_count: number;
+  source_kind_hint: string | null;
+  owner: string;
+  created_at_ms: number;
+  sealed_at_ms: number | null;
+  status: string;
+}
+
+/** Response per GET /api/memory/tree/stats — count by status + source_kind */
+export interface TreeStatsResponse {
+  counts_by_status: Record<string, number>;
+  counts_by_source_kind: Record<string, number>;
+  total: number;
 }

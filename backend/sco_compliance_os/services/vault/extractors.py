@@ -1,7 +1,7 @@
 """Vault file extractors per auto-ingestion (v0.6.0 DEV-VAULT-AUTOINGEST).
 
 Estrattori di testo + metadata per i 7 formati supportati nell'auto-ingest
-del vault Karpathy:
+del vault SCO:
 
     - .md            -> frontmatter YAML + body markdown
     - .pdf           -> testo per pagina (pypdf), metadata page_count
@@ -11,7 +11,7 @@ del vault Karpathy:
     - .json          -> serializzazione canonica leggibile (json.dumps indent=2)
     - .yaml / .yml   -> serializzazione canonica leggibile
 
-Pattern Karpathy "schema is the product":
+Pattern SCO "schema is the product":
     - ExtractedFile dataclass tipizzato, output deterministico per stesso input.
     - content_hash SHA-256 sul body normalizzato per dedup robusta cross-mtime.
     - Tutti i parser blocking sono wrapped in run_in_executor (async-compatible).

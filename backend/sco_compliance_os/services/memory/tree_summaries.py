@@ -16,9 +16,9 @@ Token thresholds sealing (allineati a OpenHuman LLD):
     L1 (sealed)       -> buffer fino a SEAL_L2_THRESHOLD_TOKENS (16k cumulativi)
                       -> seal in summary L2 (~1k token)
     L2 (sealed)       -> buffer fino a SEAL_L3_THRESHOLD_TOKENS (8k cumulativi)
-                      -> seal in summary L3 (~500 token, "Karpathy radice")
+                      -> seal in summary L3 (~500 token, "SCO radice")
 
-Pattern Karpathy "schema is the product":
+Pattern SCO "schema is the product":
     - TreeSummary dataclass riflette mem_tree_summaries SQLite schema 1:1.
     - Stable IDs via hash(tree_kind + tree_id + level + children_ids).
     - No hallucination: lista vuota -> no summary creata.
@@ -1002,7 +1002,7 @@ async def query_relevant_summaries(
 ) -> list[TreeSummary]:
     """BM25-like retrieval su content_summary di tutte le mem_tree_summaries.
 
-    Pattern Karpathy "no vector DB fino a ~100 fonti": BM25 keyword search
+    Pattern SCO "no vector DB fino a ~100 fonti": BM25 keyword search
     su contenuto markdown delle summaries, ranked top-K. Stateless (no index
     precompiled) — recompute scoring ad ogni query, accettabile per <10k summaries.
 

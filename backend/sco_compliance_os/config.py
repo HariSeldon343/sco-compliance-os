@@ -65,7 +65,7 @@ class Settings(BaseSettings):
     )
     vault_default_path: Path | None = Field(
         default=None,
-        description="Path vault Karpathy di default da pre-caricare a startup (opzionale).",
+        description="Path vault SCO di default da pre-caricare a startup (opzionale).",
     )
 
     # ----- Logging + monitoring -----

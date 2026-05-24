@@ -2,7 +2,7 @@
 
 Routers:
 - chat_routes: /api/chat — streaming SSE + conversations CRUD.
-- vault_routes: /api/vault — registrazione + ispezione vault Karpathy.
+- vault_routes: /api/vault — registrazione + ispezione vault SCO.
 - memory_routes: /api/memory — memory tree + ingest + search.
 - integrations_routes: /api/integrations — connettori OAuth (Gmail, Drive, ecc.).
 - onboarding_routes: /api/onboarding — stato EULA/Privacy/Demo/Tutorial.

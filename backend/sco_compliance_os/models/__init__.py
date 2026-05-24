@@ -9,7 +9,7 @@ Tabelle nuove (migration 0002):
     - entity_index: entity → chunk_id mapping per cross-reference (carry-over wave 2)
     - jobs: async job queue per deep_score batch + tree promotion (carry-over)
 
-Pattern Karpathy "schema is the product": il modello dichiarativo è la single
+Pattern SCO "schema is the product": il modello dichiarativo è la single
 source of truth dello schema; la migration 0002 SQL replica il DDL per
 idempotenza cross-environment (PyInstaller bundle, dev local, CI).
 """

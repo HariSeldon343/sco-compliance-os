@@ -42,7 +42,7 @@ const STEPS: TutorialStep[] = [
     title: "3. Esplora il vault dalla sidebar",
     body:
       "Nella sidebar trovi la sezione Vault. Vedi le cartelle del tuo vault con il numero di file. Puoi aprire file, aggiungere nuovi vault, gestire la sincronizzazione.",
-    example: "La filing rule Karpathy ti aiuta a sapere dove va ogni nuovo file.",
+    example: "La struttura SCO ti aiuta a sapere dove va ogni nuovo file.",
   },
   {
     icon: <Sparkles size={48} className="text-[#0074b4]" />,

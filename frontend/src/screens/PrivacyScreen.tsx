@@ -64,7 +64,7 @@ export function PrivacyScreen() {
 
           <h3 className="mb-2 font-semibold">Dati che restano sul tuo PC</h3>
           <p className="mb-3">
-            Tutto il tuo lavoro sta sul tuo PC: i vault Obsidian, i documenti,
+            Tutto il tuo lavoro sta sul tuo PC: i vault SCO, i documenti,
             le chat con l&apos;agente, le memorie. Non li mandiamo da nessuna parte.
           </p>
 

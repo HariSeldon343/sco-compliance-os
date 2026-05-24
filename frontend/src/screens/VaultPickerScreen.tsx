@@ -1,5 +1,5 @@
 // SCO Compliance OS — VaultPickerScreen: fase 4 onboarding cumulativa
-// Tre modalità: (a) seleziona vault esistente, (b) carica vault Obsidian dal disco,
+// Tre modalità: (a) seleziona vault esistente, (b) carica vault SCO dal disco,
 // (c) crea nuovo vault da template SCO.
 // Conv. 47 + 48: lista vault dal backend (GET /api/vault/list), persistenza lato backend.
 
@@ -33,7 +33,7 @@ const TEMPLATES: Template[] = [
   { id: "sanita", label: "Sanità / accreditamento", description: "DPR 14/1/1997, DM 70/2015, qualità sanitaria." },
   { id: "qualita", label: "Qualità ISO 9001", description: "SGQ, audit, procedure." },
   { id: "integrato", label: "Integrato cyber + qualità + sanità", description: "Multi-framework, audit congiunti." },
-  { id: "vuoto", label: "Karpathy minimo vuoto", description: "Solo struttura cartelle base, nessun contenuto." },
+  { id: "vuoto", label: "SCO minimo vuoto", description: "Solo struttura cartelle base, nessun contenuto." },
 ];
 
 export function VaultPickerScreen() {
@@ -81,7 +81,7 @@ export function VaultPickerScreen() {
       const selected = await open({
         directory: true,
         multiple: false,
-        title: "Scegli la cartella del vault Obsidian",
+        title: "Scegli la cartella del vault SCO",
       });
       if (typeof selected !== "string") {
         return; // utente ha annullato
@@ -163,7 +163,7 @@ export function VaultPickerScreen() {
           Scegli il tuo vault
         </h2>
         <p className="mb-6 text-sm text-slate-600 dark:text-slate-400">
-          Il vault è la cartella Obsidian dove vivono i tuoi file Markdown.
+          Il vault è la cartella SCO dove vivono i tuoi documenti.
           L&apos;agente AI legge da qui per rispondere con il contesto del tuo lavoro.
         </p>
 
@@ -246,9 +246,9 @@ export function VaultPickerScreen() {
                           <span className="font-medium text-slate-900 dark:text-white">
                             {v.name}
                           </span>
-                          {v.isKarpathy && (
+                          {v.isScoStructure && (
                             <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900 dark:text-green-300">
-                              Karpathy
+                              SCO
                             </span>
                           )}
                           {selectedVaultId === v.id && (
@@ -288,7 +288,7 @@ export function VaultPickerScreen() {
         {mode === "open-folder" && (
           <div className="space-y-4">
             <p className="text-sm text-slate-700 dark:text-slate-200">
-              Apri una cartella che contiene già il tuo vault Obsidian.
+              Apri una cartella che contiene già il tuo vault SCO.
               L&apos;app la registra e ne legge la struttura.
             </p>
 
@@ -319,9 +319,9 @@ export function VaultPickerScreen() {
 
                 <div className="mb-4 grid grid-cols-2 gap-2 text-sm">
                   <Info
-                    label="Struttura Karpathy"
-                    value={inspectResult.isKarpathy ? "OK completa" : "Parziale o assente"}
-                    ok={inspectResult.isKarpathy}
+                    label="Struttura SCO"
+                    value={inspectResult.isScoStructure ? "OK completa" : "Parziale o assente"}
+                    ok={inspectResult.isScoStructure}
                   />
                   <Info
                     label="File .md trovati"
@@ -361,9 +361,9 @@ export function VaultPickerScreen() {
                   />
                 </label>
 
-                {!inspectResult.isKarpathy && (
+                {!inspectResult.isScoStructure && (
                   <div className="mb-3 rounded-md bg-amber-50 p-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">
-                    Attenzione: la cartella non ha la struttura Karpathy completa
+                    Attenzione: la cartella non ha la struttura SCO completa
                     (CLAUDE.md + wiki/ + raw/). L&apos;app funziona comunque, ma
                     l&apos;agente avrà meno contesto strutturato.
                   </div>

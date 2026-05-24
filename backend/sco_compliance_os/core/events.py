@@ -99,15 +99,16 @@ class EventBus:
             Numero di handler invocati con successo (no exception).
         """
         handlers = list(self._subscribers.get(event_type, []))
-        if not handlers:
-            logger.debug("event_bus.publish.no_subscribers", event_type=event_type)
-            return 0
-
+        # Conv. 41 tracciatura: log dettagliato anche su zero subscriber
+        # (sintomo diagnostico di mancato wiring lifespan).
         logger.info(
-            "event_bus.publish",
+            "events.publish",
             event_type=event_type,
-            handlers_count=len(handlers),
+            subscribers_count=len(handlers),
+            payload_keys=list(payload.keys()),
         )
+        if not handlers:
+            return 0
 
         results = await asyncio.gather(
             *(handler(payload) for handler in handlers),
@@ -125,15 +126,45 @@ class EventBus:
                 )
             else:
                 success_count += 1
+        logger.info(
+            "events.publish.complete",
+            event_type=event_type,
+            success_count=success_count,
+            total_handlers=len(handlers),
+        )
         return success_count
 
-    def schedule_publish(self, event_type: str, payload: dict[str, Any]) -> asyncio.Task[int]:
+    def schedule_publish(
+        self,
+        event_type: str,
+        payload: dict[str, Any],
+        *,
+        task_registry: set[asyncio.Task[int]] | None = None,
+    ) -> asyncio.Task[int]:
         """Schedula publish come task background fire-and-forget.
 
         Usata da endpoint REST per non bloccare la response HTTP in attesa
         che tutti i handler asincroni completino.
+
+        Args:
+            event_type: identificativo evento.
+            payload: dict con dati evento.
+            task_registry: opzionale, set per tracciare il task e impedire GC
+                prematura (Bug 3 fix: senza tracking il task viene raccolto dal
+                GC asyncio prima del completamento, handler mai eseguito).
+                Pattern FastAPI standard: ``app.state.background_tasks``.
+
+        Returns:
+            asyncio.Task wrapping publish().
         """
-        return asyncio.create_task(self.publish(event_type, payload))
+        task = asyncio.create_task(
+            self.publish(event_type, payload),
+            name=f"event_publish_{event_type}",
+        )
+        if task_registry is not None:
+            task_registry.add(task)
+            task.add_done_callback(task_registry.discard)
+        return task
 
 
 def get_event_bus() -> EventBus:

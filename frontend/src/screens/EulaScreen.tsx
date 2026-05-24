@@ -60,7 +60,7 @@ export function EulaScreen() {
           <h3 className="mb-2 font-semibold">2. Cosa puoi fare</h3>
           <p className="mb-3">
             Puoi usare l&apos;app per il tuo lavoro professionale. Puoi gestire i tuoi
-            vault Obsidian, fare ricerche, generare documenti, lavorare con l&apos;agente AI.
+            vault SCO, fare ricerche, generare documenti, lavorare con l&apos;agente AI.
           </p>
 
           <h3 className="mb-2 font-semibold">3. Cosa NON puoi fare</h3>

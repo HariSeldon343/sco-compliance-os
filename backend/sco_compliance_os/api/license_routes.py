@@ -1,6 +1,6 @@
 """Router /api/license — attivazione + verifica license key cliente SCO.
 
-Pattern Karpathy single source of truth: lo stato license vive sul SaaS,
+Pattern SCO single source of truth: lo stato license vive sul SaaS,
 NON sul backend locale. Il backend locale cache 24h via file JSON locale
 (~/.sco-compliance-os/license-cache.json) per UX offline + grace period.
 

@@ -35,7 +35,54 @@ on:
         required: false
 
 jobs:
+  # Gate Conv. 46: integration test E2E PASS è BLOCKER per il tag release.
+  # Se questo job fallisce, nessun build matrix parte e nessun artefatto firmato
+  # raggiunge la draft GitHub Release. 48 integration test in backend/tests/integration/.
+  integration-tests:
+    name: Integration tests (gate Conv. 46)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Install backend deps (with dev extras)
+        working-directory: backend
+        run: uv sync --all-extras
+
+      - name: Run integration tests (HTML report)
+        working-directory: backend
+        env:
+          SCO_SEAL_SCHEDULER_ENABLED: "0"
+          SCO_AUTO_FETCH_ENABLED: "0"
+        run: |
+          uv run pytest tests/integration/ -v --tb=short \
+            --html=test-report.html --self-contained-html \
+            --junitxml=junit-integration.xml
+
+      - name: Upload integration test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-report-${{ github.ref_name }}
+          path: |
+            backend/test-report.html
+            backend/junit-integration.xml
+          retention-days: 30
+
   release:
+    # Conv. 46 gate enforcement: blocca tutti i build sidecar/Tauri finché
+    # il gate integration-tests non passa. 0 tag su release non smoke-testata.
+    needs: integration-tests
     permissions:
       contents: write
     strategy:

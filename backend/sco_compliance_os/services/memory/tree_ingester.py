@@ -12,7 +12,7 @@ Sessione 7+. Per ora il pipeline si ferma al post-admission persistence.
 Pattern Conv. 41 (tracciatura sessione): logger structured con esiti per
 ogni chunk processed (verdict + cheap_total + reasoning).
 
-Pattern Karpathy "schema is the product": output strutturato counts per status,
+Pattern SCO "schema is the product": output strutturato counts per status,
 mai magic numbers nei log.
 """
 

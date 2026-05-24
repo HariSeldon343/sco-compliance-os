@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { cn } from "@/lib/cn";
 import { useVaultStore } from "@/store/vault-store";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 export function VaultScreen() {
   const vaults = useVaultStore((s) => s.vaults);
@@ -82,7 +83,7 @@ export function VaultScreen() {
               Vault
             </h1>
             <p className="mt-1 text-sm text-sco-muted-foreground">
-              Le tue cartelle Obsidian collegate. Filing rule Karpathy applicata.
+              Le tue cartelle SCO collegate. Struttura SCO applicata.
             </p>
           </div>
           <button
@@ -103,16 +104,14 @@ export function VaultScreen() {
         )}
 
         {vaults.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-sco-border py-16 text-center">
-            <Database size={48} className="mb-4 text-sco-muted-foreground" />
-            <h2 className="text-lg font-medium text-sco-navy dark:text-sco-text-dark">
-              Nessun vault registrato
-            </h2>
-            <p className="mt-2 max-w-md text-sm text-sco-muted-foreground">
-              Clicca su "Aggiungi vault" per scegliere una cartella Obsidian
-              esistente dal tuo disco. L'agente legge da qui per risponderti.
-            </p>
-          </div>
+          <EmptyState
+            icon={Database}
+            tone="neutral"
+            title="Nessun vault registrato"
+            description="Un vault è una cartella sul tuo disco dove l'agente trova i tuoi documenti SCO (CLAUDE.md, wiki/, raw/). Aggiungine uno per iniziare a far rispondere l'agente con i tuoi dati."
+            ctaLabel="Aggiungi vault"
+            ctaAction={handleAddVault}
+          />
         ) : (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_2fr]">
             <div className="space-y-2">
@@ -204,9 +203,9 @@ export function VaultScreen() {
                     </div>
                   </div>
                 </div>
-                {!activeVault.isKarpathy && (
+                {!activeVault.isScoStructure && (
                   <div className="mt-4 rounded-md border border-sco-amber/40 bg-sco-amber/10 px-3 py-2 text-xs text-sco-amber">
-                    Struttura Karpathy parziale o assente. L'agente avra meno
+                    Struttura SCO parziale o assente. L'agente avra meno
                     contesto strutturato.
                   </div>
                 )}

@@ -1,4 +1,4 @@
-"""Vault Karpathy — compliance ontology curata per ogni cliente del consulente.
+"""Vault SCO — compliance ontology curata per ogni cliente del consulente.
 
 Pattern: file markdown locali in vault_root/ con frontmatter YAML tipizzato
 (Ondate 2-3-4 del vault Antonio Amodeo) + relationships fra entity + edge
@@ -14,7 +14,7 @@ Componenti:
     - watcher: file watcher live (watchdog) per re-ingest delta on modify/delete
 
 Storage:
-    - vault_index.db (legacy): file markdown autoritativo + index per query Karpathy.
+    - vault_index.db (legacy): file markdown autoritativo + index per query SCO.
     - mem_tree_chunks (v0.6.0): chunk testo da TUTTI i 7 formati per memoria
       contestuale agente AI. Pipeline bucket-seal admission gate (Fase 3).
 

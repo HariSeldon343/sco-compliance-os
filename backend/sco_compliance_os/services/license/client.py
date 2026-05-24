@@ -26,7 +26,7 @@ Cache: result memorizzato in ~/.sco-compliance-os/license-cache.json con TTL 24h
 Se SaaS irraggiungibile + cache valida + < 24h → grace period, app continua.
 Se SaaS irraggiungibile + cache scaduta → mostra LicenseInvalidScreen.
 
-Pattern Karpathy "no hallucination": mai inventare validità. Se network down
+Pattern SCO "no hallucination": mai inventare validità. Se network down
 e cache scaduta, status = NETWORK_ERROR esplicito (frontend mostra retry button).
 """
 

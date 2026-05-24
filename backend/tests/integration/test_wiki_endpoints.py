@@ -32,7 +32,7 @@ async def test_wiki_stats_temp_vault(
     assert body["wiki_dir_exists"] is True
     assert body["total"] >= 2  # almeno sample-source + sample-entity
     assert "counts" in body
-    # Categorie wiki Karpathy
+    # Categorie wiki SCO
     counts = body["counts"]
     assert "sources" in counts
     assert "entities" in counts

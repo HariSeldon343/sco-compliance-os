@@ -1,6 +1,6 @@
-"""Glue layer Memory Tree + Vault Karpathy.
+"""Glue layer Memory Tree + Vault SCO.
 
-Funzione unified_search: priorità a vault Karpathy quando query è semanticamente
+Funzione unified_search: priorità a vault SCO quando query è semanticamente
 compliance ("ISO 27001", "NIS 2", "cliente sanità"), altrimenti Memory Tree.
 
 Pattern: heuristics regex-based per detection compliance-ness della query +
@@ -9,7 +9,7 @@ sentence-transformers locali per pattern detection LLM-light.
 
 Decisione strategica documentata in docs/adr/0004-memory-vault-hybrid.md:
 - Memory Tree per dati freschi auto-popolati (email, calendar, drive, uploads)
-- Vault Karpathy per ontology compliance curata cliente-per-cliente
+- Vault SCO per ontology compliance curata cliente-per-cliente
 - Glue rende la separazione semantica trasparente all'utente
 """
 
@@ -109,7 +109,7 @@ async def unified_search(
     memory_candidates: int = 200,
     top_k: int = 10,
 ) -> SearchResults:
-    """Ricerca unificata Memory Tree + Vault Karpathy.
+    """Ricerca unificata Memory Tree + Vault SCO.
 
     Args:
         query: stringa query utente.
@@ -127,7 +127,7 @@ async def unified_search(
     ambito = detect_ambito_hint(query)
     results = SearchResults(query=query, is_compliance_query=is_compliance)
 
-    # Layer 1: Vault Karpathy (priorità se compliance-flavored).
+    # Layer 1: Vault SCO (priorità se compliance-flavored).
     if vault_first and is_compliance:
         # Strategy 1a: ambito hit → catalog entity per dominio.
         if ambito:

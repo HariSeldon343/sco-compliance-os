@@ -1,6 +1,6 @@
 """Router /api/memory — memory tree + ingest + search.
 
-TODO Sessione successiva: cablare engine memory tree (Karpathy LLM Wiki pattern
+TODO Sessione successiva: cablare engine memory tree (SCO LLM Wiki pattern
 + filesystem markdown + JSON index). Per ora stub con response tipizzate.
 """
 
@@ -154,7 +154,7 @@ async def search_memory(
 ) -> MemorySearchResponse:
     """Similarity search top-K sul memory tree.
 
-    TODO: implementare retrieval. Karpathy pattern: niente vector DB, scan
+    TODO: implementare retrieval. SCO pattern: niente vector DB, scan
     filesystem markdown con keyword + ranking semplice fino a ~100 fonti.
     Per ora stub ritorna lista vuota.
     """
@@ -696,7 +696,7 @@ async def get_tree_summaries_relevant(
 ) -> list[TreeRelevantQuery]:
     """BM25-like retrieval top-K summaries pertinenti alla query (Fase 4 v0.6.0).
 
-    Pattern Karpathy "no vector DB fino a ~100 fonti": BM25 keyword search
+    Pattern SCO "no vector DB fino a ~100 fonti": BM25 keyword search
     su content_summary, stateless (recompute ad ogni query).
 
     Usato dal chat system prompt per RAG-like prepend dei top-3 summaries.

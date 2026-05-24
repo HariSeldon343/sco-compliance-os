@@ -1,4 +1,4 @@
-"""Parser/lister wiki vault Karpathy.
+"""Parser/lister wiki vault SCO.
 
 Layer sottile sopra sco_compliance_os.services.vault.parser:
 - list_wiki_files(): enumera categoria, ritorna metadata sintetica per UI lista
@@ -9,7 +9,7 @@ Layer sottile sopra sco_compliance_os.services.vault.parser:
 Conv. 47 enforcement: lo schema frontmatter NON è duplicato qui. Riusa
 VaultDocument come single source of truth (services/vault/parser.py).
 
-Conv. 35 enforcement: validazione contro vault reale Karpathy (le 5 cartelle
+Conv. 35 enforcement: validazione contro vault reale SCO (le 5 cartelle
 canoniche, slug from filename). Mai mockare lo schema.
 """
 
@@ -29,7 +29,7 @@ from sco_compliance_os.services.vault.parser import (
 
 logger = logging.getLogger(__name__)
 
-# Cartelle wiki Karpathy canoniche (5 categorie + 1 metaflag glossari).
+# Cartelle wiki SCO canoniche (5 categorie + 1 metaflag glossari).
 WIKI_CATEGORIES: frozenset[str] = frozenset(
     {"sources", "entities", "concepts", "synthesis", "glossari"}
 )

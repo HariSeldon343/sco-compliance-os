@@ -1,17 +1,17 @@
-# ADR 0004 — Architettura ibrida Memory Tree + Vault Karpathy
+# ADR 0004 — Architettura ibrida Memory Tree + Vault SCO
 
 - **Stato**: Accepted
 - **Data**: 2026-05-21
 - **Autori**: Agent MEMORY-VAULT (sotto orchestrazione main agent), pattern multi-agent Conv. 33+34
 - **Decisori**: Antonio Silvestro Amodeo (committente sco-compliance-os)
-- **Riferimenti**: vault Antonio `C:\Users\aoedo\Desktop\Second Brain\CLAUDE.md` sezione INGEST, Ondate 2-3-4 del modello tipizzato Karpathy
+- **Riferimenti**: vault Antonio `C:\Users\aoedo\Desktop\Second Brain\CLAUDE.md` sezione INGEST, Ondate 2-3-4 del modello tipizzato SCO
 
 ## Contesto
 
 `sco-compliance-os` nasce come app desktop AI assistant brandata SCO per il lavoro consulenziale di Antonio Amodeo (cybersecurity, qualità sanitaria, compliance normativa, ingegneria clinica) e dei suoi colleghi. Filosofia simile a OpenHuman ma scritta clean-room da zero. Deve supportare due workload molto diversi:
 
 1. **Ingest auto da connettori OAuth** (email Gmail, eventi calendar Google, file drive, ecc.) + **user uploads** ad-hoc di documenti che l'utente trascina nella chat. Volume previsto: migliaia di chunks/cliente, retention 12-24 mesi, query "rispondi a questa email", "che eventi avevo settimana scorsa", "cerca il PDF del bando ANAC dell'altra settimana".
-2. **Compliance ontology curata cliente-per-cliente**: ogni cliente ha un vault Karpathy con `_index.md` che dichiara `applica_entity[]`, `pertinenza_in_verifica[]`, `fornitore_di[]`; ogni entity wiki ha `entity_type`, `entity_subtype`, `ambito_canonico`, `relationships[]`. Volume per cliente: 50-300 markdown files. Query consulenziali: "chi sono i miei clienti soggetti NIS 2 essenziali?", "quali finding aperti ho su Don Calabria?", "TecnoSys è fornitore critico di chi?", "matrice cross-framework 27001/NIS2/20000-1".
+2. **Compliance ontology curata cliente-per-cliente**: ogni cliente ha un vault SCO con `_index.md` che dichiara `applica_entity[]`, `pertinenza_in_verifica[]`, `fornitore_di[]`; ogni entity wiki ha `entity_type`, `entity_subtype`, `ambito_canonico`, `relationships[]`. Volume per cliente: 50-300 markdown files. Query consulenziali: "chi sono i miei clienti soggetti NIS 2 essenziali?", "quali finding aperti ho su Don Calabria?", "TecnoSys è fornitore critico di chi?", "matrice cross-framework 27001/NIS2/20000-1".
 
 Le due workload hanno requisiti opposti:
 
@@ -31,7 +31,7 @@ Adottiamo un'architettura **ibrida a due layer separati con glue layer**:
 - Source types: `connector` | `user_upload` | `vault_ingest` | `manual`.
 - Provenance metadata completi (Conv. 43 SMART FILE INJECTION enforcement).
 
-### Layer 2 — Vault Karpathy (services/vault/)
+### Layer 2 — Vault SCO (services/vault/)
 
 - Filesystem markdown autoritativo (`vault_root/` cliente-per-cliente).
 - Frontmatter YAML tipizzato secondo le 8 dimensioni Ondate 2-3-4 del vault Antonio (fonte autoritativa: `C:\Users\aoedo\Desktop\Second Brain\CLAUDE.md` sezione INGEST):
@@ -68,26 +68,26 @@ Adottiamo un'architettura **ibrida a due layer separati con glue layer**:
 ### Negative
 
 - **Complessità +N**: due DB SQLite invece di uno, due schemi, due pipeline ingest. Costo mitigato dall'isolamento netto (zero foreign key cross-DB).
-- **Onere di scrittura Vault**: l'utente (o sistema) deve produrre `_index.md` cliente con frontmatter tipizzato corretto. La frizione è compensata dal valore consulenziale unico — un vault Karpathy popolato è asset compounding.
+- **Onere di scrittura Vault**: l'utente (o sistema) deve produrre `_index.md` cliente con frontmatter tipizzato corretto. La frizione è compensata dal valore consulenziale unico — un vault SCO popolato è asset compounding.
 - **Glue heuristics regex-based**: in wave 1 può sbagliare classificazione query borderline (es. "TecnoSys ha problemi cyber" è vault o memory?). Mitigato da fallback memory sempre attivo.
 
 ### Trade-off rifiutati
 
-- **RAG con vector DB unificato**: rifiutato perché perderebbe la struttura tipizzata Karpathy (relationships, vocabolari chiusi, edge cliente↔entity). Pattern LLM Wiki di Karpathy sostituisce RAG fino a ~100 fonti/cliente.
+- **RAG con vector DB unificato**: rifiutato perché perderebbe la struttura tipizzata SCO (relationships, vocabolari chiusi, edge cliente↔entity). Pattern LLM Wiki di SCO sostituisce RAG fino a ~100 fonti/cliente.
 - **Memory Tree-only**: rifiutato perché le query consulenziali cross-cliente ("chi sono i miei soggetti essenziali NIS 2?") richiedono graph traversal su edge tipizzati, non similarity search.
-- **Vault Karpathy-only**: rifiutato perché ingest auto da connettori OAuth produce volume incompatibile con la cura manuale richiesta dal vault. Le email non vengono "promosse a entity wiki" automaticamente.
+- **Vault SCO-only**: rifiutato perché ingest auto da connettori OAuth produce volume incompatibile con la cura manuale richiesta dal vault. Le email non vengono "promosse a entity wiki" automaticamente.
 
 ## Decisioni autonome documentate
 
 - **No embedding in wave 1**: BM25 + recency è sufficiente per query lessicali italiane di alta precisione (terminologia normativa esatta). Embedding rinviato wave 2 con scelta fra Voyage AI cloud vs sentence-transformers on-device.
 - **No SQLAlchemy**: uso diretto `aiosqlite` per zero overhead ORM e parità con pattern `sco-agent-local/conversations/store.py`.
 - **No watchdog wave 1**: `watch_vault()` solleva NotImplementedError esplicito. Sync manuale via `sync_vault()` a startup app e on-demand.
-- **Stub LLM summarizer**: `StubLLMClient` ritorna placeholder esplicito che NON simula intelligenza (pattern Karpathy "no hallucination"). Wave 2 integrare claude-haiku per cost-effective.
+- **Stub LLM summarizer**: `StubLLMClient` ritorna placeholder esplicito che NON simula intelligenza (pattern SCO "no hallucination"). Wave 2 integrare claude-haiku per cost-effective.
 
 ## Riferimenti
 
 - `services/memory/{chunker,scorer,store,summarizer,ingest}.py` — Memory Tree
-- `services/vault/{parser,scanner,query,sync}.py` — Vault Karpathy
+- `services/vault/{parser,scanner,query,sync}.py` — Vault SCO
 - `services/glue.py` — Unified search layer
 - `Second Brain/CLAUDE.md` sezione INGEST — vocabolari Ondate 2-3-4 (fonte autoritativa)
 - Conv. 33+34 multi-agent pattern, Conv. 35 RESEARCH-BEFORE-ACT, Conv. 43 SMART FILE INJECTION

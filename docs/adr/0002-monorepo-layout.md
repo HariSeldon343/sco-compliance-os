@@ -33,7 +33,7 @@ sco-compliance-os/
 │   │   ├── api/                    # Endpoint HTTP + SSE
 │   │   ├── agent/                  # Wiring Anthropic Agent SDK
 │   │   ├── mcp/                    # MCP client + server registry
-│   │   ├── vault/                  # I/O vault Karpathy
+│   │   ├── vault/                  # I/O vault SCO
 │   │   └── memory/                 # Memory tree
 │   ├── tests/                      # pytest
 │   ├── pyproject.toml

@@ -1,0 +1,96 @@
+name: Integration Tests
+
+# Standalone workflow Conv. 46 enforcement: smoke test E2E via 48 integration
+# test in backend/tests/integration/ (subagent DEV-AUTOTEST-E2E v0.7.0).
+#
+# Trigger:
+#   - pull_request: validation continua su PR aperte
+#   - workflow_dispatch: manuale per re-run on-demand
+#
+# Output:
+#   - JUnit XML (compat con GitHub Actions checks UI)
+#   - HTML report self-contained (artifact uploadato per traceability)
+#
+# Conv. 44 lesson 3 preserved: matrix 3 OS (Windows + macOS + Linux).
+# Conv. 45 lesson 1 preserved: ogni OS runa nativamente (no cross-compile).
+# Conv. 46 enforcement: badge README riflette stato gate release.
+
+on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - "backend/**"
+      - ".github/workflows/integration-test.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+jobs:
+  integration:
+    name: Integration (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+            os_label: linux
+          - platform: windows-latest
+            os_label: windows
+          - platform: macos-latest
+            os_label: macos
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Install backend deps (with dev extras)
+        working-directory: backend
+        run: uv sync --all-extras
+
+      - name: Run integration tests
+        working-directory: backend
+        env:
+          SCO_SEAL_SCHEDULER_ENABLED: "0"
+          SCO_AUTO_FETCH_ENABLED: "0"
+        run: |
+          uv run pytest tests/integration/ -v --tb=short \
+            --html=test-report-${{ matrix.os_label }}.html --self-contained-html \
+            --junitxml=junit-integration-${{ matrix.os_label }}.xml
+
+      - name: Upload HTML + JUnit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-report-${{ matrix.os_label }}-${{ github.run_id }}
+          path: |
+            backend/test-report-${{ matrix.os_label }}.html
+            backend/junit-integration-${{ matrix.os_label }}.xml
+          retention-days: 30
+
+      # Pubblica i risultati JUnit nell'UI di GitHub Checks per visibilità diretta
+      # senza dover scaricare l'artifact (utile in review PR rapide).
+      - name: Publish JUnit summary
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Integration ${{ matrix.os_label }}
+          path: backend/junit-integration-${{ matrix.os_label }}.xml
+          reporter: java-junit
+          fail-on-error: false

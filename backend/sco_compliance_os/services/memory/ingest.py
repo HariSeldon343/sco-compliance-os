@@ -13,7 +13,7 @@ provenance metadata completi nella tabella memory_chunks.score_metadata:
     - mime_type (heuristic + extension)
     - data_import_vault (UTC ISO)
 
-Pattern Karpathy "schema is the product, no hallucination": nessun parser
+Pattern SCO "schema is the product, no hallucination": nessun parser
 inventa contenuto. Se il file non è leggibile o vuoto, ritorna lista vuota
 e registra warning. Mai produrre chunk fantoccio.
 """

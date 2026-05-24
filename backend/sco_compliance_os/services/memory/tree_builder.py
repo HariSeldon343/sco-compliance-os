@@ -6,7 +6,7 @@ Pattern OpenHuman (clean-room reimplementation from docs):
     - Async via job queue (no sync LLM in hot path).
     - Compressione target 4:1 ogni livello.
 
-Pattern Karpathy:
+Pattern SCO:
     - Schema is the product: ogni Summary L1/L2 carries chunk_ids in JSON.
     - Single source of truth: il tree è ricostruito on-demand via query
       (no caching duplicato dello stato).

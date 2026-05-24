@@ -5,7 +5,7 @@ Pattern OpenHuman (clean-room reimplementation from docs):
     - L1 summary aggregati settimanali → L2 monthly (compressione cumulative ~16:1).
     - Promotion async via job queue (no LLM sync in hot path).
 
-Pattern Karpathy "shallow + lossy summarization":
+Pattern SCO "shallow + lossy summarization":
     L1 condensa preservando entità + topic, scarta dettagli stilistici.
     L2 condensa L1 settimanali a snapshot mensile, preservando timeline + temi.
 

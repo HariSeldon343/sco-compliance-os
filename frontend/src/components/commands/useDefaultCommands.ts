@@ -65,7 +65,7 @@ export function useDefaultCommands() {
         label: "Apri Vault",
         category: "navigation",
         icon: Database,
-        keywords: ["vault", "obsidian", "second brain"],
+        keywords: ["vault", "sco", "second brain"],
         hint: "G poi V",
         action: (close) => {
           navigate("/vault");

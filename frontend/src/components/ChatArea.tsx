@@ -83,8 +83,9 @@ export function ChatArea() {
             Cosa lavoriamo oggi?
           </h1>
           <p className="mt-3 max-w-xl text-sm leading-relaxed text-sco-muted-foreground md:text-base">
-            Sono il Personal AI di Antonio per compliance italiana. Audit,
-            procedure, gap analysis, risk assessment.
+            Scrivi una domanda nel campo qui sotto, oppure scegli un punto di
+            partenza dalle quattro card. Posso aiutarti con audit, procedure,
+            gap analysis e risk assessment.
           </p>
 
           {/* 4 card quick action — 2x2 grid */}

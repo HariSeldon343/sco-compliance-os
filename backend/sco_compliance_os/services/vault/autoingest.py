@@ -1,4 +1,4 @@
-"""Auto-ingestion vault Karpathy nel Memory Tree bucket-seal (v0.6.0).
+"""Auto-ingestion vault SCO nel Memory Tree bucket-seal (v0.6.0).
 
 Risolve il bug "agente non legge i file" mostrato esplicitamente da Antonio
 (screenshot chat v0.5.0 con messaggio "non ho accesso diretto ai file in
@@ -15,7 +15,7 @@ Pipeline:
     5. Ingest via ingest_chunks (admission gate Fase 3 con cheap signals).
     6. Persist in mem_tree_chunks (single source of truth Conv. 47).
 
-Pattern Karpathy "single source of truth": chunk vivono SOLO in mem_tree_chunks,
+Pattern SCO "single source of truth": chunk vivono SOLO in mem_tree_chunks,
 mai duplicati. Schema source_kind='vault_file' gia esistente, no migrazione.
 
 Pattern Conv. 41 (tracciatura sessione): SyncReport con counts dettagliati,
@@ -226,7 +226,7 @@ def walk_vault_files(vault_root: Path) -> AsyncIterator[Path]:
     """Generatore async di file supportati nel vault, skip cartelle escluse.
 
     Args:
-        vault_root: directory root del vault Karpathy.
+        vault_root: directory root del vault SCO.
 
     Yields:
         Path assoluti di file con estensione in SUPPORTED_EXTENSIONS.

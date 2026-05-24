@@ -47,7 +47,7 @@ async def sync_vault(
     """Sync completo vault → index SQLite.
 
     Args:
-        vault_root: directory root del vault Karpathy del cliente.
+        vault_root: directory root del vault SCO del cliente.
         db_path: override path index DB (default ~/.sco-compliance-os/vault_index.db).
         force: se True, forza reindex completo anche di doc non modificati.
                Wave 1: il flag è documentato ma non implementa diff incrementale

@@ -17,7 +17,7 @@ Architettura:
 
 Convenzioni:
 
-- Pattern Karpathy "single source of truth": i token vivono solo nel
+- Pattern SCO "single source of truth": i token vivono solo nel
   keyring OS, mai duplicati in DB o filesystem plaintext.
 - Pattern Conv. 35 RESEARCH-BEFORE-ACT: ogni connector cita le docs
   ufficiali OAuth del provider come reference nel modulo.

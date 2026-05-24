@@ -45,7 +45,7 @@ def _group_by_category(
     """Raggruppa preferenze per categoria preservando ordine input.
 
     L'ordine input riflette gia priority (pinned DESC, seen_count DESC) dal
-    profile_store, quindi NON ri-ordinare qui — pattern Karpathy single
+    profile_store, quindi NON ri-ordinare qui — pattern SCO single
     source of truth per ranking.
     """
     grouped: dict[ProfileCategory, list[Preference]] = {

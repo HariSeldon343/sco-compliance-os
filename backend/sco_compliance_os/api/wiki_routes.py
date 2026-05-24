@@ -1,4 +1,4 @@
-"""Router /api/wiki — lettura wiki Karpathy vault attivo.
+"""Router /api/wiki — lettura wiki SCO vault attivo.
 
 Endpoints:
     GET /api/wiki/stats
@@ -12,7 +12,7 @@ Endpoints:
 Risoluzione vault attivo:
     1. Se query param vault_path è esplicito, usa quello (validazione containment).
     2. Altrimenti, legge vault registry (services/vault path JSON) e seleziona:
-       - primo vault con is_karpathy=true se presente,
+       - primo vault con is_sco_structure=true se presente,
        - altrimenti primo vault registrato,
        - altrimenti 404 con detail "Nessun vault attivo".
 
@@ -110,7 +110,7 @@ def _resolve_active_vault(
 
     Pattern:
         1. Se vault_path_override esplicito, validalo (esiste + è dir) e usalo.
-        2. Altrimenti scan registry: primo karpathy, fallback primo registered.
+        2. Altrimenti scan registry: primo sco_structure, fallback primo registered.
         3. Nessun vault risolto -> HTTPException 404.
 
     Returns:
@@ -140,9 +140,9 @@ def _resolve_active_vault(
             ),
         )
 
-    # Preferenza karpathy.
-    karpathy = [e for e in entries if e.get("is_karpathy")]
-    chosen = karpathy[0] if karpathy else entries[0]
+    # Preferenza sco_structure.
+    sco_structured = [e for e in entries if e.get("is_sco_structure")]
+    chosen = sco_structured[0] if sco_structured else entries[0]
     raw_path = str(chosen.get("path", ""))
     if not raw_path:
         raise HTTPException(

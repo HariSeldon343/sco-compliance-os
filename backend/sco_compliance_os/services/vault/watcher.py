@@ -1,4 +1,4 @@
-"""File watcher per vault Karpathy con re-ingest live delle modifiche.
+"""File watcher per vault SCO con re-ingest live delle modifiche.
 
 v0.6.0 DEV-VAULT-AUTOINGEST: ogni vault registrato attiva un VaultWatcher
 in background che monitora il filesystem per create/modify/delete eventi
@@ -19,7 +19,7 @@ Pattern Conv. 44 lesson 1 (CircuitBreaker per file rotti):
 Pattern Conv. 41 (tracciatura):
     - Logger structured per ogni evento ricevuto + decisione (debounce/process/skip).
 
-Pattern Karpathy "single source of truth":
+Pattern SCO "single source of truth":
     - I chunks vivono in mem_tree_chunks, mai duplicati.
     - Watcher e' fire-and-forget: niente stato locale che possa drift dal DB.
 """

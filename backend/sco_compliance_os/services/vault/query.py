@@ -1,4 +1,4 @@
-"""Query layer cross-cliente sul vault Karpathy.
+"""Query layer cross-cliente sul vault SCO.
 
 Funzioni di interrogazione tipiche del lavoro consulenziale:
     - clients_applying_entity: chi applica una norma?
@@ -8,7 +8,7 @@ Funzioni di interrogazione tipiche del lavoro consulenziale:
     - entities_by_ambito: cataloga entity per dominio normativo
     - entities_with_relationships: graph traversal relationships
 
-Pattern Karpathy "single-source-of-truth": le query leggono SOLO dall'index
+Pattern SCO "single-source-of-truth": le query leggono SOLO dall'index
 SQLite popolato da scanner.py, mai dal filesystem direttamente, per coerenza
 performance + caching transparente.
 """

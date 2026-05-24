@@ -22,7 +22,7 @@ In alternativa si può registrare esplicitamente:
 
     ConnectorRegistry.register(GmailConnector)
 
-Pattern Karpathy "single source of truth": il registry è l'unica fonte
+Pattern SCO "single source of truth": il registry è l'unica fonte
 autorevole della lista connettori. La UI legge da qui via API, non da
 config files duplicati.
 """

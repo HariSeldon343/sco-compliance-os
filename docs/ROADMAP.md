@@ -13,14 +13,14 @@ Roadmap incrementale a 4 wave. Ogni wave si chiude con una release pubblica firm
 
 ## Wave 1 — MVP locale single-LLM (4-6 settimane)
 
-Obiettivo: avere in mano un'app desktop installabile su Windows che esegua una chat completa con vault Karpathy editabile, single-LLM Anthropic, senza connettori esterni.
+Obiettivo: avere in mano un'app desktop installabile su Windows che esegua una chat completa con vault SCO editabile, single-LLM Anthropic, senza connettori esterni.
 
 Deliverable:
 - Shell Tauri 2 funzionante con WebView2 Windows, navigation base.
 - Sidecar FastAPI con endpoint `/api/v1/chat/stream` SSE, conversation history SQLite.
 - Wiring Anthropic Agent SDK base (no tool use ancora).
 - VaultExplorer UI con editor markdown e preview live.
-- Bootstrap vault da template Karpathy (struttura `raw/`, `wiki/`, `CLAUDE.md` seed).
+- Bootstrap vault da template SCO (struttura `raw/`, `wiki/`, `CLAUDE.md` seed).
 - Build MSI Windows firmato, distribuzione manuale.
 - Smoke test E2E manuale: install MSI + onboarding + apertura vault + chat reale + persistenza conversation.
 
@@ -33,7 +33,7 @@ Exit criteria: tag `v0.1.0` pushed dopo smoke test PASS (Conv. 46 enforcement).
 Obiettivo: aggiungere conoscenza persistente strutturata (memory tree) e i primi 5-10 connettori OAuth verso servizi cloud essenziali al workflow Amodeo.
 
 Deliverable:
-- Memory Tree backend: nodi/edge in SQLite, sintesi gerarchica progressiva (algoritmo Karpathy-style, no vector DB).
+- Memory Tree backend: nodi/edge in SQLite, sintesi gerarchica progressiva (algoritmo SCO-style, no vector DB).
 - Memory Tree UI: force graph 2D/3D React, navigazione concetti.
 - MCP server registry nel sidecar, gestione lifecycle (start/stop/health).
 - 5-10 connettori OAuth target priorità Antonio:

@@ -154,6 +154,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     settings.ensure_data_dir()
 
+    # Bug 3 fix: registry di tracking per task fire-and-forget.
+    # Pattern FastAPI standard per evitare GC prematura di asyncio.create_task()
+    # non assegnato. Senza, l'event loop scarta il task prima del completamento
+    # e l'handler vault.registered NON viene mai eseguito (root cause Bug Antonio).
+    app.state.background_tasks = set()
+
     # Init main DB (conversations + messages)
     store = get_store(settings.memory_tree_db_path)
     await store.init_schema()

@@ -1,7 +1,7 @@
 """STT (Speech-to-Text) on-device via whisper.cpp.
 
 Privacy hard requirement: tutto locale, niente cloud (OpenAI Whisper API,
-Deepgram, AssemblyAI, ecc.). Pattern Karpathy single source of truth lato
+Deepgram, AssemblyAI, ecc.). Pattern SCO single source of truth lato
 device per audio.
 
 Architettura:

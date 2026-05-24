@@ -9,7 +9,7 @@ Tre componenti separati per disaccoppiare: il fast_score è sempre calcolato
 sync alla ingestion (no LLM call), il deep_score è async batch via job queue
 (costo controllato), la hotness vive nel ranking runtime per retrieval.
 
-Pattern Karpathy "single source of truth": ogni chunk ha al massimo una row
+Pattern SCO "single source of truth": ogni chunk ha al massimo una row
 Score (chunk_id UNIQUE), updated_at riflette ultimo refresh.
 """
 

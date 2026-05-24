@@ -15,7 +15,7 @@ Routing decisionale per tier:
 
 Pattern Conv. 47: tenant_config dal SaaS, cache memory 5 min TTL.
 Pattern Conv. 41 tracciatura: ogni routing decision loggato structured.
-Pattern Karpathy "no rocket science": dispatch table + health scoring.
+Pattern SCO "no rocket science": dispatch table + health scoring.
 """
 
 from __future__ import annotations

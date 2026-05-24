@@ -1,4 +1,4 @@
-"""Summarizer gerarchico — Memory Tree Karpathy hierarchical summary.
+"""Summarizer gerarchico — Memory Tree SCO hierarchical summary.
 
 Quando un gruppo di N chunks fratelli (stesso parent_chunk_id o stessa
 heading_path radice) supera il token budget complessivo, viene generato un
@@ -8,7 +8,7 @@ leaves accessibili in retrieval di precisione.
 Wave 1: stub LLM client (TODO async claude.haiku per cost-effective).
 Wave 2: integrazione completa con LLM provider + tracking cost.
 
-Pattern Karpathy: la summarization è "shallow + lossy" intenzionalmente.
+Pattern SCO: la summarization è "shallow + lossy" intenzionalmente.
 Lo scopo è un albero navigabile dove le query first-pass colpiscono summaries
 e solo on-demand espandono ai leaves di dettaglio.
 """

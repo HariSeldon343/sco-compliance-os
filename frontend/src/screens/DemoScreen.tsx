@@ -24,10 +24,10 @@ const SLIDES: Slide[] = [
   },
   {
     icon: <Database size={48} className="text-[#ffa727]" />,
-    title: "Il tuo vault Obsidian è la memoria dell'agente",
+    title: "Il tuo vault SCO è la memoria dell'agente",
     body:
-      "L'agente legge i tuoi file Markdown: indici cliente, procedure, audit, fonti normative. Più il vault è ricco, più le risposte sono precise per il tuo lavoro.",
-    hint: "Strutture supportate: Karpathy three-layer (raw + wiki + CLAUDE.md)",
+      "L'agente legge i tuoi documenti: indici cliente, procedure, audit, fonti normative. Più il vault è ricco, più le risposte sono precise per il tuo lavoro.",
+    hint: "Struttura SCO three-layer (raw + wiki + CLAUDE.md)",
   },
   {
     icon: <Shield size={48} className="text-[#302e5c]" />,

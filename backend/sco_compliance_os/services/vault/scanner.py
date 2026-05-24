@@ -1,4 +1,4 @@
-"""Scanner ricorsivo del vault Karpathy.
+"""Scanner ricorsivo del vault SCO.
 
 Pattern walk filesystem + skip cartelle dot-prefixed e archivi + index in
 SQLite separato ~/.sco-compliance-os/vault_index.db.
@@ -190,7 +190,7 @@ async def scan_vault(
         try:
             doc = parse_vault_file(md_file)
             if doc.type == "unknown" and not doc.entity_type:
-                # Skip file senza segnali Karpathy (es. README sparsi).
+                # Skip file senza segnali SCO (es. README sparsi).
                 continue
             await index_document(doc, db_path=db_path)
             indexed += 1

@@ -26,7 +26,7 @@ Error handling (invariato W1):
 - Errori applicativi (parsing, schema): log + chunk corrotto skippato in
   :func:`_dispatch_chunks`.
 
-Pattern Karpathy "single source of truth" applicato al checkpoint:
+Pattern SCO "single source of truth" applicato al checkpoint:
 ``last_fetch_at`` per-connector vive sul ``connector_state`` interno dello
 :class:`AutoFetchLoop` (in-memory, no DB). Pattern intenzionalmente diverso da
 W1 "checkpoints.json filesystem": il loop e' single-process e i checkpoint

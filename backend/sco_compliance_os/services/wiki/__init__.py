@@ -1,4 +1,4 @@
-"""Servizi wiki vault Karpathy.
+"""Servizi wiki vault SCO.
 
 Espone funzioni per listare e leggere file markdown in:
     <vault_root>/wiki/sources/

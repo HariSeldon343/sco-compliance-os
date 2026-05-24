@@ -6,7 +6,7 @@ con supporto opzionale a PKCE (RFC 7636) per provider che lo supportano
 (Google, GitHub). Ogni connector concreto deve sottoclassare ``BaseConnector``
 e implementare i metodi astratti.
 
-Pattern Karpathy "schema is the product": le dataclass tipizzate
+Pattern SCO "schema is the product": le dataclass tipizzate
 (`OAuthTokens`, `MemoryChunk`, `OAuthError`) sono il contratto stabile;
 le implementazioni concrete dei connettori sono interscambiabili.
 
@@ -55,7 +55,7 @@ class OAuthTokens:
 class MemoryChunk:
     """Chunk di dati prodotto da ``fetch_data()`` e destinato al Memory Tree.
 
-    Pattern Conv. 43 (Smart File Injection) + Karpathy three-layer: ogni
+    Pattern Conv. 43 (Smart File Injection) + SCO three-layer: ogni
     chunk diventa una scheda markdown in ``wiki/sources/`` con frontmatter
     standard B (provenance metadata) e link bidirezionale verso entità.
     """

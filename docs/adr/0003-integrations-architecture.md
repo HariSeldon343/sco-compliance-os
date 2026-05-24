@@ -26,7 +26,7 @@ Alternative valutate:
 - **Plugin esterni dinamici** (entry points setuptools): potenza eccessiva per Wave 1; aggiunge complessità di packaging.
 - **ABC + classi concrete** (scelta): contratto stabile garantito dal Python ABC, type hints completi, IDE autocomplete, mockable per test, registry semplice via decorator.
 
-Pattern Karpathy "schema is the product": le dataclass tipizzate (`OAuthTokens`, `MemoryChunk`, `OAuthError`) sono il contratto stabile; le implementazioni concrete dei connettori sono interscambiabili. Aggiungere un nuovo connettore = 1 file Python + 1 decorator `@connector`.
+Pattern SCO "schema is the product": le dataclass tipizzate (`OAuthTokens`, `MemoryChunk`, `OAuthError`) sono il contratto stabile; le implementazioni concrete dei connettori sono interscambiabili. Aggiungere un nuovo connettore = 1 file Python + 1 decorator `@connector`.
 
 ### 2. Perché token in OS keyring vs DB cifrato
 
@@ -65,7 +65,7 @@ Per Wave 1 lo scheduler è un loop `asyncio` semplice (`while self._running: ...
 ### Positive
 
 - **Single source of truth** lato token: il keyring OS è l'unica fonte autoritativa, niente duplicazione DB/file. Pattern Conv. 47/48 enforcement.
-- **Pattern Karpathy "no edit retroattivo"**: aggiungere nuovi connettori non modifica `BaseConnector`; le 5 dataclass sono stabili.
+- **Pattern SCO "no edit retroattivo"**: aggiungere nuovi connettori non modifica `BaseConnector`; le 5 dataclass sono stabili.
 - **Test isolabili**: `BaseConnector` mockabile via `unittest.mock`; ogni connector testabile in isolamento.
 - **Privacy by design**: zero dati utente lato server SCO. Compliance GDPR by architecture.
 - **Type safety**: type hints completi Python 3.12 + TypeScript types in `packages/integrations/types.ts`.

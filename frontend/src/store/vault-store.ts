@@ -10,7 +10,7 @@ export interface VaultEntry {
   id: string;
   name: string;
   path: string;
-  isKarpathy: boolean;
+  isScoStructure: boolean;
   mdFilesCount: number;
   hasClaudeMd: boolean;
   hasAgentsMd: boolean;
@@ -20,7 +20,7 @@ export interface VaultEntry {
 
 export interface VaultInspectResult {
   path: string;
-  isKarpathy: boolean;
+  isScoStructure: boolean;
   mdFilesCount: number;
   hasClaudeMd: boolean;
   hasAgentsMd: boolean;
@@ -47,7 +47,7 @@ interface BackendVaultEntry {
   id: string;
   name: string;
   path: string;
-  is_karpathy: boolean;
+  is_sco_structure: boolean;
   md_files_count: number;
   has_claude_md: boolean;
   has_agents_md: boolean;
@@ -57,7 +57,7 @@ interface BackendVaultEntry {
 
 interface BackendVaultInspect {
   path: string;
-  is_karpathy: boolean;
+  is_sco_structure: boolean;
   md_files_count: number;
   has_claude_md: boolean;
   has_agents_md: boolean;
@@ -70,7 +70,7 @@ function mapVaultEntry(data: BackendVaultEntry): VaultEntry {
     id: data.id,
     name: data.name,
     path: data.path,
-    isKarpathy: Boolean(data.is_karpathy),
+    isScoStructure: Boolean(data.is_sco_structure),
     mdFilesCount: data.md_files_count ?? 0,
     hasClaudeMd: Boolean(data.has_claude_md),
     hasAgentsMd: Boolean(data.has_agents_md),
@@ -82,7 +82,7 @@ function mapVaultEntry(data: BackendVaultEntry): VaultEntry {
 function mapInspect(data: BackendVaultInspect): VaultInspectResult {
   return {
     path: data.path,
-    isKarpathy: Boolean(data.is_karpathy),
+    isScoStructure: Boolean(data.is_sco_structure),
     mdFilesCount: data.md_files_count ?? 0,
     hasClaudeMd: Boolean(data.has_claude_md),
     hasAgentsMd: Boolean(data.has_agents_md),

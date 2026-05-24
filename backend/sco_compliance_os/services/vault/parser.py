@@ -1,4 +1,4 @@
-"""Parser markdown vault Karpathy con frontmatter YAML.
+"""Parser markdown vault SCO con frontmatter YAML.
 
 Estrae dimensioni tipizzate Ondate 2-3-4 (vault Antonio Amodeo, riferimento
 autoritativo: C:\\Users\\aoedo\\Desktop\\Second Brain\\CLAUDE.md sezione INGEST):
@@ -13,7 +13,7 @@ autoritativo: C:\\Users\\aoedo\\Desktop\\Second Brain\\CLAUDE.md sezione INGEST)
     Dimensione 7: pertinenza_in_verifica (qualifiche ambigue strutturate)
     Dimensione 8: fornitore_di (edge cliente↔cliente asimmetrico)
 
-Pattern Karpathy "no hallucination": il parser è strict sui vocabolari chiusi.
+Pattern SCO "no hallucination": il parser è strict sui vocabolari chiusi.
 Valori fuori vocabolario sollevano warning ma vengono preservati in raw_frontmatter
 (per non perdere dati durante migrazioni). Validazione separata in scanner.py.
 """
@@ -135,7 +135,7 @@ class Relationship:
 
 @dataclass(slots=True)
 class VaultDocument:
-    """Documento del vault Karpathy parsed.
+    """Documento del vault SCO parsed.
 
     Copre sia entity wiki (wiki/entities/*.md) sia _index cliente
     (Business/*/clienti/*/_index.md), sia sources, concepts, synthesis.
@@ -166,14 +166,14 @@ class VaultDocument:
 def _parse_yaml_safe(yaml_text: str) -> dict:
     """Parsing YAML tollerante con fallback a naive parser su YAMLError.
 
-    Strategia v0.4.0 (cantiere fix YAML invalido vault Karpathy):
+    Strategia v0.4.0 (cantiere fix YAML invalido vault SCO):
     1. Tenta yaml.safe_load standard.
     2. Su YAMLError (chiave seguita da `- elem` inline, indentazione mista, etc):
        normalizza il testo (sposta `key: - elem` su 2 righe) e riprova.
     3. Su nuovo fallimento, fallback a _naive_yaml_parse (estrae solo chiavi top-level
        come stringhe; perde array nested ma non blocca il vault).
 
-    Pattern Karpathy "vault intoccabile" (decisione Antonio 24/05/2026): il parser
+    Pattern SCO "vault intoccabile" (decisione Antonio 24/05/2026): il parser
     deve essere robusto a YAML imperfetto invece di richiedere fix manuali del vault.
     """
     try:
@@ -323,7 +323,7 @@ def _parse_fornitore_di(raw: object) -> list[FornitoreDi]:
 def parse_vault_file(path: Path) -> VaultDocument:
     """Parsa file markdown vault, ritorna VaultDocument tipizzato.
 
-    Pattern Karpathy "no hallucination": se il file non esiste o è vuoto,
+    Pattern SCO "no hallucination": se il file non esiste o è vuoto,
     ritorna VaultDocument minimo con status='deprecated' e log warning.
     """
     if not path.exists():

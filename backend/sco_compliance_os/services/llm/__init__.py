@@ -7,7 +7,7 @@ Modulo che astrae la scelta del provider LLM dietro un Protocol uniforme.
 - Gemini (Google Generative AI)
 - Ollama (local-only, http://localhost:11434)
 
-Pattern Karpathy "no rocket science": dataclass + protocol + dispatch table.
+Pattern SCO "no rocket science": dataclass + protocol + dispatch table.
 Nessun copy da OpenHuman/altri router GPL: design clean-room basato su idee
 architetturali astratte (provider abstraction, tiered routing, fallback).
 

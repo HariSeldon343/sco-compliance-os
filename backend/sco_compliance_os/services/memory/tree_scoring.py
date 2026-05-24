@@ -17,7 +17,7 @@ Razionale tre-soglia:
     - LLM call solo per il 5-15% borderline (cost-controlled).
     - Asimmetria conservativa: DEFINITE_KEEP > DEFINITE_DROP per evitare false drop.
 
-Pattern Karpathy "schema is the product":
+Pattern SCO "schema is the product":
     - cheap_signals() ritorna dict[str, float] strutturato, mai magic numbers.
     - Pesi aggregazione documentati in CHEAP_WEIGHTS.
     - LLM extractor REAL: Claude Haiku 4.5 via Anthropic SDK + license proxy SaaS.

@@ -155,7 +155,7 @@ async def chat_stream(
     # Memory Tree summaries RAG-like injection (v0.6.0 Fase 4 wire):
     # query top-3 summaries pertinenti al user message, prepend al system prompt.
     # Cap totale 4000 char per evitare overflow context window.
-    # Pattern Karpathy "no vector DB": BM25 lite stateless.
+    # Pattern SCO "no vector DB": BM25 lite stateless.
     # Best-effort: errori loggati ma NON bloccano lo stream chat.
     memory_context_markdown = ""
     try:

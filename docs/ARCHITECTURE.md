@@ -49,7 +49,7 @@ Vista architetturale 10000ft. Per le decisioni puntuali sullo stack e sul layout
         v                  v                v               v
 +----------------+ +---------------+ +-------------+ +-----------+
 | Anthropic API  | | MCP Servers   | | Vault       | | Memory    |
-| (cloud)        | | (OAuth conn.) | | Karpathy    | | Tree      |
+| (cloud)        | | (OAuth conn.) | | SCO         | | Tree      |
 | solo chiamate  | | Gmail, Slack, | | local FS    | | local FS  |
 | esplicite      | | Calendar, ... | | markdown    | | tokenized |
 +----------------+ +---------------+ +-------------+ +-----------+
@@ -63,7 +63,7 @@ Responsabilità: rendering interfaccia utente, gestione stato locale, comunicazi
 
 Componenti principali:
 - **ChatView**: chat con agente AI, streaming SSE token-by-token, markdown + code highlight, tool use widget cliccabili.
-- **VaultExplorer**: navigazione filesystem del vault Karpathy, editor markdown inline, preview live.
+- **VaultExplorer**: navigazione filesystem del vault SCO, editor markdown inline, preview live.
 - **MemoryTree**: visualizzazione force graph 2D/3D della knowledge base, navigazione per concetti e backlink.
 - **Connettori**: gestione OAuth verso servizi esterni (Gmail, Slack, ecc.) con flow di consenso utente.
 
@@ -141,7 +141,7 @@ Punto chiave: la persistenza di stato widget (es. `ask_user_question`) avviene i
 | Cosa | Dove | Formato |
 |---|---|---|
 | Conversation history | SQLite locale (sidecar) | DB file `~/.sco-compliance-os/conversations.db` |
-| Vault Karpathy | Filesystem utente | Markdown + YAML frontmatter + asset binari |
+| Vault SCO | Filesystem utente | Markdown + YAML frontmatter + asset binari |
 | Memory tree nodi/edge | SQLite locale (sidecar) | DB file `~/.sco-compliance-os/memory.db` |
 | OAuth token connettori | Keyring sistema operativo | Credential manager Win / Keychain Mac / libsecret Linux |
 | Configurazione utente | JSON file utente | `~/.sco-compliance-os/config.json` |

@@ -2,10 +2,11 @@
 // Pattern Conv. 47 + Conv. 48 enforcement: single source of truth backend, niente stub hardcoded.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Brain, ChevronRight, ChevronDown, FileText, RefreshCw, AlertCircle } from "lucide-react";
+import { Brain, ChevronRight, ChevronDown, FileText, RefreshCw } from "lucide-react";
 
 import { ApiError } from "@/api/client";
 import { cn } from "@/lib/cn";
+import { EmptyState, ErrorState } from "@/components/ui/EmptyState";
 
 interface MemoryNodeRemote {
   id: string;
@@ -112,27 +113,26 @@ export function MemoryScreen() {
         )}
 
         {state === "error" && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
-            <div className="flex items-start gap-3">
-              <AlertCircle size={18} className="mt-0.5 shrink-0" />
-              <div className="flex-1">
-                <p className="font-medium">Memory Tree non raggiungibile</p>
-                <p className="mt-1 text-xs text-red-700 dark:text-red-300">
-                  {error}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => void load()}
-                  className="mt-3 rounded-md bg-red-100 px-3 py-1.5 text-xs font-medium text-red-900 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-100 dark:hover:bg-red-900/60"
-                >
-                  Riprova
-                </button>
-              </div>
-            </div>
-          </div>
+          <ErrorState
+            icon={Brain}
+            title="Non riesco a leggere il Memory Tree"
+            message={`Il backend non risponde o ha restituito un errore. Dettaglio tecnico: ${error ?? "errore sconosciuto"}`}
+            onRetry={() => void load()}
+          />
         )}
 
-        {isEmpty && <EmptyMemoryState />}
+        {isEmpty && (
+          <EmptyState
+            icon={Brain}
+            tone="neutral"
+            title="Memory Tree ancora vuoto"
+            description="Qui vedrai i nodi gerarchici che l'agente costruisce mentre lavorate insieme. Avvia una chat dalla sidebar oppure collega un connettore per popolare la memoria."
+            ctaLabel="Apri una nuova chat"
+            ctaHref="/"
+            secondaryCtaLabel="Vai a Connettori"
+            secondaryCtaHref="/integrations"
+          />
+        )}
 
         {state === "ok" && tree && tree.total_count > 0 && (
           <div className="rounded-lg border border-sco-border bg-sco-surface-elevated p-4">
@@ -153,27 +153,6 @@ export function MemoryScreen() {
           </p>
         )}
       </div>
-    </div>
-  );
-}
-
-function EmptyMemoryState() {
-  return (
-    <div className="rounded-lg border border-sco-border bg-sco-surface-elevated p-12 text-center">
-      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-sco-navy/10 text-sco-navy">
-        <Brain size={26} />
-      </div>
-      <h2 className="text-lg font-semibold text-sco-navy dark:text-sco-text-dark">
-        Memory Tree ancora vuoto
-      </h2>
-      <p className="mx-auto mt-2 max-w-md text-sm text-sco-muted-foreground">
-        Il tuo Memory Tree si popolerà man mano che lavori con l'agente. Ogni
-        conversazione genera nodi gerarchici che l'agente userà per ricordare
-        contesto.
-      </p>
-      <p className="mx-auto mt-3 max-w-md text-sm text-sco-muted-foreground">
-        Avvia una nuova chat dalla sidebar per cominciare.
-      </p>
     </div>
   );
 }

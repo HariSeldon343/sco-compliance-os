@@ -1,8 +1,14 @@
 # SCO Compliance OS
 
-> "Compliance OS for AI" — la postazione di lavoro AI di SCO Solution Consulting srls.
+[![Integration Tests](https://github.com/HariSeldon342/sco-compliance-os/actions/workflows/integration-test.yml/badge.svg)](https://github.com/HariSeldon342/sco-compliance-os/actions/workflows/integration-test.yml)
+[![CI](https://github.com/HariSeldon342/sco-compliance-os/actions/workflows/ci.yml/badge.svg)](https://github.com/HariSeldon342/sco-compliance-os/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/badge/version-1.0.0-302e5c)](docs/RELEASE_NOTES_v1.0.0.md)
+[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-0074b4)](docs/RELEASE_NOTES_v1.0.0.md#come-installare)
+[![License](https://img.shields.io/badge/license-Proprietary-ffa727)](LICENSE)
 
-Applicazione desktop locale-first per il lavoro consulenziale di Antonio Amodeo. Agente AI con vault Karpathy editabile, memory tree gerarchica, connettori OAuth verso servizi cloud, multi-LLM router. Tutto on-device per default, niente upload silenziosi al cloud.
+**Privato. Tuo. Italiano.**
+
+Sistema operativo AI desktop per il consulente normativo italiano. SCO Solution Consulting srls.
 
 Brand: SCO Solution Consulting srls. Palette navy `#302e5c` + blue `#0074b4` + amber `#ffa727`. Tipografia Inter (UI) + Source Code Pro (mono).
 
@@ -10,25 +16,44 @@ Brand: SCO Solution Consulting srls. Palette navy `#302e5c` + blue `#0074b4` + a
 
 ## Cos'è
 
-SCO Compliance OS è un sistema operativo AI desktop per consulenti normativi. Tre piani di lavoro:
+SCO Compliance OS è una postazione di lavoro AI privata per consulenti di compliance. Tre piani di lavoro integrati.
 
-1. **Chat con agente**, multi-LLM (reasoning/fast/vision), tool use end-to-end, voice STT/TTS opzionale, mascot opzionale.
-2. **Vault Karpathy**, repository markdown locale (filesystem nativo) editabile a mano e dall'agente. Wiki di compliance, raw, sources, entities, concepts, synthesis, glossari.
-3. **Memory Tree**, knowledge base gerarchica tokenizzata, sintesi progressiva, ricerca semantica locale senza vector DB esterno.
+1. **Chat con agente AI** multi-LLM (Anthropic, OpenAI, Gemini, Ollama), con voce on-device opzionale (Whisper.cpp STT, Piper TTS) e mascotte SVG opzionale.
+2. **Vault editabile** in markdown, repository locale leggibile, versionabile git, sincronizzabile fra PC. Wiki di compliance a cinque categorie (raw, sources, entities, concepts, synthesis, glossari).
+3. **Memory Tree gerarchica** con sintesi progressiva a quattro fasi (L0 raw, L1 compressed, L2 synthesis, L3 canonical) tramite Claude Haiku. Nessun vector database esterno.
 
-Connettività verso il cloud solo su richiesta, via 100+ connettori OAuth plug-in (Gmail, Calendar, Slack, GitHub, Notion, Drive, ecc.). Default privacy: niente telemetria, niente egress automatico.
+Oltre 100 connettori OAuth disponibili via protocollo MCP (Gmail, Calendar, Drive, Slack, GitHub, Notion e altri). Connettività cloud sempre opt-in. Default privacy: niente telemetria, niente egress automatico, niente upload silenziosi.
+
+## Quick install
+
+Scaricare l'artefatto firmato Ed25519 dalla pagina release ufficiale.
+
+| OS | File |
+|---|---|
+| Windows 10 64-bit o superiore | `sco-compliance-os_1.0.0_x64_en-US.msi` |
+| macOS 11 o superiore | `sco-compliance-os_1.0.0_universal.dmg` (Intel + Apple Silicon) |
+| Linux x86_64 | `sco-compliance-os_1.0.0_amd64.AppImage` |
+
+Al primo avvio il sistema chiede licenza tenant (richiedibile a `commerciale@scosolution.it`) e profila l'utente tramite la skill `os-setup`. Aggiornamenti automatici verificati Ed25519 attivi per default.
+
+## Documentazione release
+
+- **`docs/RELEASE_NOTES_v1.0.0.md`** — Note di rilascio narrative della General Availability del 24/05/2026.
+- **`docs/CHANGELOG.md`** — Storico tecnico delle release v0.4.0 → v1.0.0.
+- **`docs/ARCHITECTURE.md`** — Vista architetturale a 10000ft.
+- **`docs/ROADMAP.md`** — Wave di sviluppo e piano release successive.
 
 ## Perché esiste
 
-Il lavoro consulenziale di Antonio Amodeo produce decine di deliverable a settimana (procedure SGSI, RVE audit, perizie CTU, gap analysis, atti di gara, contenuti LinkedIn). I tool generalisti (ChatGPT web, Claude.ai web, IDE plugin) sono nati per altri use case e impongono compromessi sul controllo dei dati e sulla persistenza della conoscenza maturata sessione dopo sessione.
+Il lavoro consulenziale di compliance produce decine di deliverable a settimana (procedure SGSI, RVE audit, perizie CTU, gap analysis, atti di gara, contenuti editoriali). I tool generalisti (assistenti web, plugin IDE) sono nati per altri use case e impongono compromessi sul controllo dei dati e sulla persistenza della conoscenza maturata sessione dopo sessione.
 
 SCO Compliance OS nasce per:
 
 - Conservare in locale il "secondo cervello" del consulente, in formato markdown leggibile, versionato git, sincronizzabile fra PC.
-- Standardizzare il workflow Amodeo (regole permanenti, convenzioni operative, skill di dominio) come asset compounding.
-- Disaccoppiare il valore consulenziale dall'AI provider del momento, grazie al routing multi-LLM e al protocollo MCP per i connettori esterni.
+- Standardizzare il workflow del consulente (regole permanenti, convenzioni operative, skill di dominio) come asset compounding.
+- Disaccoppiare il valore consulenziale dal fornitore AI del momento, grazie al routing multi-LLM e al protocollo MCP per i connettori esterni.
 
-## Stack
+## Stack tecnologico
 
 | Layer | Tecnologia | Versione | Note |
 |---|---|---|---|
@@ -38,21 +63,21 @@ SCO Compliance OS nasce per:
 | Linguaggio UI | TypeScript | 5.8.x | Strict mode |
 | Bundler UI | Vite | 6.x | Dev server HMR |
 | Styling | Tailwind CSS | 4.x | Plugin `@tailwindcss/vite` |
-| Backend agente | Python | 3.11+ | FastAPI sidecar PyInstaller-bundled |
+| Backend agente | Python | 3.12 | FastAPI sidecar PyInstaller-bundled |
 | Framework HTTP | FastAPI | 0.115+ | Endpoint chat + SSE streaming |
-| SDK AI | Anthropic Agent SDK | latest | Reasoning, tool use, computer use |
-| Connettori | MCP (Model Context Protocol) | spec 2024-11 | OAuth-backed via MCP servers |
+| SDK AI primario | Anthropic Claude Sonnet 4.6 | latest | Reasoning, tool use, vision |
+| Multi-LLM router | Anthropic + OpenAI + Gemini + Ollama | n/a | Profili reasoning / fast / vision |
+| Voce on-device | Whisper.cpp (STT) + Piper (TTS) | latest | Modelli italiani inclusi |
+| Connettori | Model Context Protocol (MCP) | spec 2024-11 | OAuth-backed via MCP servers |
 | Package manager | pnpm | 10.x | Workspace monorepo |
 | Build cross-OS | GitHub Actions matrix | n/a | Windows + macOS + Linux runners |
 
-Ipotesi tecnica da validare: il routing multi-LLM richiederà un layer adapter unificato. Soluzioni candidate `LiteLLM` (Python) oppure adapter custom. Decisione rimandata a Wave 3 (vedi `docs/ROADMAP.md`).
+## Quick start sviluppo
 
-## Quick start dev
-
-Requisiti host: Node.js 22.x LTS, pnpm 10.x, Rust toolchain stabile, Python 3.11+, uv (Python package manager). Su Windows serve anche Visual Studio Build Tools (per la compilazione Rust).
+Requisiti host: Node.js 22 LTS, pnpm 10, Rust toolchain stabile, Python 3.12, uv (Python package manager). Su Windows servono anche i Visual Studio Build Tools (per la compilazione Rust).
 
 ```powershell
-# Clone (path canonico Antonio)
+# Clone (path canonico)
 cd C:\Users\aoedo\Progetti\sco-compliance-os
 
 # Install dipendenze monorepo
@@ -69,13 +94,13 @@ pnpm dev
 powershell -ExecutionPolicy Bypass -File scripts/dev.ps1
 ```
 
-Build produzione locale (MSI Windows):
+Build produzione locale:
 
 ```powershell
 pnpm build
 ```
 
-Per il flusso CI matrix cross-OS vedere `.github/workflows/` (carry-over Wave 1, riferimento `sco-agent-local` Conv. 45).
+Per il flusso CI matrix cross-OS vedere `.github/workflows/`. Gli artefatti sono firmati Ed25519, l'aggiornamento automatico via Tauri Updater verifica la firma prima dell'installazione del delta.
 
 ## Architettura monorepo
 
@@ -87,38 +112,27 @@ sco-compliance-os/
 ├── backend/                  # FastAPI sidecar Python
 │   └── sco_compliance_os/    # Logica agente, MCP wiring, vault I/O
 ├── packages/
-│   ├── agent-skills/         # Skill di dominio markdown (versionabili)
+│   ├── agent-skills/         # Skill di dominio markdown versionabili
 │   └── integrations/         # Adattatori MCP per connettori OAuth
 ├── scripts/                  # PowerShell + bash helper di build/dev
-├── docs/                     # ADR, architettura, roadmap
+├── docs/                     # ADR, architettura, roadmap, release notes
 └── .github/workflows/        # CI matrix Windows + macOS + Linux
 ```
 
-Dettaglio razionale in `docs/adr/0002-monorepo-layout.md`.
-
-Vista architetturale completa con diagramma layer in `docs/ARCHITECTURE.md`.
-
-## Roadmap
-
-Lavorazione in 4 wave incrementali (totale ~5-7 mesi calendario, calibrato sul ritmo sostenibile per consulente full-time).
-
-| Wave | Obiettivo | Durata stimata |
-|---|---|---|
-| 1 | MVP locale single-LLM Anthropic + vault + chat | 4-6 settimane |
-| 2 | Memory Tree + 5-10 connettori OAuth core | 4-6 settimane |
-| 3 | Multi-LLM router + voice STT/TTS + plugin system | 4-6 settimane |
-| 4 | 100+ integrazioni + mascot opzionale + auto-update | 8-12 settimane |
-
-Dettaglio in `docs/ROADMAP.md`.
+Razionale dettagliato in `docs/adr/0002-monorepo-layout.md`. Vista architetturale completa con diagramma layer in `docs/ARCHITECTURE.md`.
 
 ## Licenza
 
-Software proprietario chiuso, copyright SCO Solution Consulting srls. Vedere `LICENSE` per i termini completi. Nessuna parte di questo software è rilasciata sotto licenza open source. Riproduzione, modifica e distribuzione non autorizzate sono vietate.
+Software proprietario chiuso, copyright SCO Solution Consulting srls. Vedere `LICENSE` per i termini completi. Nessuna parte di questo software è rilasciata sotto licenza open source. Riproduzione, modifica, distribuzione, sublicenza e rivendita non autorizzate sono vietate.
+
+Per richiesta licenza commerciale (Starter, Professional, Enterprise) scrivere a `commerciale@scosolution.it`.
 
 ## Riferimenti interni
 
+- `docs/RELEASE_NOTES_v1.0.0.md` — Release notes General Availability v1.0.0
+- `docs/CHANGELOG.md` — Storico release tecnico v0.4.0 → v1.0.0
+- `docs/ARCHITECTURE.md` — Vista architetturale a 10000ft
+- `docs/ROADMAP.md` — Roadmap a 4 wave
 - `docs/adr/0001-stack-choice.md` — Architecture Decision Record sullo stack
 - `docs/adr/0002-monorepo-layout.md` — ADR sul layout del monorepo
-- `docs/ARCHITECTURE.md` — Vista architetturale 10000ft
-- `docs/ROADMAP.md` — Roadmap di sviluppo a 4 wave
 - `scripts/dev.ps1` — Avvio sviluppo parallelo Windows

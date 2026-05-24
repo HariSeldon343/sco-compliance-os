@@ -14,7 +14,7 @@ BM25 query-time ranking, scopo diverso). Il main agent ha facoltà di decidere
 se unificare i due file in un solo modulo `scoring/` con sotto-moduli o
 lasciare la dual-file separation per chiarezza semantica.
 
-Pattern Karpathy "single source of truth": entity extraction è inline nel
+Pattern SCO "single source of truth": entity extraction è inline nel
 deep_score (no doppio LLM call), output entity_list popola entity_index.
 """
 

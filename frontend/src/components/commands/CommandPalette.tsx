@@ -6,7 +6,7 @@
 // - Design tokens v0.5.0 (token CSS scoped --cmd-*) per coerenza con brand SCO
 // - Hotkey Ctrl+K (Win/Linux) + Cmd+K (Mac) gestita da listener globale
 //
-// Pattern Karpathy single-source-of-truth: i comandi vivono in useCommandRegistry
+// Pattern SCO single-source-of-truth: i comandi vivono in useCommandRegistry
 // (Zustand store globale), questo componente li renderizza in tempo reale.
 // Niente copy code OpenHuman GPL. Architettura derivata dalla doc cmdk + Radix.
 

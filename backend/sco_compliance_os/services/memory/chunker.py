@@ -10,7 +10,7 @@ Tokenizer: usa `tiktoken` (compatibile con anthropic claude token count
 approssimativamente, alternativa locale veloce). Se non disponibile, fallback
 a stima euristica (4 chars/token, registrazione warning).
 
-Pattern Karpathy: schema is the product. Il chunk è l'unità atomica del
+Pattern SCO: schema is the product. Il chunk è l'unità atomica del
 Memory Tree, ogni chunk porta con sé provenance + heading_path per ricomposizione.
 """
 

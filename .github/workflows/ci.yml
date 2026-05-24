@@ -82,9 +82,13 @@ jobs:
         run: pnpm run test -- --run
 
   test-backend:
-    name: Test backend (pytest)
-    runs-on: ubuntu-22.04
+    name: Test backend (pytest ${{ matrix.platform }})
     needs: lint-backend
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ubuntu-22.04, windows-latest, macos-latest]
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -97,9 +101,32 @@ jobs:
       - name: Install backend deps
         working-directory: backend
         run: uv sync --all-extras
-      - name: Pytest
+      # Test suite unit (rapida) — esegue tutto fuori da tests/integration/.
+      # NB: pytest "not integration" filter via path: tests/ esclude integration via --ignore.
+      - name: Pytest unit
         working-directory: backend
-        run: uv run pytest -q
+        run: uv run pytest -q --ignore=tests/integration
+      # Conv. 46 enforcement: integration test E2E su 3 OS per PR validation,
+      # con HTML report uploadato come artifact per traceability.
+      # Conv. 44 lesson 3 preserved: matrix copre Windows + macOS + Linux.
+      - name: Pytest integration (Conv. 46 gate)
+        working-directory: backend
+        env:
+          SCO_SEAL_SCHEDULER_ENABLED: "0"
+          SCO_AUTO_FETCH_ENABLED: "0"
+        run: |
+          uv run pytest tests/integration/ -v --tb=short \
+            --html=test-report-${{ matrix.platform }}.html --self-contained-html \
+            --junitxml=junit-integration-${{ matrix.platform }}.xml
+      - name: Upload integration test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-report-${{ matrix.platform }}-${{ github.sha }}
+          path: |
+            backend/test-report-${{ matrix.platform }}.html
+            backend/junit-integration-${{ matrix.platform }}.xml
+          retention-days: 14
 
   build-rust:
     name: Build Rust (${{ matrix.platform }})

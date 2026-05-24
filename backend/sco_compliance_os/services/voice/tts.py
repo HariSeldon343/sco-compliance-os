@@ -1,7 +1,7 @@
 """TTS (Text-to-Speech) on-device via Piper.
 
 Privacy hard requirement: tutto locale, niente cloud (ElevenLabs, OpenAI
-TTS, Google Cloud TTS, ecc.). Pattern Karpathy single source of truth
+TTS, Google Cloud TTS, ecc.). Pattern SCO single source of truth
 lato device per audio sintetizzato.
 
 Architettura:

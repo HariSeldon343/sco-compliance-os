@@ -11,12 +11,12 @@ reimplementation ispirata a OpenHuman MEMORY_ARCHITECTURE_LLD, NO code copy):
 Questo modulo implementa Fase 1 + 2 (canonicalize + chunker).
 Fase 3 in `tree_scoring.py`. Fase 4 sealing/summarization carry-over Sessione 7+.
 
-Pattern Karpathy "schema is the product":
+Pattern SCO "schema is the product":
     - Stable IDs deterministici: hash(content + source_kind + source_id + seq)
     - Idempotent re-ingest: stesso input -> stessi IDs -> upsert no-op
     - No hallucination: chunk vuoto -> lista vuota, mai chunk fantoccio
 
-Pattern Karpathy "single source of truth":
+Pattern SCO "single source of truth":
     - Token count vive nel Chunk, mai cached altrove
     - Status enum vive nel DB, mai cached in memory
 
@@ -50,7 +50,7 @@ class TreeChunkSourceKind(str, Enum):
     """Vocabolario chiuso source_kind del Memory Tree bucket-seal.
 
     Valori mutualmente esclusivi. Aggiunte richiedono OK utente esplicito
-    (Conv. di stabilita vocabolario tipizzato Ondata 2 vault Karpathy).
+    (Conv. di stabilita vocabolario tipizzato Ondata 2 vault SCO).
     """
 
     CHAT = "chat"

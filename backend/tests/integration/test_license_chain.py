@@ -85,7 +85,7 @@ async def test_license_status_post_activate_cached(
 ) -> None:
     """Activate poi /status → cache hit → no second SaaS call.
 
-    Conv. 47 + Karpathy single source of truth:
+    Conv. 47 + SCO single source of truth:
     il cliente NON spamma il SaaS se la cache è fresca (<24h).
     """
     httpx_mock.add_response(

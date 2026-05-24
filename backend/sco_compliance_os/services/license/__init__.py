@@ -19,7 +19,7 @@ Componenti:
 - middleware.py: dependency injection FastAPI per validare ogni request.
 - models.py: dataclass LicenseStatus + LicenseValidationResult.
 
-Pattern Karpathy single source of truth: lo stato license vive sul SaaS,
+Pattern SCO single source of truth: lo stato license vive sul SaaS,
 mai duplicato in più posti locali (cache TTL bassa per safety).
 """
 

@@ -7,7 +7,7 @@ Livelli:
     L1 = summary per source/topic/day (compressione 4:1 target)
     L2 = aggregated weekly/monthly (compressione 16:1 cumulative)
 
-Pattern Karpathy single-source-of-truth: ogni Summary L1/L2 conosce i chunk_ids
+Pattern SCO single-source-of-truth: ogni Summary L1/L2 conosce i chunk_ids
 o summary_ids figli via colonna JSON. La direzione opposta è ricostruita via
 query sul campo `parent_id` (no duplicazione del dato).
 """

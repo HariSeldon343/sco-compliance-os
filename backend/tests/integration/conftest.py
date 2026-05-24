@@ -74,11 +74,11 @@ def temp_data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 @pytest.fixture
 def temp_vault(tmp_path: Path) -> Path:
-    """Crea un vault Karpathy minimo per test (CLAUDE.md + wiki/ + raw/ + Contesto/).
+    """Crea un vault SCO minimo per test (CLAUDE.md + wiki/ + raw/ + Contesto/).
 
     Struttura:
         vault/
-            CLAUDE.md              (marker Karpathy)
+            CLAUDE.md              (marker SCO)
             wiki/
                 _index.md
                 sources/
@@ -98,9 +98,9 @@ def temp_vault(tmp_path: Path) -> Path:
     vault = tmp_path / "test-vault"
     vault.mkdir()
 
-    # CLAUDE.md (marker Karpathy)
+    # CLAUDE.md (marker SCO)
     (vault / "CLAUDE.md").write_text(
-        "# Test Vault Karpathy\n\nVault di test per integration tests v0.7.0.\n",
+        "# Test Vault SCO\n\nVault di test per integration tests v0.7.0.\n",
         encoding="utf-8",
     )
 

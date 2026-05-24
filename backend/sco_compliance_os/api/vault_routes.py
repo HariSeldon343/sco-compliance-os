@@ -1,15 +1,20 @@
-"""Router /api/vault — registrazione + ispezione + auto-sync vault Karpathy.
+"""Router /api/vault — registrazione + ispezione + auto-sync vault SCO.
 
 v0.6.0 DEV-VAULT-AUTOINGEST: estensione con endpoint sync + sync-status +
 auto-ingest fire-and-forget al register + integrazione VaultWatcher.
 
+v1.0.0 DEV-OPTIMIZER-AUTO: estensione con endpoint complete-structure per
+scaffolding incrementale di vault esistenti con struttura SCO INCOMPLETA.
+
 Endpoints:
-    GET    /api/vault/list                   -> lista vault registrati
-    POST   /api/vault/add                    -> aggiungi vault (fire-and-forget sync + watcher)
-    POST   /api/vault/inspect                -> ispeziona path senza registrare
-    DELETE /api/vault/{id}                   -> rimuovi vault dal registry + stop watcher
-    POST   /api/vault/{id}/sync              -> trigger re-sync sincrono (timeout 5min)
-    GET    /api/vault/{id}/sync-status       -> stato sync corrente + counts DB
+    GET    /api/vault/list                          -> lista vault registrati
+    POST   /api/vault/add                           -> aggiungi vault (fire-and-forget sync + watcher)
+    POST   /api/vault/inspect                       -> ispeziona path senza registrare
+    POST   /api/vault/scaffold                      -> scaffold completo da template (fresh vault)
+    DELETE /api/vault/{id}                          -> rimuovi vault dal registry + stop watcher
+    POST   /api/vault/{id}/sync                     -> trigger re-sync sincrono (timeout 5min)
+    GET    /api/vault/{id}/sync-status              -> stato sync corrente + counts DB
+    POST   /api/vault/{id}/complete-structure       -> crea cartelle/file SCO mancanti (incrementale, no overwrite)
 """
 
 from __future__ import annotations
@@ -20,7 +25,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from sco_compliance_os.config import Settings, get_settings
@@ -34,6 +39,13 @@ from sco_compliance_os.services.vault.autoingest import (
     get_sync_status,
     ingest_single_file,
     sync_vault,
+)
+from sco_compliance_os.services.vault.scaffolder import (
+    VALID_TEMPLATES,
+    TemplateKind,
+    complete_missing_structure,
+    inspect_missing_components,
+    scaffold_vault,
 )
 from sco_compliance_os.services.vault.watcher import (
     FileEvent,
@@ -58,7 +70,7 @@ class VaultEntry(BaseModel):
     id: str
     name: str
     path: str
-    is_karpathy: bool = False
+    is_sco_structure: bool = False
     md_files_count: int = 0
     has_claude_md: bool = False
     has_agents_md: bool = False
@@ -85,6 +97,51 @@ class VaultSyncRequest(BaseModel):
     force: bool = Field(
         default=False,
         description="Se True, bypassa dedup check e re-ingest tutto.",
+    )
+
+
+class VaultScaffoldRequest(BaseModel):
+    """Richiesta scaffold vault SCO (creazione + popolamento iniziale)."""
+
+    path: str = Field(
+        ...,
+        description=(
+            "Path assoluto della directory dove creare il vault. Se la directory "
+            "non esiste viene creata. Se contiene gia un CLAUDE.md lo scaffold "
+            "viene saltato (idempotenza)."
+        ),
+    )
+    template: str = Field(
+        default="vuoto",
+        description=(
+            "Template di partenza. Valori ammessi: vuoto, cyber, sanita, "
+            "qualita, integrato."
+        ),
+    )
+    vault_name: str = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="Nome leggibile del vault (usato in CLAUDE.md + README).",
+    )
+
+
+class VaultCompleteStructureRequest(BaseModel):
+    """Richiesta completamento incrementale struttura SCO (vault esistente).
+
+    DEV-OPTIMIZER-AUTO v1.0.0: usato dalla skill ``os-ottimizzatore`` (proposto
+    in chat) o invocato direttamente dal frontend (button "Completa cartelle
+    mancanti") per scaffolding incrementale di vault registrati con struttura
+    SCO INCOMPLETA.
+    """
+
+    include_opt_in: bool = Field(
+        default=False,
+        description=(
+            "Se True, crea anche cartelle/file opt-in (Contesto/, Business/, "
+            "raw/, wiki/, CLAUDE.md). Se False (default), crea solo auto-create "
+            "(Giornaliero/, Libreria/, Skill/, Progetti/, Team/, log/)."
+        ),
     )
 
 
@@ -121,10 +178,10 @@ def _inspect_vault(vault_path: Path) -> dict[str, Any]:
     has_raw_dir = (vault_path / "raw").is_dir()
     md_files_count = sum(1 for _ in vault_path.rglob("*.md"))
 
-    is_karpathy = has_claude_md and has_wiki_dir and has_raw_dir
+    is_sco_structure = has_claude_md and has_wiki_dir and has_raw_dir
 
     return {
-        "is_karpathy": is_karpathy,
+        "is_sco_structure": is_sco_structure,
         "md_files_count": md_files_count,
         "has_claude_md": has_claude_md,
         "has_agents_md": has_agents_md,
@@ -225,6 +282,7 @@ async def list_vaults(
 @router.post("/add", response_model=VaultEntry, status_code=201)
 async def add_vault(
     payload: VaultAddRequest,
+    request: Request,
     settings: Settings = Depends(get_settings),
 ) -> VaultEntry:
     """Aggiungi vault al registry + lancia auto-sync + watcher fire-and-forget.
@@ -232,9 +290,17 @@ async def add_vault(
     v0.6.0: dopo register, asyncio.create_task per sync_vault background +
     start VaultWatcher per modifiche live. Il client riceve 201 immediato
     senza aspettare il completamento del sync (consultabile via GET /sync-status).
+
+    v0.6.1 Bug Antonio fix: emit ``vault.registered`` ANCHE su re-add path
+    identico (rimosso skip silenzioso che bloccava il trigger della
+    conversation system-generated "Configurazione iniziale del vault X").
+    Il payload include ``is_new`` per dare al handler la facolta' di
+    decidere se ri-eseguire le skill (default os-setup + os-ottimizzatore
+    rieseguono sempre, idempotenti).
     """
     settings.ensure_data_dir()
     vault_path = Path(payload.path).expanduser().resolve()
+    logger.info("vault.add.request", path=str(vault_path), name=payload.name)
     meta = _inspect_vault(vault_path)
 
     entry = VaultEntry(
@@ -244,8 +310,6 @@ async def add_vault(
         **meta,
     )
     entries = _load_registry(settings.vault_registry_path)
-    # Dedup by path: se gia' presente, NON re-emettiamo evento auto-trigger
-    # (per evitare loop os-setup ad ogni re-add dello stesso path).
     existing = [e for e in entries if e.get("path") == entry.path]
     already_registered = bool(existing)
     if already_registered:
@@ -255,35 +319,49 @@ async def add_vault(
     entries.append(entry.model_dump())
     _save_registry(settings.vault_registry_path, entries)
     logger.info(
-        "vault.added",
+        "vault.add.success",
         path=entry.path,
-        is_karpathy=entry.is_karpathy,
-        already_registered=already_registered,
+        vault_id=entry.id,
+        is_sco_structure=entry.is_sco_structure,
+        registered=True,
+        reason="re-add" if already_registered else "new",
     )
 
     # Auto-trigger skill loader runtime: emit evento ``vault.registered``
-    # come task background fire-and-forget. La response HTTP non attende che
-    # le skill os-setup + os-ottimizzatore completino (possono richiedere
-    # secondi / minuti via LLM call). Il frontend vede la nuova conversation
-    # in sidebar Recents al successivo refresh /api/chat/conversations.
-    if not already_registered:
-        EventBus.instance().schedule_publish(
-            EVENT_VAULT_REGISTERED,
-            {
-                "vault_id": entry.id,
-                "vault_path": entry.path,
-                "vault_name": entry.name,
-                "is_karpathy": entry.is_karpathy,
-            },
-        )
+    # come task background fire-and-forget (TRACCIATO in app.state per
+    # evitare GC prematura: Bug 3 root cause).
+    # Pattern Conv. 47 single source of truth: emit SEMPRE (anche re-add),
+    # handler decide se ri-eseguire skill via flag ``is_new``.
+    background_tasks: set[asyncio.Task] = getattr(
+        request.app.state, "background_tasks", set()
+    )
+    EventBus.instance().schedule_publish(
+        EVENT_VAULT_REGISTERED,
+        {
+            "vault_id": entry.id,
+            "vault_path": entry.path,
+            "vault_name": entry.name,
+            "is_sco_structure": entry.is_sco_structure,
+            "is_new": not already_registered,
+        },
+        task_registry=background_tasks,
+    )
+    logger.info(
+        "vault.add.event_published",
+        event_type=EVENT_VAULT_REGISTERED,
+        vault_id=entry.id,
+        is_new=not already_registered,
+    )
 
-    # Fire-and-forget: sync + watcher start in background (no await).
+    # Fire-and-forget: sync + watcher start in background (tracciato).
     # Risolve bug v0.5.0 "agente non legge i file": il vault viene
     # ingerito in mem_tree_chunks automaticamente al register.
-    asyncio.create_task(
+    sync_task = asyncio.create_task(
         _background_sync_and_watch(entry.id, vault_path),
         name=f"autoingest-{entry.id}",
     )
+    background_tasks.add(sync_task)
+    sync_task.add_done_callback(background_tasks.discard)
 
     return entry
 
@@ -295,6 +373,160 @@ async def inspect_vault(payload: VaultInspectRequest) -> dict[str, Any]:
     meta = _inspect_vault(vault_path)
     meta["path"] = str(vault_path)
     return meta
+
+
+@router.post("/scaffold", status_code=201)
+async def scaffold_vault_endpoint(
+    payload: VaultScaffoldRequest,
+    request: Request,
+    settings: Settings = Depends(get_settings),
+) -> dict[str, Any]:
+    """Crea struttura vault SCO completa partendo da template + registra il vault.
+
+    Pipeline:
+        1. Validazione template (whitelist 5 valori) + vault_name non vuoto.
+        2. Risoluzione path (creata se non esiste come directory).
+        3. ``scaffold_vault()`` materializza struttura + entity seed.
+        4. Registra il vault in registry JSON come fa ``add_vault()``.
+        5. Emette evento ``vault.registered`` su EventBus (auto-trigger
+           os-setup + os-ottimizzatore via skill auto_trigger).
+        6. Lancia auto-sync + watcher fire-and-forget (idempotente con
+           lo scaffold appena creato; ingestisce CLAUDE.md + README +
+           entity seed in mem_tree_chunks).
+
+    Idempotenza: se vault path contiene gia un CLAUDE.md, lo scaffold viene
+    saltato (``scaffolded=false``, reason=``already_exists``) ma il vault
+    viene comunque registrato. Il chiamante puo distinguere "scaffold nuovo"
+    da "registrazione di esistente" dal campo ``scaffolded`` della response.
+
+    Response:
+        {
+            "scaffolded": bool,
+            "vault_id": str,
+            "files_created": int,
+            "directories_created": int,
+            "entities_seeded": int,
+            "template": str,
+            "name": str,
+            "path": str,
+            "reason": "already_exists" (opzionale)
+        }
+    """
+    settings.ensure_data_dir()
+
+    # Validazione template lato API (oltre alla validazione interna allo scaffolder).
+    if payload.template not in VALID_TEMPLATES:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Template '{payload.template}' non ammesso. "
+                f"Valori: {', '.join(VALID_TEMPLATES)}"
+            ),
+        )
+
+    vault_path = Path(payload.path).expanduser().resolve()
+    logger.info(
+        "vault.scaffold.request",
+        path=str(vault_path),
+        template=payload.template,
+        vault_name=payload.vault_name,
+    )
+
+    # Se il path esiste deve essere una directory (mai un file).
+    if vault_path.exists() and not vault_path.is_dir():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Path {vault_path} esiste ma non è una directory",
+        )
+
+    # Materializza struttura SCO sul filesystem.
+    try:
+        result = scaffold_vault(
+            vault_path,
+            template=payload.template,  # type: ignore[arg-type]
+            vault_name=payload.vault_name,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except OSError as exc:
+        logger.error(
+            "vault.scaffold.filesystem_error",
+            path=str(vault_path),
+            error=str(exc),
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Errore filesystem durante scaffold: {exc}",
+        ) from exc
+
+    # Post-scaffold: registra il vault come fa /api/vault/add (riusa la logica
+    # ispezione meta + dedup by path + emit event + auto-sync fire-and-forget).
+    meta = _inspect_vault(vault_path)
+    entry = VaultEntry(
+        id=str(uuid.uuid4()),
+        name=payload.vault_name,
+        path=str(vault_path),
+        **meta,
+    )
+    entries = _load_registry(settings.vault_registry_path)
+    existing = [e for e in entries if e.get("path") == entry.path]
+    already_registered = bool(existing)
+    if already_registered:
+        entry.id = existing[0].get("id", entry.id)
+    entries = [e for e in entries if e.get("path") != entry.path]
+    entries.append(entry.model_dump())
+    _save_registry(settings.vault_registry_path, entries)
+    logger.info(
+        "vault.scaffold.registered",
+        vault_id=entry.id,
+        path=entry.path,
+        already_registered=already_registered,
+        scaffolded=result.scaffolded,
+        files_created=result.files_created,
+        entities_seeded=result.entities_seeded,
+    )
+
+    # Emit evento auto-trigger skill (os-setup + os-ottimizzatore).
+    # Conv. 47 single source of truth: nome campo univoco ``is_sco_structure``.
+    background_tasks: set[asyncio.Task] = getattr(
+        request.app.state, "background_tasks", set()
+    )
+    EventBus.instance().schedule_publish(
+        EVENT_VAULT_REGISTERED,
+        {
+            "vault_id": entry.id,
+            "vault_path": entry.path,
+            "vault_name": entry.name,
+            "is_sco_structure": entry.is_sco_structure,
+            "is_new": not already_registered,
+            "scaffolded": result.scaffolded,
+            "template": payload.template,
+        },
+        task_registry=background_tasks,
+    )
+
+    # Auto-sync + watcher fire-and-forget (la struttura appena creata viene
+    # ingerita in mem_tree_chunks per essere subito interrogabile dall'agente).
+    sync_task = asyncio.create_task(
+        _background_sync_and_watch(entry.id, vault_path),
+        name=f"autoingest-scaffold-{entry.id}",
+    )
+    background_tasks.add(sync_task)
+    sync_task.add_done_callback(background_tasks.discard)
+
+    response: dict[str, Any] = {
+        "scaffolded": result.scaffolded,
+        "vault_id": entry.id,
+        "files_created": result.files_created,
+        "directories_created": result.directories_created,
+        "entities_seeded": result.entities_seeded,
+        "template": payload.template,
+        "name": entry.name,
+        "path": entry.path,
+    }
+    if result.reason is not None:
+        response["reason"] = result.reason
+    return response
 
 
 @router.delete("/{vault_id}", status_code=204)
@@ -399,6 +631,114 @@ async def vault_sync_status(
         out["watcher_running"] = False
 
     return out
+
+
+@router.post("/{vault_id}/complete-structure", status_code=200)
+async def complete_vault_structure(
+    vault_id: str,
+    payload: VaultCompleteStructureRequest | None = None,
+    settings: Settings = Depends(get_settings),
+) -> dict[str, Any]:
+    """Crea cartelle/file SCO mancanti per vault esistente (no overwrite).
+
+    DEV-OPTIMIZER-AUTO v1.0.0: endpoint riusato dalla skill ``os-ottimizzatore``
+    (quando vault.is_sco_structure=False) o da una azione esplicita del
+    frontend per scaffolding incrementale.
+
+    Differenza con ``POST /api/vault/scaffold``:
+        - ``/scaffold``: vault NUOVO da template (vuoto/cyber/sanita/qualita/integrato).
+            Salta se CLAUDE.md gia esistente.
+        - ``/complete-structure``: vault ESISTENTE registrato, struttura SCO incompleta.
+            NON salta su CLAUDE.md, crea solo le cartelle/file mancanti.
+
+    Request body (opzionale):
+        - include_opt_in: bool (default False). Se True, crea anche cartelle
+          opt-in (Contesto/, Business/, raw/, wiki/, CLAUDE.md).
+
+    Response:
+        {
+            "completed": bool,
+            "files_created": list[str],
+            "files_skipped": list[str],
+            "missing_before": list[str],
+            "errors": list[str]
+        }
+    """
+    settings.ensure_data_dir()
+    entry = _find_vault_in_registry(settings, vault_id)
+    vault_path = Path(entry["path"])
+    vault_name = entry.get("name", vault_path.name)
+    include_opt_in = bool(payload.include_opt_in) if payload else False
+
+    logger.info(
+        "vault.complete_structure.request",
+        vault_id=vault_id,
+        path=str(vault_path),
+        include_opt_in=include_opt_in,
+    )
+
+    # Snapshot pre-operazione per audit (Conv. 41 tracciatura).
+    inspect_before = inspect_missing_components(vault_path)
+    logger.info(
+        "vault.complete_structure.inspect_before",
+        vault_id=vault_id,
+        is_sco_structure=inspect_before["is_sco_structure"],
+        missing_folders=inspect_before["missing_folders"],
+        missing_auto=inspect_before["missing_auto"],
+        missing_opt_in=inspect_before["missing_opt_in"],
+    )
+
+    try:
+        result = complete_missing_structure(
+            vault_path,
+            vault_name=vault_name,
+            include_opt_in=include_opt_in,
+        )
+    except OSError as exc:
+        logger.error(
+            "vault.complete_structure.filesystem_error",
+            vault_id=vault_id,
+            path=str(vault_path),
+            error=str(exc),
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Errore filesystem durante complete-structure: {exc}",
+        ) from exc
+
+    logger.info(
+        "vault.complete_structure.completed",
+        vault_id=vault_id,
+        files_created_count=len(result.files_created),
+        files_skipped_count=len(result.files_skipped),
+        errors_count=len(result.errors),
+    )
+
+    # Aggiorna registry con nuovi flag struttura (la struttura SCO e' cambiata).
+    # Riusa _inspect_vault per coerenza con i campi del VaultEntry schema
+    # (has_wiki_dir, has_raw_dir, md_files_count) — single source of truth = filesystem
+    # corrente, non snapshot in memoria.
+    if result.completed:
+        meta_after = _inspect_vault(vault_path)
+        entries = _load_registry(settings.vault_registry_path)
+        for e in entries:
+            if e.get("id") == vault_id:
+                e["is_sco_structure"] = meta_after["is_sco_structure"]
+                e["has_claude_md"] = meta_after["has_claude_md"]
+                e["has_wiki_dir"] = meta_after["has_wiki_dir"]
+                e["has_raw_dir"] = meta_after["has_raw_dir"]
+                e["has_agents_md"] = meta_after["has_agents_md"]
+                e["md_files_count"] = meta_after["md_files_count"]
+        _save_registry(settings.vault_registry_path, entries)
+        logger.info(
+            "vault.complete_structure.registry_updated",
+            vault_id=vault_id,
+            new_is_sco_structure=meta_after["is_sco_structure"],
+            new_has_wiki_dir=meta_after["has_wiki_dir"],
+            new_has_raw_dir=meta_after["has_raw_dir"],
+        )
+
+    return result.to_dict()
 
 
 # ----- Callback registrato dal lifespan per gestire eventi watcher -----
