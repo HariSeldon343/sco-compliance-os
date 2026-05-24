@@ -54,49 +54,13 @@ interface ChatState {
   clearError: () => void;
 }
 
-// Stub mock per la sidebar iniziale (5 voci) — verranno sostituite dal fetch reale
-const STUB_CONVERSATIONS: ConversationItem[] = [
-  {
-    id: "stub-1",
-    title: "Audit ISO 27001 — Don Calabria",
-    vault_id: null,
-    created_at: "2026-05-19T09:00:00Z",
-    updated_at: "2026-05-21T14:30:00Z",
-    message_count: 12,
-  },
-  {
-    id: "stub-2",
-    title: "Gap analysis NIS 2 — TecnoSys",
-    vault_id: null,
-    created_at: "2026-05-20T11:15:00Z",
-    updated_at: "2026-05-21T10:00:00Z",
-    message_count: 8,
-  },
-  {
-    id: "stub-3",
-    title: "Procedura sanitaria — Romolo Hospital",
-    vault_id: null,
-    created_at: "2026-05-20T16:42:00Z",
-    updated_at: "2026-05-20T18:10:00Z",
-    message_count: 5,
-  },
-  {
-    id: "stub-4",
-    title: "Risk assessment cloud — Akrea",
-    vault_id: null,
-    created_at: "2026-05-21T08:30:00Z",
-    updated_at: "2026-05-21T09:45:00Z",
-    message_count: 3,
-  },
-  {
-    id: "stub-5",
-    title: "Verbale CDA AKREA 19/02/2026",
-    vault_id: null,
-    created_at: "2026-05-18T14:00:00Z",
-    updated_at: "2026-05-18T16:30:00Z",
-    message_count: 15,
-  },
-];
+// Conv. 47 enforcement v0.7.2: conversations vivono ESCLUSIVAMENTE backend SQLite
+// conversations.db. Lo stub hardcoded di 5 chat (Audit ISO 27001 + Gap NIS 2 +
+// Procedura Romolo + Risk Akrea + Verbale AKREA) era pre-popolato nel JS bundle
+// dal v0.0.1 demo iniziale e tornava SEMPRE post-cleanup AppData perche' caricato
+// dal codice frontend, non dal disco. Antonio ha rilevato il drift dopo 4 release.
+// Fix: init vuoto + fetch reale via apiClient.listConversations() al mount.
+const STUB_CONVERSATIONS: ConversationItem[] = [];
 
 export const useChatStore = create<ChatState>()(
   persist(
@@ -255,6 +219,35 @@ export const useChatStore = create<ChatState>()(
     }),
     {
       name: "sco-chat",
+      version: 2, // v0.7.2: migration purge stub-* conversations from localStorage
+      migrate: (persistedState: unknown, version: number) => {
+        if (version < 2) {
+          // Rimuove le 5 conversations stub-* hardcoded pre-v0.7.2 dal localStorage
+          // WebView2. Senza migrate restavano persisted post-upgrade in-place anche
+          // se STUB_CONVERSATIONS adesso e' vuoto.
+          const state = persistedState as {
+            conversations?: Record<string, { id?: string }>;
+            messagesByConv?: Record<string, unknown>;
+            activeConversationId?: string | null;
+          };
+          if (state.conversations) {
+            const filtered: Record<string, { id?: string }> = {};
+            for (const [id, conv] of Object.entries(state.conversations)) {
+              if (!id.startsWith("stub-")) {
+                filtered[id] = conv;
+              }
+            }
+            state.conversations = filtered;
+          }
+          if (
+            state.activeConversationId &&
+            state.activeConversationId.startsWith("stub-")
+          ) {
+            state.activeConversationId = null;
+          }
+        }
+        return persistedState;
+      },
       partialize: (s) => ({
         conversations: s.conversations,
         messagesByConv: s.messagesByConv,
