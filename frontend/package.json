@@ -1,7 +1,7 @@
 {
   "name": "sco-compliance-os-frontend",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.6.0",
   "type": "module",
   "description": "SCO Compliance OS — Personal AI for Italian Compliance. Frontend React 19 + Vite 6 + Tailwind 4.",
   "scripts": {
@@ -15,6 +15,7 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.15",
     "@tailwindcss/vite": "^4.0.0",
     "@tauri-apps/api": "^2.1.1",
     "@tauri-apps/plugin-dialog": "^2.2.0",
@@ -22,6 +23,7 @@
     "@tauri-apps/plugin-shell": "^2.2.0",
     "@tauri-apps/plugin-updater": "^2.3.0",
     "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
     "highlight.js": "^11.11.1",
     "lucide-react": "^0.469.0",
     "react": "^19.0.0",

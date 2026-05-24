@@ -494,3 +494,211 @@ async def get_tree_stats() -> TreeStatsResponse:
         counts_by_source_kind=by_kind,
         total=total,
     )
+
+
+# ----- Memory Tree bucket-seal Fase 4: summaries L1/L2/L3 + BM25 query (v0.6.0) -----
+
+
+class TreeSummaryItemV2(BaseModel):
+    """Item summary L1/L2/L3 per GET /tree/summaries (v0.6.0)."""
+
+    id: str
+    tree_kind: str = Field(..., description="source | topic | global")
+    tree_id: str
+    level: int = Field(..., ge=1, le=3)
+    content_summary: str
+    content_preview: str = Field(default="", description="Preview 300 char.")
+    parent_summary_id: str | None = None
+    children_chunk_ids: list[str] = Field(default_factory=list)
+    children_summary_ids: list[str] = Field(default_factory=list)
+    token_count: int = 0
+    source_kind_hint: str | None = None
+    owner: str = "local"
+    created_at_ms: int = 0
+    sealed_at_ms: int | None = None
+    status: str = "sealed"
+
+
+class TreeSealRequest(BaseModel):
+    """Request body per POST /tree/seal."""
+
+    tree_kind: str = Field(
+        ..., description="Vocabolario chiuso: source | topic | global."
+    )
+    tree_id: str = Field(
+        ..., description="source_id (per source) o 'global'.", min_length=1
+    )
+    force: bool = Field(
+        default=False,
+        description="Se True, sigilla anche sotto-threshold per smoke test / on-demand.",
+    )
+
+
+class TreeSealResponse(BaseModel):
+    """Response per POST /tree/seal."""
+
+    tree_kind: str
+    tree_id: str
+    force: bool
+    summaries_l1_created: int = 0
+    summaries_l2_created: int = 0
+    summaries_l3_created: int = 0
+
+
+class TreeRelevantQuery(BaseModel):
+    """Item summary relevant per GET /tree/summaries/relevant."""
+
+    id: str
+    tree_kind: str
+    tree_id: str
+    level: int
+    content_preview: str = ""
+    token_count: int = 0
+    sealed_at_ms: int | None = None
+
+
+@router.get("/tree/summaries", response_model=list[TreeSummaryItemV2])
+async def get_tree_summaries_v2(
+    tree_kind: str | None = Query(
+        default=None,
+        description="Filtra per tree_kind: source | topic | global.",
+    ),
+    tree_id: str | None = Query(
+        default=None,
+        description="Filtra per tree_id (source_id o 'global').",
+    ),
+    level: int | None = Query(
+        default=None,
+        ge=1,
+        le=3,
+        description="Filtra per level (1 / 2 / 3).",
+    ),
+    owner: str | None = Query(default="local", description="Filtra per owner."),
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[TreeSummaryItemV2]:
+    """Lista summaries L1/L2/L3 con filtri + paginazione (Fase 4 v0.6.0).
+
+    Endpoint distinto da `/tree-summaries` legacy Wave 1 (su tabella
+    `summaries` diversa) per evitare breaking change.
+
+    Ordine: sealed_at_ms DESC, created_at_ms DESC.
+    """
+    from sco_compliance_os.services.memory.tree_summaries import list_summaries
+
+    logger.info(
+        "memory.tree.summaries_v2.requested",
+        tree_kind=tree_kind,
+        tree_id=tree_id,
+        level=level,
+        owner=owner,
+        limit=limit,
+        offset=offset,
+    )
+    summaries = await list_summaries(
+        tree_kind=tree_kind,
+        tree_id=tree_id,
+        level=level,
+        owner=owner,
+        limit=limit,
+        offset=offset,
+    )
+    return [
+        TreeSummaryItemV2(
+            id=s.id,
+            tree_kind=s.tree_kind,
+            tree_id=s.tree_id,
+            level=s.level,
+            content_summary=s.content_summary,
+            content_preview=s.content_summary[:300].strip().replace("\n", " "),
+            parent_summary_id=s.parent_summary_id,
+            children_chunk_ids=s.children_chunk_ids,
+            children_summary_ids=s.children_summary_ids,
+            token_count=s.token_count,
+            source_kind_hint=s.source_kind_hint,
+            owner=s.owner,
+            created_at_ms=s.created_at_ms,
+            sealed_at_ms=s.sealed_at_ms,
+            status=s.status,
+        )
+        for s in summaries
+    ]
+
+
+@router.post("/tree/seal", response_model=TreeSealResponse, status_code=202)
+async def post_tree_seal(payload: TreeSealRequest) -> TreeSealResponse:
+    """Trigger cascade_seal sync per tree_kind/tree_id (Fase 4 sealing v0.6.0).
+
+    Pipeline:
+        1. L0 (chunks admitted) -> seal L1 se total tokens >= threshold (32k).
+        2. L1 pending -> cascade L2 se total tokens >= threshold (16k).
+        3. L2 pending -> cascade L3 se total tokens >= threshold (8k).
+
+    `force=True` bypassa threshold (utile per smoke test + on-demand sealing).
+    """
+    from sco_compliance_os.services.memory.tree_summaries import cascade_seal
+
+    logger.info(
+        "memory.tree.seal.requested",
+        tree_kind=payload.tree_kind,
+        tree_id=payload.tree_id,
+        force=payload.force,
+    )
+
+    counts = await cascade_seal(
+        tree_kind=payload.tree_kind,
+        tree_id=payload.tree_id,
+        force=payload.force,
+    )
+
+    return TreeSealResponse(
+        tree_kind=payload.tree_kind,
+        tree_id=payload.tree_id,
+        force=payload.force,
+        summaries_l1_created=counts.get(1, 0),
+        summaries_l2_created=counts.get(2, 0),
+        summaries_l3_created=counts.get(3, 0),
+    )
+
+
+@router.get("/tree/summaries/relevant", response_model=list[TreeRelevantQuery])
+async def get_tree_summaries_relevant(
+    query: str = Query(..., min_length=1, max_length=500, description="Query BM25."),
+    tree_kind: str | None = Query(
+        default=None,
+        description="Opzionale filtro tree_kind: source | topic | global.",
+    ),
+    top_k: int = Query(default=5, ge=1, le=20),
+) -> list[TreeRelevantQuery]:
+    """BM25-like retrieval top-K summaries pertinenti alla query (Fase 4 v0.6.0).
+
+    Pattern Karpathy "no vector DB fino a ~100 fonti": BM25 keyword search
+    su content_summary, stateless (recompute ad ogni query).
+
+    Usato dal chat system prompt per RAG-like prepend dei top-3 summaries.
+    """
+    from sco_compliance_os.services.memory.tree_summaries import (
+        query_relevant_summaries,
+    )
+
+    logger.info(
+        "memory.tree.summaries_relevant.requested",
+        query_len=len(query),
+        tree_kind=tree_kind,
+        top_k=top_k,
+    )
+    summaries = await query_relevant_summaries(
+        query, tree_kind=tree_kind, top_k=top_k
+    )
+    return [
+        TreeRelevantQuery(
+            id=s.id,
+            tree_kind=s.tree_kind,
+            tree_id=s.tree_id,
+            level=s.level,
+            content_preview=s.content_summary[:500].strip().replace("\n", " "),
+            token_count=s.token_count,
+            sealed_at_ms=s.sealed_at_ms,
+        )
+        for s in summaries
+    ]

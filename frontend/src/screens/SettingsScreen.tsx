@@ -1,16 +1,25 @@
-// SCO Compliance OS — schermata Impostazioni (aspetto, privacy)
+// SCO Compliance OS — schermata Impostazioni (aspetto, layout, privacy)
 // Pattern Conv. 47 single source of truth: il modello LLM e l'API key Anthropic
 // vivono lato server SCO per tenant. L'app desktop NON deve far scegliere il modello
 // al cliente — è gestito centralmente da SCO Solution Consulting via license + proxy.
 
-import { Palette, ShieldCheck, ServerCog } from "lucide-react";
+import {
+  Palette,
+  ShieldCheck,
+  ServerCog,
+  LayoutPanelLeft,
+  Navigation,
+} from "lucide-react";
 
 import { useThemeStore, type Theme } from "@/store/theme-store";
+import { useLayoutStore, type LayoutMode } from "@/store/layout-store";
 import { cn } from "@/lib/cn";
 
 export function SettingsScreen() {
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
+  const layoutMode = useLayoutStore((s) => s.mode);
+  const setLayoutMode = useLayoutStore((s) => s.setMode);
 
   return (
     <div className="h-full overflow-y-auto px-8 py-6">
@@ -74,6 +83,64 @@ export function SettingsScreen() {
                       : "Sistema"}
                 </button>
               ))}
+            </div>
+          </Field>
+        </Section>
+
+        {/* Layout di navigazione */}
+        <Section icon={Navigation} title="Layout di navigazione">
+          <Field label="Modalità">
+            <div className="grid gap-3 sm:grid-cols-2">
+              {(
+                [
+                  {
+                    value: "sidebar",
+                    label: "Sidebar laterale",
+                    desc: "Pannello sinistro 280px con conversazioni e navigazione.",
+                    icon: LayoutPanelLeft,
+                  },
+                  {
+                    value: "bottom-tab",
+                    label: "Barra inferiore",
+                    desc: "Pill flottante in basso, più spazio per la chat.",
+                    icon: Navigation,
+                  },
+                ] as Array<{
+                  value: LayoutMode;
+                  label: string;
+                  desc: string;
+                  icon: typeof LayoutPanelLeft;
+                }>
+              ).map((opt) => {
+                const Icon = opt.icon;
+                const active = layoutMode === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setLayoutMode(opt.value)}
+                    className={cn(
+                      "flex flex-col gap-2 rounded-lg border p-4 text-left transition-all",
+                      active
+                        ? "border-sco-blue bg-sco-blue/10 ring-1 ring-sco-blue"
+                        : "border-sco-border hover:border-sco-blue/60",
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Icon
+                        size={16}
+                        className={cn(
+                          active ? "text-sco-blue" : "text-sco-muted-foreground",
+                        )}
+                      />
+                      <span className="text-sm font-medium">{opt.label}</span>
+                    </div>
+                    <p className="text-xs text-sco-muted-foreground">
+                      {opt.desc}
+                    </p>
+                  </button>
+                );
+              })}
             </div>
           </Field>
         </Section>

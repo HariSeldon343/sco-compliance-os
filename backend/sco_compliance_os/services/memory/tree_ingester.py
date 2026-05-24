@@ -119,7 +119,7 @@ async def ingest_chunks(
     scoring_map: dict[str, tuple[float | None, float | None, str | None]] = {}
 
     for ch in chunks:
-        decision = admission_decision(
+        decision = await admission_decision(
             ch,
             consult_llm_on_borderline=consult_llm_on_borderline,
         )

@@ -14,6 +14,7 @@ generazione futura PyInstaller sidecar.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import uuid
 from collections.abc import AsyncIterator
@@ -37,6 +38,7 @@ from sco_compliance_os.api import (
     memory_routes,
     onboarding_routes,
     profile_routes,
+    skills_routes,
     subconscious_routes,
     tokenjuice_routes,
     vault_routes,
@@ -62,10 +64,14 @@ from sco_compliance_os.services.learning.profile_store import (
 )
 from sco_compliance_os.services.memory.store import init_schema as init_memory_schema
 from sco_compliance_os.services.memory.tree_store import init_tree_schema
+from sco_compliance_os.services.skills.auto_trigger import (
+    register_default_subscribers as register_skill_subscribers,
+)
 from sco_compliance_os.services.subconscious.tick_loop import (
     SubconsciousTickLoop,
     set_active_loop,
 )
+from sco_compliance_os.services.vault.watcher import get_watcher_manager
 
 # Carica .env override=True (Conv. 44 enforcement: override valori già in env)
 load_dotenv(override=True)
@@ -75,6 +81,63 @@ load_dotenv(override=True)
 _active_scheduler: ConnectorScheduler | None = None
 _subconscious_loop: SubconsciousTickLoop | None = None
 _autofetch_loop: AutoFetchLoop | None = None
+_seal_scheduler_task: asyncio.Task | None = None
+_seal_scheduler_stop: asyncio.Event | None = None
+
+
+# Default seal scheduler tick interval (5 min). Overridable via env
+# SCO_SEAL_SCHEDULER_INTERVAL_SECONDS (hard floor 60s).
+_SEAL_SCHEDULER_DEFAULT_INTERVAL_SECONDS = 300
+_SEAL_SCHEDULER_MIN_INTERVAL_SECONDS = 60
+
+
+async def _seal_scheduler_loop(
+    interval_seconds: int, stop_event: asyncio.Event
+) -> None:
+    """Background loop: chiama cascade_seal_all per tutti i tree ogni N secondi.
+
+    Pattern Conv. 41 tracciatura: logger structured ogni tick con counts per livello.
+    Pattern Conv. 44 lesson 1: protetto da stop_event invece di run_forever puro;
+    cancellabile da shutdown lifespan.
+    """
+    from sco_compliance_os.services.memory.tree_summaries import cascade_seal_all
+
+    log = structlog.get_logger(__name__)
+    log.info(
+        "seal_scheduler.start",
+        interval_seconds=interval_seconds,
+    )
+    while not stop_event.is_set():
+        try:
+            # Wait con timeout: scatta stop_event O elapsed interval (chi prima).
+            await asyncio.wait_for(stop_event.wait(), timeout=interval_seconds)
+            # Se stop_event partito, esci.
+            if stop_event.is_set():
+                break
+        except asyncio.TimeoutError:
+            # Timeout = tempo di tick.
+            pass
+
+        try:
+            counts = await cascade_seal_all(owner="local", force=False)
+            total_l1 = sum(v.get(1, 0) for v in counts.values())
+            total_l2 = sum(v.get(2, 0) for v in counts.values())
+            total_l3 = sum(v.get(3, 0) for v in counts.values())
+            log.info(
+                "seal_scheduler.tick_complete",
+                trees_processed=len(counts),
+                summaries_l1=total_l1,
+                summaries_l2=total_l2,
+                summaries_l3=total_l3,
+            )
+        except Exception as exc:
+            log.warning(
+                "seal_scheduler.tick_error",
+                error=str(exc),
+                exc_type=type(exc).__name__,
+            )
+
+    log.info("seal_scheduler.stop")
 
 
 @asynccontextmanager
@@ -85,6 +148,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     interval su connettori attivi (token presenti nel keyring). Idempotente.
     """
     global _active_scheduler, _subconscious_loop, _autofetch_loop
+    global _seal_scheduler_task, _seal_scheduler_stop
     settings = get_settings()
     settings.ensure_data_dir()
 
@@ -102,6 +166,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Init User Profile DB schema (apprendimento profilo progressivo)
     await init_user_profile_schema()
+
+    # Wire skill loader auto-trigger subscriber su event bus.
+    # Pattern Conv. 47 single source of truth: registrazione in-process,
+    # nessuna persistenza DB. Idempotente (skip se gia' registrato).
+    register_skill_subscribers()
 
     # Apply migrations OpenHuman replica (W1-MEMORY: 0002_openhuman_features.sql)
     # Idempotente IF NOT EXISTS, sicuro da rieseguire ad ogni startup.
@@ -162,6 +231,66 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if settings.subconscious_enabled:
         await _subconscious_loop.start()
 
+    # Memory Tree seal scheduler (v0.6.0 Fase 4): background task ogni 5 min
+    # chiama cascade_seal_all() per consolidare chunks admitted -> summaries L1->L2->L3.
+    # Default abilitato (cost basso via threshold 32k token cumulativi).
+    # Disabilitabile via env SCO_SEAL_SCHEDULER_ENABLED=0 per dev / debug.
+    seal_scheduler_enabled = os.environ.get("SCO_SEAL_SCHEDULER_ENABLED", "1") == "1"
+    seal_interval_raw = int(
+        os.environ.get(
+            "SCO_SEAL_SCHEDULER_INTERVAL_SECONDS",
+            str(_SEAL_SCHEDULER_DEFAULT_INTERVAL_SECONDS),
+        )
+    )
+    seal_interval = max(_SEAL_SCHEDULER_MIN_INTERVAL_SECONDS, seal_interval_raw)
+    if seal_scheduler_enabled:
+        _seal_scheduler_stop = asyncio.Event()
+        _seal_scheduler_task = asyncio.create_task(
+            _seal_scheduler_loop(seal_interval, _seal_scheduler_stop),
+            name="seal_scheduler",
+        )
+
+    # v0.6.0 DEV-VAULT-AUTOINGEST: wire file event callback + avvia watcher
+    # per ogni vault gia' registrato + lancia sync iniziale.
+    # Import locale per evitare import circolare (vault_routes importa watcher).
+    from sco_compliance_os.api.vault_routes import (
+        _background_sync_and_watch,
+        _load_registry,
+        handle_file_event,
+    )
+
+    watcher_manager = get_watcher_manager()
+    watcher_manager.set_event_callback(handle_file_event)
+
+    # Per ogni vault gia' registrato: lancia sync iniziale fire-and-forget +
+    # avvia watcher. Idempotente: dedup naturale (chunk_id stabile).
+    try:
+        registered_entries = _load_registry(settings.vault_registry_path)
+        for entry in registered_entries:
+            vault_id_existing = entry.get("id")
+            path_existing = entry.get("path")
+            if not vault_id_existing or not path_existing:
+                continue
+            from pathlib import Path as _PathLocal
+
+            vault_path_existing = _PathLocal(path_existing)
+            if not vault_path_existing.exists():
+                structlog.get_logger(__name__).warning(
+                    "startup.vault_path_missing",
+                    vault_id=vault_id_existing,
+                    path=path_existing,
+                )
+                continue
+            asyncio.create_task(
+                _background_sync_and_watch(vault_id_existing, vault_path_existing),
+                name=f"startup-autoingest-{vault_id_existing}",
+            )
+    except Exception as start_exc:  # noqa: BLE001
+        structlog.get_logger(__name__).warning(
+            "startup.vault_autoingest_failed",
+            error=str(start_exc),
+        )
+
     logger = structlog.get_logger(__name__)
     logger.info(
         "backend.startup.complete",
@@ -172,10 +301,36 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         autofetch_running=_autofetch_loop.is_running(),
         subconscious_enabled=settings.subconscious_enabled,
         subconscious_running=_subconscious_loop.is_running(),
+        seal_scheduler_enabled=seal_scheduler_enabled,
+        seal_scheduler_interval=seal_interval,
+        vault_watcher_enabled=True,
         user_id=user_id,
     )
 
     yield
+
+    # Shutdown pulito seal scheduler (v0.6.0 Fase 4)
+    if _seal_scheduler_stop is not None:
+        _seal_scheduler_stop.set()
+    if _seal_scheduler_task is not None:
+        try:
+            await asyncio.wait_for(_seal_scheduler_task, timeout=10.0)
+        except asyncio.TimeoutError:
+            structlog.get_logger(__name__).warning(
+                "backend.shutdown.seal_scheduler_timeout"
+            )
+            _seal_scheduler_task.cancel()
+        _seal_scheduler_task = None
+        _seal_scheduler_stop = None
+
+    # Shutdown pulito vault watchers (v0.6.0)
+    try:
+        await get_watcher_manager().stop_all()
+    except Exception as wm_exc:  # noqa: BLE001
+        structlog.get_logger(__name__).warning(
+            "backend.shutdown.watcher_stop_failed",
+            error=str(wm_exc),
+        )
 
     # Shutdown pulito subconscious loop
     if _subconscious_loop is not None:
@@ -294,6 +449,7 @@ def create_app() -> FastAPI:
     app.include_router(tokenjuice_routes.router)
     app.include_router(autofetch_routes.router)
     app.include_router(profile_routes.router)
+    app.include_router(skills_routes.router)
 
     return app
 

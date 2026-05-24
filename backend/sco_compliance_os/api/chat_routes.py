@@ -133,6 +133,50 @@ async def chat_stream(
             error=str(exc),
         )
 
+    # Memory Tree summaries RAG-like injection (v0.6.0 Fase 4 wire):
+    # query top-3 summaries pertinenti al user message, prepend al system prompt.
+    # Cap totale 4000 char per evitare overflow context window.
+    # Pattern Karpathy "no vector DB": BM25 lite stateless.
+    # Best-effort: errori loggati ma NON bloccano lo stream chat.
+    memory_context_markdown = ""
+    try:
+        from sco_compliance_os.services.memory.tree_summaries import (
+            query_relevant_summaries,
+        )
+
+        relevant = await query_relevant_summaries(payload.message, top_k=3)
+        if relevant:
+            parts = ["## Contesto rilevante dalla memoria\n"]
+            cumulative_chars = len(parts[0])
+            for s in relevant:
+                snippet = (
+                    f"\n### [{s.tree_kind}:{s.tree_id} L{s.level}]\n"
+                    f"{s.content_summary}\n"
+                )
+                if cumulative_chars + len(snippet) > 4000:
+                    parts.append("\n[...summary aggiuntive omesse per cap context...]\n")
+                    break
+                parts.append(snippet)
+                cumulative_chars += len(snippet)
+            memory_context_markdown = "".join(parts) + "\n"
+            logger.info(
+                "chat_stream.memory_inject.success",
+                summaries_count=len(relevant),
+                cumulative_chars=cumulative_chars,
+            )
+    except Exception as exc:
+        logger.warning(
+            "chat_stream.memory_inject_failed",
+            error=str(exc),
+        )
+
+    # Combina profile + memory context come prepend al system prompt.
+    if memory_context_markdown:
+        if profile_markdown:
+            profile_markdown = f"{memory_context_markdown}\n{profile_markdown}"
+        else:
+            profile_markdown = memory_context_markdown
+
     async def event_generator() -> AsyncIterator[str]:
         """Yield SSE events in formato `data: {json}\\n\\n`."""
         runner = await build_runner(

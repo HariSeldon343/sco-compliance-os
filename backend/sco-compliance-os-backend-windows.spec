@@ -100,8 +100,20 @@ hiddenimports = [
     "jwt",
 ]
 
-# File dati statici (config, prompt templates, asset)
+# File dati statici (config, prompt templates, skill SKILL.md bundled)
+# v0.6.0: glob ricorsivo su scaffold/templates/skills/**/*.md per legacy scope skill loader.
+# Senza questa entry, PyInstaller esclude i .md di skills/os-setup + skills/os-ottimizzatore
+# dal bundle e il legacy scope risulta vuoto runtime (Conv. 44 lesson 3 spot check DEV-SKILLS-LOADER).
+import os as _os
+_skills_templates_root = Path("sco_compliance_os") / "scaffold" / "templates" / "skills"
 datas = []
+if _skills_templates_root.exists():
+    for _root, _dirs, _files in _os.walk(str(_skills_templates_root)):
+        for _f in _files:
+            if _f.endswith(('.md', '.yaml', '.yml', '.json')):
+                _src = _os.path.join(_root, _f)
+                _dst_dir = _os.path.relpath(_root, ".")
+                datas.append((_src, _dst_dir))
 
 # Block cipher disabilitato per build pulito
 block_cipher = None

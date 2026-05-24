@@ -66,7 +66,8 @@ CREATE TABLE IF NOT EXISTS mem_tree_chunks (
         ('pending_extraction','admitted','buffered','sealed','dropped')),
     cheap_total REAL NULL,
     llm_score REAL NULL,
-    admission_reasoning TEXT NULL
+    admission_reasoning TEXT NULL,
+    parent_summary_id TEXT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_tree_source
@@ -79,6 +80,66 @@ CREATE INDEX IF NOT EXISTS idx_tree_status_created
     ON mem_tree_chunks(status, created_at_ms DESC);
 CREATE INDEX IF NOT EXISTS idx_tree_created_at
     ON mem_tree_chunks(created_at_ms DESC);
+CREATE INDEX IF NOT EXISTS idx_tree_parent_summary
+    ON mem_tree_chunks(parent_summary_id);
+
+-- LLM score cache idempotente: hash(content) -> score (no ri-extraction)
+CREATE TABLE IF NOT EXISTS mem_llm_score_cache (
+    chunk_id_hash TEXT PRIMARY KEY,
+    score REAL NOT NULL,
+    model TEXT NOT NULL DEFAULT '',
+    scored_at_ms INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_llm_score_cache_scored_at
+    ON mem_llm_score_cache(scored_at_ms DESC);
+
+-- Memory Tree summaries — Fase 4 sealing L0->L1->L2->L3
+-- tree_kind: source | topic | global (3 alberi concentrici)
+-- tree_id: source_id (per source) | topic_name (per topic) | 'global' (per global)
+-- level: 0 raw (chunk) | 1 L1 sealed | 2 L2 sealed | 3 L3 sealed
+-- status: pending (in buffer) | sealed (promosso) | archived (sealed L2+ then archived)
+CREATE TABLE IF NOT EXISTS mem_tree_summaries (
+    id TEXT PRIMARY KEY,
+    tree_kind TEXT NOT NULL CHECK (tree_kind IN ('source','topic','global')),
+    tree_id TEXT NOT NULL DEFAULT '',
+    level INTEGER NOT NULL DEFAULT 1 CHECK (level BETWEEN 1 AND 3),
+    content_summary TEXT NOT NULL,
+    parent_summary_id TEXT NULL,
+    children_chunk_ids_json TEXT NOT NULL DEFAULT '[]',
+    children_summary_ids_json TEXT NOT NULL DEFAULT '[]',
+    token_count INTEGER NOT NULL DEFAULT 0,
+    source_kind_hint TEXT NULL,
+    owner TEXT NOT NULL DEFAULT 'local',
+    created_at_ms INTEGER NOT NULL DEFAULT 0,
+    sealed_at_ms INTEGER NULL,
+    status TEXT NOT NULL DEFAULT 'sealed' CHECK (status IN
+        ('pending','sealed','archived'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_tree_summaries_kind_id
+    ON mem_tree_summaries(tree_kind, tree_id);
+CREATE INDEX IF NOT EXISTS idx_tree_summaries_level
+    ON mem_tree_summaries(level);
+CREATE INDEX IF NOT EXISTS idx_tree_summaries_kind_id_level
+    ON mem_tree_summaries(tree_kind, tree_id, level);
+CREATE INDEX IF NOT EXISTS idx_tree_summaries_status
+    ON mem_tree_summaries(status);
+CREATE INDEX IF NOT EXISTS idx_tree_summaries_sealed_at
+    ON mem_tree_summaries(sealed_at_ms DESC);
+CREATE INDEX IF NOT EXISTS idx_tree_summaries_created_at
+    ON mem_tree_summaries(created_at_ms DESC);
+CREATE INDEX IF NOT EXISTS idx_tree_summaries_parent
+    ON mem_tree_summaries(parent_summary_id);
+CREATE INDEX IF NOT EXISTS idx_tree_summaries_owner
+    ON mem_tree_summaries(owner);
+"""
+
+# Migration idempotente per aggiungere parent_summary_id su mem_tree_chunks
+# (per installs esistenti pre-v0.6.0). SQLite ALTER TABLE ADD COLUMN e' safe
+# se la colonna non esiste; cattura errore "duplicate column" come no-op.
+_MIGRATION_PARENT_SUMMARY_SQL = """
+ALTER TABLE mem_tree_chunks ADD COLUMN parent_summary_id TEXT NULL;
 """
 
 
@@ -193,17 +254,90 @@ _tree_breaker = CircuitBreaker(name="tree_store")
 
 
 async def init_tree_schema(db_path: Path | None = None) -> None:
-    """Inizializza schema mem_tree_chunks idempotente.
+    """Inizializza schema mem_tree_chunks + mem_llm_score_cache + mem_tree_summaries.
 
     Safe da chiamare a ogni avvio app. Usa stesso DB di store.py legacy
     per single-source-of-truth filesystem (Conv. 47 enforcement).
+
+    Migration idempotente parent_summary_id su mem_tree_chunks per upgrade
+    da v0.5.0 a v0.6.0 senza data loss (Conv. 48 enforcement: estendere
+    schema invece di workaround applicativi).
     """
     path = db_path or default_db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     async with aiosqlite.connect(path) as db:
         await db.executescript(_TREE_SCHEMA_SQL)
+        # Migration idempotente: parent_summary_id added in v0.6.0
+        # Pattern allineato a sco-agent-local store.py init_schema
+        try:
+            await db.execute(_MIGRATION_PARENT_SUMMARY_SQL)
+        except Exception as exc:
+            msg = str(exc).lower()
+            if "duplicate column" not in msg and "already exists" not in msg:
+                # Errore reale: log warning ma non blocca init (idempotency-first)
+                logger.warning(
+                    "init_tree_schema.migration_parent_summary_unexpected",
+                    extra={"error": str(exc)[:200]},
+                )
         await db.commit()
-    logger.info("mem_tree_chunks schema inizializzato", extra={"db_path": str(path)})
+    logger.info(
+        "mem_tree_chunks + mem_llm_score_cache + mem_tree_summaries schema inizializzato",
+        extra={"db_path": str(path)},
+    )
+
+
+# --------------------------------------------------------------------------
+# LLM SCORE CACHE — idempotente (chunk_id_hash PK)
+# --------------------------------------------------------------------------
+
+
+async def get_llm_score_cached(
+    content_hash: str,
+    db_path: Path | None = None,
+) -> float | None:
+    """Cache lookup score LLM per content hash.
+
+    Returns:
+        float score se cache hit, None se miss.
+    """
+    try:
+        async with _tree_breaker:
+            async with _connection(db_path) as db:
+                async with db.execute(
+                    "SELECT score FROM mem_llm_score_cache WHERE chunk_id_hash = ?",
+                    (content_hash,),
+                ) as cur:
+                    row = await cur.fetchone()
+                    if row is None:
+                        return None
+                    return float(row["score"])
+    except (CircuitBreakerOpenError, Exception) as exc:
+        logger.warning("get_llm_score_cached: errore: %s", exc)
+        return None
+
+
+async def set_llm_score_cached(
+    content_hash: str,
+    score: float,
+    model: str,
+    db_path: Path | None = None,
+) -> bool:
+    """Store score LLM in cache idempotente (INSERT OR REPLACE)."""
+    try:
+        async with _tree_breaker:
+            async with _connection(db_path) as db:
+                ts_ms = int(time.time() * 1000)
+                await db.execute(
+                    """INSERT OR REPLACE INTO mem_llm_score_cache
+                    (chunk_id_hash, score, model, scored_at_ms)
+                    VALUES (?, ?, ?, ?)""",
+                    (content_hash, score, model, ts_ms),
+                )
+                await db.commit()
+            return True
+    except (CircuitBreakerOpenError, Exception) as exc:
+        logger.warning("set_llm_score_cached: errore: %s", exc)
+        return False
 
 
 # --------------------------------------------------------------------------
@@ -488,15 +622,123 @@ async def count_by_source_kind(db_path: Path | None = None) -> dict[str, int]:
     return out
 
 
+async def mark_chunks_sealed(
+    chunk_ids: list[str],
+    parent_summary_id: str,
+    db_path: Path | None = None,
+) -> int:
+    """Marca lista chunk come SEALED (Fase 4 promozione L0->L1).
+
+    Aggiorna status -> 'sealed' + parent_summary_id -> id della summary L1
+    appena creata. Idempotente: re-call con stesso parent_summary_id non
+    cambia nulla.
+
+    Args:
+        chunk_ids: lista ID chunk da promuovere.
+        parent_summary_id: ID della summary L1 padre.
+
+    Returns:
+        Numero righe aggiornate.
+    """
+    if not chunk_ids:
+        return 0
+    placeholders = ",".join("?" * len(chunk_ids))
+    sql = (
+        f"UPDATE mem_tree_chunks "
+        f"SET status = 'sealed', parent_summary_id = ? "
+        f"WHERE id IN ({placeholders})"
+    )
+    try:
+        async with _tree_breaker:
+            async with _connection(db_path) as db:
+                cur = await db.execute(sql, (parent_summary_id, *chunk_ids))
+                await db.commit()
+                return cur.rowcount or 0
+    except (CircuitBreakerOpenError, Exception) as exc:
+        logger.warning("mark_chunks_sealed: errore: %s", exc)
+        return 0
+
+
+async def get_admitted_chunks_for_seal(
+    *,
+    source_id: str | None = None,
+    owner: str = "local",
+    db_path: Path | None = None,
+) -> list[TreeChunk]:
+    """Recupera tutti i chunk admitted NON ancora sealed per un source/owner.
+
+    Pattern Fase 4 sealing: query candidates pre-aggregazione per tree_source
+    (filtro per source_id) o tree_global (no filter).
+
+    Args:
+        source_id: se non None filtra per source_id (tree_source mode).
+        owner: filtra per owner (default 'local' single-user).
+
+    Returns:
+        Lista TreeChunk admitted ordinata per timestamp_ms ASC (cronologica).
+    """
+    sql = (
+        "SELECT * FROM mem_tree_chunks "
+        "WHERE status = 'admitted' AND owner = ? AND parent_summary_id IS NULL"
+    )
+    params: list = [owner]
+    if source_id:
+        sql += " AND source_id = ?"
+        params.append(source_id)
+    sql += " ORDER BY timestamp_ms ASC, seq_in_source ASC"
+    try:
+        async with _tree_breaker:
+            async with _connection(db_path) as db:
+                async with db.execute(sql, params) as cur:
+                    return [_row_to_chunk(r) async for r in cur]
+    except (CircuitBreakerOpenError, Exception) as exc:
+        logger.warning("get_admitted_chunks_for_seal: errore: %s", exc)
+        return []
+
+
+async def list_distinct_sources(
+    *,
+    owner: str = "local",
+    db_path: Path | None = None,
+) -> list[tuple[str, str]]:
+    """Lista distinti (source_kind, source_id) di chunk admitted per tree_source iteration.
+
+    Returns:
+        Lista tuple (source_kind, source_id) ordinata.
+    """
+    try:
+        async with _tree_breaker:
+            async with _connection(db_path) as db:
+                async with db.execute(
+                    """SELECT DISTINCT source_kind, source_id
+                    FROM mem_tree_chunks
+                    WHERE status = 'admitted' AND owner = ?
+                      AND parent_summary_id IS NULL
+                    ORDER BY source_kind, source_id""",
+                    (owner,),
+                ) as cur:
+                    return [(r["source_kind"], r["source_id"]) async for r in cur]
+    except (CircuitBreakerOpenError, Exception) as exc:
+        logger.warning("list_distinct_sources: errore: %s", exc)
+        return []
+
+
 __all__ = [
     "CircuitBreaker",
     "CircuitBreakerOpenError",
+    "_connection",
+    "_tree_breaker",
     "bulk_upsert_chunks",
     "count_by_source_kind",
     "count_by_status",
     "delete_chunk",
+    "get_admitted_chunks_for_seal",
     "get_chunk",
+    "get_llm_score_cached",
     "init_tree_schema",
     "list_chunks",
+    "list_distinct_sources",
+    "mark_chunks_sealed",
+    "set_llm_score_cached",
     "upsert_chunk",
 ]

@@ -20,21 +20,59 @@ Razionale tre-soglia:
 Pattern Karpathy "schema is the product":
     - cheap_signals() ritorna dict[str, float] strutturato, mai magic numbers.
     - Pesi aggregazione documentati in CHEAP_WEIGHTS.
-    - LLM extractor stub: ritorna 0.5 neutral fino a wire Sessione 7+.
+    - LLM extractor REAL: Claude Haiku 4.5 via Anthropic SDK + license proxy SaaS.
 
-Pattern Conv. 34 (spot check post-multi-agent): LLM extractor stub dichiara
-esplicitamente l'incertezza nel campo `reasoning`, mai pretende un score reale.
+Pattern Conv. 34 (spot check post-multi-agent): LLM extractor reale dichiara
+esplicitamente l'incertezza nel campo `reasoning`, fallback 0.5 borderline su
+ogni errore.
+
+Pattern Conv. 47 (single source of truth costanti): score LLM cached in
+SQLite `mem_llm_score_cache` (chunk_id_hash PK). Stessa content -> stesso
+hash -> cache hit -> zero cost ri-extraction.
 """
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
+import time
 from dataclasses import dataclass
 
 from .tree_chunker import TreeChunk
 
 logger = logging.getLogger(__name__)
+
+
+# --------------------------------------------------------------------------
+# LLM EXTRACTOR — config Claude Haiku 4.5
+# --------------------------------------------------------------------------
+
+# Model slug per scoring borderline (cost ~$0.80/MTok input, ~$4/MTok output).
+LLM_SCORE_MODEL = "claude-haiku-4-5-20251001"
+
+# Max output tokens: 10 sufficienti per singolo float (es. "0.73\n").
+LLM_SCORE_MAX_OUTPUT = 10
+
+# Prompt sistema corto: classificatore numerico 0.0-1.0.
+LLM_SCORE_SYSTEM = (
+    "Sei un classificatore deterministico. Dato un chunk di testo, ritorna "
+    "un singolo numero da 0.0 a 1.0 che rappresenta l'importanza del chunk "
+    "per memoria persistente di un consulente compliance italiana:\n"
+    "  - 0.0-0.2: trivial (small talk, conferme, saluti, no info).\n"
+    "  - 0.3-0.5: contesto utile (riferimenti generici, nomi, date).\n"
+    "  - 0.6-0.8: insight rilevante (decisione operativa, fatto normativo).\n"
+    "  - 0.9-1.0: high-value (norma puntuale + autorita + decisione).\n"
+    "Output: solo il numero (es. '0.73'), niente altro testo, niente spiegazione."
+)
+
+# Fallback score su error / timeout: borderline cautelativo (admit-leaning).
+LLM_FALLBACK_SCORE = 0.5
+
+# Stima cost USD per chunk (Haiku 4.5 input $0.80/MTok + output $4/MTok).
+# Per ~300 token input + 5 token output -> ~$0.0003 per chunk.
+LLM_COST_PER_INPUT_TOK = 0.80 / 1_000_000.0
+LLM_COST_PER_OUTPUT_TOK = 4.00 / 1_000_000.0
 
 
 # --------------------------------------------------------------------------
@@ -275,32 +313,196 @@ def cheap_total(signals: CheapSignals) -> float:
 
 
 # --------------------------------------------------------------------------
-# LLM EXTRACTOR — Fase 3 borderline (STUB carry-over Sessione 7+)
+# LLM EXTRACTOR — Fase 3 borderline (REAL Claude Haiku 4.5 v0.6.0)
 # --------------------------------------------------------------------------
 
 
-def llm_extract_importance(chunk: TreeChunk) -> float:
-    """STUB LLM extractor per chunks borderline (carry-over Sessione 7+).
+def _content_hash(content: str) -> str:
+    """Stable hash content per cache idempotente."""
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
 
-    Implementazione reale: chiamata Claude Haiku 4.5 batch con prompt scoring
-    relevance + entity extraction. Cost-controlled via batching + caching.
 
-    Ora: ritorna 0.5 neutral (deferisce decisione al cheap_total signal).
+def _parse_llm_score(raw: str) -> float | None:
+    """Parsing robusto del singolo float da output LLM.
 
-    Pattern Conv. 34 spot check post-multi-agent: dichiarazione esplicita
-    di incertezza nel reasoning, mai pretende score reale.
+    Returns:
+        float 0.0-1.0 se parsing OK, None altrimenti (fallback caller).
+    """
+    if not raw:
+        return None
+    # Estrai primo float-like pattern (es. "0.73", "0.85\n", "Score: 0.7")
+    match = re.search(r"\b(?:0|1)(?:\.\d+)?\b", raw.strip())
+    if not match:
+        return None
+    try:
+        val = float(match.group(0))
+        if 0.0 <= val <= 1.0:
+            return val
+        # Clamp out-of-range a [0.0, 1.0]
+        return max(0.0, min(1.0, val))
+    except ValueError:
+        return None
+
+
+async def _llm_score_cached_lookup(content_hash: str) -> float | None:
+    """Cache lookup in mem_llm_score_cache per chunk hash.
+
+    Returns:
+        float score se cache hit, None se miss / error.
+    """
+    # Import locale per evitare circular import (tree_store importa scoring? no, ma safe)
+    from .tree_store import get_llm_score_cached
+
+    try:
+        return await get_llm_score_cached(content_hash)
+    except Exception as exc:
+        logger.warning("llm_score_cache_lookup_failed", extra={"error": str(exc)})
+        return None
+
+
+async def _llm_score_cached_store(content_hash: str, score: float, model: str) -> None:
+    """Store score in cache mem_llm_score_cache. Best-effort (no raise)."""
+    from .tree_store import set_llm_score_cached
+
+    try:
+        await set_llm_score_cached(content_hash, score, model)
+    except Exception as exc:
+        logger.warning("llm_score_cache_store_failed", extra={"error": str(exc)})
+
+
+async def llm_extract_importance(chunk: TreeChunk) -> float:
+    """LLM extractor REALE per chunks borderline (Claude Haiku 4.5).
+
+    Pipeline:
+        1. Hash content -> lookup mem_llm_score_cache (idempotente).
+        2. Se miss: chiamata Claude Haiku via anthropic.AsyncAnthropic +
+           SaaS proxy SCO (license-gated, no API key cliente).
+        3. Parse output -> score float 0.0-1.0.
+        4. Store cache.
+        5. Log cost (input + output tokens stimati).
+
+    Fallback robusti:
+        - Cache hit -> ritorna score cached (no LLM call).
+        - LLM error / parse fail -> ritorna 0.5 (borderline admit-leaning).
+        - Missing credentials -> ritorna 0.5 + logger warning (no exception).
 
     Args:
         chunk: TreeChunk borderline da consultare.
 
     Returns:
-        float 0.0-1.0 score LLM (stub: 0.5 fisso).
+        float 0.0-1.0 score importanza chunk per memoria persistente.
+
+    Pattern Conv. 34 spot check post-multi-agent: dichiarazione esplicita
+    di incertezza nel campo `reasoning` upstream (admission_decision).
+
+    Pattern Conv. 41 tracciatura: log strutturato cost USD + tokens per ogni call.
     """
-    logger.info(
-        "llm_extract_importance: STUB call (carry-over Sessione 7+)",
-        extra={"chunk_id": chunk.id, "stub_score": 0.5},
-    )
-    return 0.5
+    content_hash = _content_hash(chunk.content)
+
+    # Lookup cache idempotente
+    cached = await _llm_score_cached_lookup(content_hash)
+    if cached is not None:
+        logger.info(
+            "llm_extract_importance.cache_hit",
+            extra={
+                "chunk_id": chunk.id,
+                "content_hash": content_hash,
+                "cached_score": cached,
+            },
+        )
+        return cached
+
+    # Cache miss: chiamata LLM reale
+    # Import locale per evitare import top-level pesanti (anthropic SDK ~3 MB)
+    try:
+        from anthropic import AsyncAnthropic
+
+        from sco_compliance_os.core.agent_sdk_runner import _resolve_credentials
+    except ImportError as exc:
+        logger.warning(
+            "llm_extract_importance.import_failed",
+            extra={"chunk_id": chunk.id, "error": str(exc)},
+        )
+        return LLM_FALLBACK_SCORE
+
+    creds = _resolve_credentials()
+    if creds is None:
+        logger.warning(
+            "llm_extract_importance.no_credentials",
+            extra={"chunk_id": chunk.id, "fallback_score": LLM_FALLBACK_SCORE},
+        )
+        return LLM_FALLBACK_SCORE
+
+    base_url, api_key = creds
+    started_ms = int(time.time() * 1000)
+
+    try:
+        client = AsyncAnthropic(base_url=base_url, api_key=api_key)
+        # User content: cap a ~2000 char per evitare overflow su chunk over-sized.
+        content_capped = chunk.content[:2000]
+        response = await client.messages.create(
+            model=LLM_SCORE_MODEL,
+            max_tokens=LLM_SCORE_MAX_OUTPUT,
+            system=LLM_SCORE_SYSTEM,
+            messages=[{"role": "user", "content": content_capped}],
+        )
+
+        elapsed_ms = int(time.time() * 1000) - started_ms
+
+        # Estrai testo risposta (TextBlock list -> primo TextBlock.text)
+        raw_text = ""
+        if response.content:
+            first_block = response.content[0]
+            raw_text = getattr(first_block, "text", "") or ""
+
+        score = _parse_llm_score(raw_text)
+        if score is None:
+            logger.warning(
+                "llm_extract_importance.parse_failed",
+                extra={
+                    "chunk_id": chunk.id,
+                    "raw_text": raw_text[:100],
+                    "fallback_score": LLM_FALLBACK_SCORE,
+                },
+            )
+            score = LLM_FALLBACK_SCORE
+
+        # Cost tracking
+        input_tok = response.usage.input_tokens
+        output_tok = response.usage.output_tokens
+        est_cost_usd = (
+            input_tok * LLM_COST_PER_INPUT_TOK + output_tok * LLM_COST_PER_OUTPUT_TOK
+        )
+        logger.info(
+            "llm_extract_importance.success",
+            extra={
+                "chunk_id": chunk.id,
+                "content_hash": content_hash,
+                "score": score,
+                "model": LLM_SCORE_MODEL,
+                "input_tokens": input_tok,
+                "output_tokens": output_tok,
+                "est_cost_usd": round(est_cost_usd, 6),
+                "elapsed_ms": elapsed_ms,
+            },
+        )
+
+        # Store cache (idempotente, best-effort)
+        await _llm_score_cached_store(content_hash, score, LLM_SCORE_MODEL)
+
+        return score
+
+    except Exception as exc:
+        logger.error(
+            "llm_extract_importance.error",
+            extra={
+                "chunk_id": chunk.id,
+                "exc_type": type(exc).__name__,
+                "error": str(exc)[:200],
+                "fallback_score": LLM_FALLBACK_SCORE,
+            },
+        )
+        return LLM_FALLBACK_SCORE
 
 
 # --------------------------------------------------------------------------
@@ -308,7 +510,7 @@ def llm_extract_importance(chunk: TreeChunk) -> float:
 # --------------------------------------------------------------------------
 
 
-def admission_decision(
+async def admission_decision(
     chunk: TreeChunk,
     *,
     definite_keep: float = DEFINITE_KEEP,
@@ -318,19 +520,21 @@ def admission_decision(
 ) -> AdmissionDecision:
     """Decide admit/drop/borderline per un chunk via cheap signals + LLM optional.
 
+    Async post-v0.6.0 (LLM extractor reale richiede await).
+
     Logic:
         1. Calcola cheap_signals + cheap_total.
         2. Se cheap_total >= definite_keep -> admit no LLM (hot path).
         3. Se cheap_total <= definite_drop -> drop no LLM (hot path).
         4. Else borderline: se consult_llm_on_borderline -> chiama llm_extract,
-           se LLM stub neutral (0.5) -> resta borderline (status pending_extraction).
+           merge cheap + llm via average, decide admit/drop/borderline finale.
 
     Args:
         chunk: TreeChunk da decidere.
         definite_keep: soglia admit no-LLM (default 0.85).
         definite_drop: soglia drop no-LLM (default 0.15).
-        consult_llm_on_borderline: se True consulta LLM extractor (default False
-            per non incorrere in cost durante smoke test e dev locale).
+        consult_llm_on_borderline: se True consulta LLM extractor reale Haiku
+            (default False per non incorrere in cost durante smoke + dev).
         now_ms: timestamp corrente per freshness (default = chunk.created_at_ms).
 
     Returns:
@@ -363,7 +567,7 @@ def admission_decision(
 
     # Borderline
     if consult_llm_on_borderline:
-        llm_score = llm_extract_importance(chunk)
+        llm_score = await llm_extract_importance(chunk)
         # Decision merge: average cheap + llm.
         merged = round((total + llm_score) / 2.0, 4)
         if merged >= definite_keep:
