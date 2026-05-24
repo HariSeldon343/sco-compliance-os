@@ -124,7 +124,12 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   fetchVaults: async () => {
     set({ loading: true, errorMessage: "" });
     try {
-      const res = await fetch(`${BACKEND_URL}/api/vault/list`);
+      // v1.0.1 fix race condition: retry 5x backoff coerente con license + onboarding store.
+      const { fetchWithRetry } = await import("@/api/retry");
+      const res = await fetchWithRetry(`${BACKEND_URL}/api/vault/list`, {
+        maxRetries: 5,
+        baseMs: 500,
+      });
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
       }

@@ -109,7 +109,12 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
   fetchStatus: async () => {
     set({ loading: true, errorMessage: "" });
     try {
-      const res = await fetch(`${BACKEND_URL}/api/onboarding/status`);
+      // v1.0.1 fix race condition: retry 5x backoff 500ms-8s assorbe startup sidecar.
+      const { fetchWithRetry } = await import("@/api/retry");
+      const res = await fetchWithRetry(`${BACKEND_URL}/api/onboarding/status`, {
+        maxRetries: 5,
+        baseMs: 500,
+      });
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
       }

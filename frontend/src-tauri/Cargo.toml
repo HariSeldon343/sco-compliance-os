@@ -1,6 +1,6 @@
 [package]
 name = "sco-compliance-os-app"
-version = "1.0.0"
+version = "1.0.1"
 description = "SCO Compliance OS — Personal AI desktop app per compliance italiana"
 authors = ["SCO Solution Consulting srls"]
 edition = "2021"

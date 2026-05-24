@@ -82,7 +82,13 @@ export const useLicenseStore = create<LicenseState>((set) => ({
   fetchStatus: async () => {
     set({ loading: true });
     try {
-      const res = await fetch(`${BACKEND_URL}/api/license/status`);
+      // v1.0.1 fix race condition: retry 5x backoff 500ms-8s = ~15s cumulative.
+      // Copre worst-case startup sidecar PyInstaller v1.0.0 (61 MB, 5-10s bind porta).
+      const { fetchWithRetry } = await import("@/api/retry");
+      const res = await fetchWithRetry(`${BACKEND_URL}/api/license/status`, {
+        maxRetries: 5,
+        baseMs: 500,
+      });
       const data: BackendStatusResponse = await res.json();
       set({ ...mapResponse(data), loading: false, initialFetchDone: true });
     } catch (err) {
