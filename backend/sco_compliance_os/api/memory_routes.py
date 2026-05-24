@@ -87,12 +87,46 @@ async def get_memory_tree(
 ) -> MemoryTreeResponse:
     """Ritorna struttura tree del memory chunks indicizzati.
 
-    TODO: implementare scan di vault wiki/entities + wiki/concepts + wiki/sources.
-    Per ora stub con tree vuoto + counter zero.
+    Subagent DEV-MEMORY-TREE 24/05/2026: ora ritorna dati reali da mem_tree_chunks
+    (bucket-seal Fase 1+2+3) come MemoryNode roots. Ciascun chunk admitted appare
+    come nodo root tree. Filtraggio per status='admitted' per coerenza UX.
+
+    Per dati dettagliati con filtri completi usare GET /tree/chunks.
+    Per stats aggregati usare GET /tree/stats.
     """
     _ = settings  # silence unused
+    _ = vault_id  # vault filter futura, ora cumulativo
+    from sco_compliance_os.services.memory.tree_store import (
+        count_by_status,
+        list_chunks,
+    )
+
     logger.info("memory.tree.requested", vault_id=vault_id)
-    return MemoryTreeResponse(root_ids=[], nodes={}, total_count=0)
+
+    # Ritorna top-50 chunk admitted ordinati per timestamp DESC
+    chunks = await list_chunks(status="admitted", limit=50)
+    counts = await count_by_status()
+    total = counts.get("total", 0)
+
+    nodes: dict[str, MemoryNode] = {}
+    root_ids: list[str] = []
+    for c in chunks:
+        node = MemoryNode(
+            id=c.id,
+            title=f"[{c.source_kind}] {c.source_id}",
+            path=f"mem_tree_chunks/{c.id}",
+            kind=c.source_kind,
+            snippet=c.content[:200].strip().replace("\n", " "),
+            children=[],
+        )
+        nodes[c.id] = node
+        root_ids.append(c.id)
+
+    return MemoryTreeResponse(
+        root_ids=root_ids,
+        nodes=nodes,
+        total_count=total,
+    )
 
 
 @router.post("/ingest", response_model=MemoryIngestResponse, status_code=202)
@@ -248,3 +282,215 @@ async def get_top_hotness(
         )
         for s in snapshots
     ]
+
+
+# ----- Memory Tree bucket-seal 4 fasi (subagent DEV-MEMORY-TREE 24/05/2026) -----
+
+
+class TreeIngestInputItem(BaseModel):
+    """Singolo input per POST /tree/ingest."""
+
+    source_kind: str = Field(
+        ...,
+        description="Vocabolario chiuso: chat | email | document | vault_file | note.",
+    )
+    source_id: str = Field(..., min_length=1, description="Identificatore opaco sorgente.")
+    content: str = Field(..., min_length=1, description="Testo raw da ingerire.")
+    owner: str = Field(default="local", description="Identificatore utente (default 'local').")
+    timestamp_ms: int | None = Field(
+        default=None,
+        description="Timestamp evento POSIX ms UTC (default now).",
+    )
+    tags: list[str] = Field(default_factory=list, description="Tag arbitrari.")
+
+
+class TreeIngestRequest(BaseModel):
+    """Request body per POST /tree/ingest."""
+
+    texts: list[TreeIngestInputItem] = Field(..., min_length=1, max_length=100)
+    consult_llm_on_borderline: bool = Field(
+        default=False,
+        description="Se True consulta LLM extractor stub per chunk borderline.",
+    )
+    max_tokens: int = Field(
+        default=3000,
+        ge=100,
+        le=8000,
+        description="Budget massimo per chunk (default 3000).",
+    )
+
+
+class TreeIngestResponse(BaseModel):
+    """Response per POST /tree/ingest — IngestCounts."""
+
+    admitted: int
+    dropped: int
+    pending_extraction: int
+    total: int
+    upserted: int
+
+
+class TreeChunkItem(BaseModel):
+    """Item rappresentativo di un TreeChunk per GET /tree/chunks."""
+
+    id: str
+    source_kind: str
+    source_id: str
+    owner: str
+    timestamp_ms: int
+    tags: list[str]
+    content_preview: str
+    token_count: int
+    seq_in_source: int
+    created_at_ms: int
+    status: str
+
+
+class TreeStatsResponse(BaseModel):
+    """Response per GET /tree/stats — count_by_status + count_by_source_kind."""
+
+    counts_by_status: dict[str, int]
+    counts_by_source_kind: dict[str, int]
+    total: int
+
+
+@router.post("/tree/ingest", response_model=TreeIngestResponse, status_code=202)
+async def post_tree_ingest(payload: TreeIngestRequest) -> TreeIngestResponse:
+    """Ingestion bucket-seal: canonicalize + chunk + admission gate + persist.
+
+    Pipeline 4 fasi (Fase 1+2+3 implementate, Fase 4 sealing carry-over Sessione 7+):
+        1. Canonicalize testo -> markdown canonico (whitespace normalize).
+        2. Chunk_text -> stable deterministic IDs, max_tokens default 3000.
+        3. Admission gate -> cheap signals + decisione admit/drop/borderline.
+        4. (carry-over) Sealing summarization tree_source / tree_topic / tree_global.
+
+    Args:
+        payload: lista IngestInput + flag LLM consult + max_tokens.
+
+    Returns:
+        IngestCounts con breakdown admitted/dropped/pending + upserted.
+    """
+    from sco_compliance_os.services.memory.tree_ingester import (
+        IngestInput,
+        ingest_inputs,
+    )
+
+    inputs = [
+        IngestInput(
+            source_kind=item.source_kind,
+            source_id=item.source_id,
+            content=item.content,
+            owner=item.owner,
+            timestamp_ms=item.timestamp_ms,
+            tags=item.tags,
+        )
+        for item in payload.texts
+    ]
+
+    logger.info(
+        "memory.tree.ingest.requested",
+        input_count=len(inputs),
+        consult_llm=payload.consult_llm_on_borderline,
+        max_tokens=payload.max_tokens,
+    )
+
+    counts = await ingest_inputs(
+        inputs,
+        consult_llm_on_borderline=payload.consult_llm_on_borderline,
+        max_tokens=payload.max_tokens,
+    )
+
+    return TreeIngestResponse(
+        admitted=counts.admitted,
+        dropped=counts.dropped,
+        pending_extraction=counts.pending_extraction,
+        total=counts.total,
+        upserted=counts.upserted,
+    )
+
+
+@router.get("/tree/chunks", response_model=list[TreeChunkItem])
+async def get_tree_chunks(
+    source_kind: str | None = Query(
+        default=None,
+        description="Filtra per source_kind (chat | email | document | vault_file | note).",
+    ),
+    status: str | None = Query(
+        default=None,
+        description="Filtra per status (pending_extraction | admitted | buffered | sealed | dropped).",
+    ),
+    source_id: str | None = Query(default=None, description="Filtra per source_id."),
+    owner: str | None = Query(default=None, description="Filtra per owner."),
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[TreeChunkItem]:
+    """Lista chunks del Memory Tree bucket-seal con filtri + paginazione.
+
+    Ordine: created_at_ms DESC (chunk piu' recenti per primi).
+    """
+    from sco_compliance_os.services.memory.tree_store import list_chunks
+
+    logger.info(
+        "memory.tree.chunks.requested",
+        source_kind=source_kind,
+        status=status,
+        source_id=source_id,
+        owner=owner,
+        limit=limit,
+        offset=offset,
+    )
+
+    chunks = await list_chunks(
+        status=status,
+        source_kind=source_kind,
+        source_id=source_id,
+        owner=owner,
+        limit=limit,
+        offset=offset,
+    )
+
+    return [
+        TreeChunkItem(
+            id=c.id,
+            source_kind=c.source_kind,
+            source_id=c.source_id,
+            owner=c.owner,
+            timestamp_ms=c.timestamp_ms,
+            tags=c.tags,
+            content_preview=c.content[:300].strip().replace("\n", " "),
+            token_count=c.token_count,
+            seq_in_source=c.seq_in_source,
+            created_at_ms=c.created_at_ms,
+            status=c.status,
+        )
+        for c in chunks
+    ]
+
+
+@router.get("/tree/stats", response_model=TreeStatsResponse)
+async def get_tree_stats() -> TreeStatsResponse:
+    """Statistiche aggregate Memory Tree bucket-seal (count by status + source_kind).
+
+    Cruscotto Conv. 41 tracciatura: utile per smoke + verifica pipeline.
+    """
+    from sco_compliance_os.services.memory.tree_store import (
+        count_by_source_kind,
+        count_by_status,
+    )
+
+    by_status = await count_by_status()
+    by_kind = await count_by_source_kind()
+    total = by_status.pop("total", 0) if "total" in by_status else 0
+
+    logger.info(
+        "memory.tree.stats.requested",
+        total=total,
+        statuses=len(by_status),
+        source_kinds=len(by_kind),
+    )
+
+    return TreeStatsResponse(
+        counts_by_status=by_status,
+        counts_by_source_kind=by_kind,
+        total=total,
+    )

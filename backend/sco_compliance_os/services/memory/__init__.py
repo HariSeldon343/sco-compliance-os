@@ -29,4 +29,9 @@ __all__ = [
     "tokenjuice",
     # Wave 1 OpenHuman replica additions (subagent W1-MEMORY 23/05/2026)
     "tree_builder",
+    # Memory Tree bucket-seal 4 fasi clean-room (subagent DEV-MEMORY-TREE 24/05/2026)
+    "tree_chunker",
+    "tree_scoring",
+    "tree_store",
+    "tree_ingester",
 ]

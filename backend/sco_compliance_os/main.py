@@ -36,9 +36,11 @@ from sco_compliance_os.api import (
     license_routes,
     memory_routes,
     onboarding_routes,
+    profile_routes,
     subconscious_routes,
     tokenjuice_routes,
     vault_routes,
+    wiki_routes,
 )
 from sco_compliance_os.config import get_settings
 from sco_compliance_os.core.logging_setup import configure_logging, set_request_id
@@ -55,7 +57,11 @@ from sco_compliance_os.services.integrations.scheduler import (
     ConnectorScheduler,
     fetch_connector,
 )
+from sco_compliance_os.services.learning.profile_store import (
+    init_schema as init_user_profile_schema,
+)
 from sco_compliance_os.services.memory.store import init_schema as init_memory_schema
+from sco_compliance_os.services.memory.tree_store import init_tree_schema
 from sco_compliance_os.services.subconscious.tick_loop import (
     SubconsciousTickLoop,
     set_active_loop,
@@ -88,6 +94,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Init Memory Tree DB schema (chunks per Subconscio)
     await init_memory_schema()
+
+    # Init Memory Tree bucket-seal schema (mem_tree_chunks, 4 fasi pipeline)
+    # Subagent DEV-MEMORY-TREE 24/05/2026: Fase 1+2+3 + admission gate.
+    # Schema idempotente safe a ogni avvio (CHECK constraints + INDEX IF NOT EXISTS).
+    await init_tree_schema()
+
+    # Init User Profile DB schema (apprendimento profilo progressivo)
+    await init_user_profile_schema()
 
     # Apply migrations OpenHuman replica (W1-MEMORY: 0002_openhuman_features.sql)
     # Idempotente IF NOT EXISTS, sicuro da rieseguire ad ogni startup.
@@ -271,6 +285,7 @@ def create_app() -> FastAPI:
     # Routers
     app.include_router(chat_routes.router)
     app.include_router(vault_routes.router)
+    app.include_router(wiki_routes.router)
     app.include_router(memory_routes.router)
     app.include_router(integrations_routes.router)
     app.include_router(onboarding_routes.router)
@@ -278,6 +293,7 @@ def create_app() -> FastAPI:
     app.include_router(subconscious_routes.router)
     app.include_router(tokenjuice_routes.router)
     app.include_router(autofetch_routes.router)
+    app.include_router(profile_routes.router)
 
     return app
 

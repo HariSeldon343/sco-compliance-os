@@ -279,11 +279,29 @@ async def build_runner(
     system_prompt: str | None = None,
     mcp_servers: list[dict[str, Any]] | None = None,
     tools: list[dict[str, Any]] | None = None,
+    profile_markdown: str | None = None,
 ) -> AgentRunner:
-    """Factory helper per istanziare AgentRunner con config standard."""
+    """Factory helper per istanziare AgentRunner con config standard.
+
+    Args:
+        model_slug: identificativo modello Anthropic (es. claude-sonnet-4-6).
+        system_prompt: override del system prompt default (Antonio Amodeo).
+        mcp_servers: MCP servers da connettere (placeholder v0.2.0).
+        tools: tools custom (placeholder v0.2.0).
+        profile_markdown: markdown del profilo utente fetched da profile_store
+            via render_profile_markdown(). Se non None, viene PREPENDED al
+            system prompt per injection learning progressivo del profilo.
+            Pattern Conv. 47 single source of truth: il profilo vive solo nel
+            DB SQLite, qui passato come stringa pronta a uso.
+    """
+    base_prompt = system_prompt or _DEFAULT_SYSTEM_PROMPT
+    if profile_markdown:
+        effective_prompt = f"{profile_markdown}\n\n{base_prompt}"
+    else:
+        effective_prompt = base_prompt
     config = AgentRunnerConfig(
         model_slug=model_slug,
-        system_prompt=system_prompt or _DEFAULT_SYSTEM_PROMPT,
+        system_prompt=effective_prompt,
         mcp_servers=mcp_servers or [],
         tools=tools or [],
     )

@@ -1,49 +1,77 @@
-// SCO Compliance OS — schermata Vault: lista vault registrati + aggiungi via dialog Tauri
-import { useState } from "react";
-import { Database, FolderPlus, Check, AlertCircle } from "lucide-react";
+// SCO Compliance OS — schermata Vault: lista vault registrati REALI da backend
+// Conv. 47 enforcement v0.5.0: nessun hardcoded INITIAL_VAULTS, fonte unica = useVaultStore.
+// Conv. 48 enforcement: backend single source of truth tramite GET /api/vault/list.
+
+import { useEffect } from "react";
+import { Database, FolderPlus, Check, AlertCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/cn";
-
-interface VaultEntry {
-  id: string;
-  name: string;
-  path: string;
-  isActive: boolean;
-  fileCount: number;
-  lastSync: string;
-}
-
-// Stub vault — verranno sostituiti da fetch /api/vaults
-const INITIAL_VAULTS: VaultEntry[] = [
-  {
-    id: "v1",
-    name: "Second Brain",
-    path: "C:\\Users\\aoedo\\Desktop\\Second Brain",
-    isActive: true,
-    fileCount: 1247,
-    lastSync: "2026-05-21 14:30",
-  },
-];
+import { useVaultStore } from "@/store/vault-store";
 
 export function VaultScreen() {
-  const [vaults, setVaults] = useState<VaultEntry[]>(INITIAL_VAULTS);
-  const [selected, setSelected] = useState<string>(INITIAL_VAULTS[0]?.id ?? "");
+  const vaults = useVaultStore((s) => s.vaults);
+  const selectedVaultId = useVaultStore((s) => s.selectedVaultId);
+  const loading = useVaultStore((s) => s.loading);
+  const errorMessage = useVaultStore((s) => s.errorMessage);
+  const initialFetchDone = useVaultStore((s) => s.initialFetchDone);
+  const fetchVaults = useVaultStore((s) => s.fetchVaults);
+  const addVault = useVaultStore((s) => s.addVault);
+  const selectVault = useVaultStore((s) => s.selectVault);
+  const removeVault = useVaultStore((s) => s.removeVault);
 
-  const activeVault = vaults.find((v) => v.id === selected) ?? null;
+  useEffect(() => {
+    if (!initialFetchDone) {
+      fetchVaults();
+    }
+  }, [initialFetchDone, fetchVaults]);
+
+  const activeVault = vaults.find((v) => v.id === selectedVaultId) ?? null;
 
   const handleAddVault = async () => {
-    // TODO: integrare @tauri-apps/plugin-dialog `open({ directory: true })`
-    // try { const path = await open({ directory: true }); ... } catch ...
-    toast.info("Aggiungi vault: dialog Tauri in arrivo (stub).");
+    try {
+      const dialogModule = await import("@tauri-apps/plugin-dialog");
+      const selected = await dialogModule.open({
+        directory: true,
+        multiple: false,
+        title: "Scegli la cartella del vault",
+      });
+      if (typeof selected !== "string") {
+        return;
+      }
+      const entry = await addVault(selected);
+      if (entry) {
+        toast.success(`Vault "${entry.name}" registrato.`);
+        selectVault(entry.id);
+      } else {
+        toast.error(errorMessage || "Aggiunta vault fallita.");
+      }
+    } catch (err) {
+      toast.error(`Aggiunta vault fallita: ${(err as Error).message}`);
+    }
   };
 
   const handleSetActive = (id: string) => {
-    setVaults((prev) =>
-      prev.map((v) => ({ ...v, isActive: v.id === id })),
-    );
+    selectVault(id);
     toast.success("Vault attivo aggiornato.");
   };
+
+  const handleRemove = async (id: string) => {
+    const ok = await removeVault(id);
+    if (ok) {
+      toast.success("Vault rimosso dal registry locale.");
+    } else {
+      toast.error(errorMessage || "Rimozione vault fallita.");
+    }
+  };
+
+  if (loading && !initialFetchDone) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 size={32} className="animate-spin text-sco-blue" />
+      </div>
+    );
+  }
 
   return (
     <div className="h-full overflow-y-auto px-8 py-6">
@@ -54,8 +82,7 @@ export function VaultScreen() {
               Vault
             </h1>
             <p className="mt-1 text-sm text-sco-muted-foreground">
-              Le tue cartelle Obsidian collegate. Filing rule Karpathy
-              applicata.
+              Le tue cartelle Obsidian collegate. Filing rule Karpathy applicata.
             </p>
           </div>
           <button
@@ -68,108 +95,126 @@ export function VaultScreen() {
           </button>
         </header>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_2fr]">
-          {/* Lista vault */}
-          <div className="space-y-2">
-            {vaults.map((v) => (
-              <button
-                key={v.id}
-                type="button"
-                onClick={() => setSelected(v.id)}
-                className={cn(
-                  "flex w-full items-center gap-3 rounded-md border p-3 text-left transition-colors",
-                  selected === v.id
-                    ? "border-sco-blue bg-sco-blue/5"
-                    : "border-sco-border hover:border-sco-blue",
-                )}
-              >
-                <Database size={18} className="text-sco-blue" />
-                <div className="flex-1 truncate">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{v.name}</span>
-                    {v.isActive && (
-                      <span className="rounded-full bg-sco-amber/20 px-2 py-0.5 text-xs font-medium text-sco-amber">
-                        Attivo
-                      </span>
-                    )}
-                  </div>
-                  <div className="truncate text-xs text-sco-muted-foreground">
-                    {v.path}
-                  </div>
-                </div>
-              </button>
-            ))}
+        {errorMessage && (
+          <div className="mb-4 flex items-center gap-2 rounded-md border border-sco-amber/40 bg-sco-amber/10 px-3 py-2 text-sm text-sco-amber">
+            <AlertCircle size={16} />
+            {errorMessage}
           </div>
+        )}
 
-          {/* Dettaglio vault */}
-          {activeVault && (
-            <div className="rounded-lg border border-sco-border bg-sco-surface-elevated p-6">
-              <h2 className="text-lg font-semibold">{activeVault.name}</h2>
-              <p className="mt-1 break-all text-xs text-sco-muted-foreground">
-                {activeVault.path}
-              </p>
-
-              <dl className="mt-4 grid grid-cols-2 gap-4 text-sm">
-                <Detail
-                  label="File indicizzati"
-                  value={activeVault.fileCount.toLocaleString("it-IT")}
-                />
-                <Detail label="Ultimo sync" value={activeVault.lastSync} />
-                <Detail
-                  label="Stato"
-                  value={
-                    <span className="flex items-center gap-1">
-                      <Check size={14} className="text-green-600" />
-                      Healthy
-                    </span>
-                  }
-                />
-                <Detail label="Filing rule" value="Karpathy 10 step" />
-              </dl>
-
-              <div className="mt-6 flex gap-2">
-                {!activeVault.isActive && (
+        {vaults.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-sco-border py-16 text-center">
+            <Database size={48} className="mb-4 text-sco-muted-foreground" />
+            <h2 className="text-lg font-medium text-sco-navy dark:text-sco-text-dark">
+              Nessun vault registrato
+            </h2>
+            <p className="mt-2 max-w-md text-sm text-sco-muted-foreground">
+              Clicca su "Aggiungi vault" per scegliere una cartella Obsidian
+              esistente dal tuo disco. L'agente legge da qui per risponderti.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_2fr]">
+            <div className="space-y-2">
+              {vaults.map((v) => (
+                <div
+                  key={v.id}
+                  className={cn(
+                    "rounded-md border p-3 transition-colors",
+                    selectedVaultId === v.id
+                      ? "border-sco-blue bg-sco-blue/5"
+                      : "border-sco-border hover:border-sco-blue",
+                  )}
+                >
                   <button
                     type="button"
-                    onClick={() => handleSetActive(activeVault.id)}
-                    className="rounded-md bg-sco-navy px-3 py-2 text-sm font-medium text-white hover:bg-sco-blue"
+                    onClick={() => handleSetActive(v.id)}
+                    className="flex w-full items-center gap-3 text-left"
                   >
-                    Imposta come attivo
+                    <Database size={18} className="text-sco-blue" />
+                    <div className="flex-1 truncate">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">{v.name}</span>
+                        {selectedVaultId === v.id && (
+                          <span className="rounded-full bg-sco-amber/20 px-2 py-0.5 text-xs font-medium text-sco-amber">
+                            Attivo
+                          </span>
+                        )}
+                      </div>
+                      <div className="truncate text-xs text-sco-muted-foreground">
+                        {v.path}
+                      </div>
+                    </div>
                   </button>
-                )}
-                <button
-                  type="button"
-                  className="rounded-md border border-sco-border px-3 py-2 text-sm hover:bg-sco-muted"
-                >
-                  Re-indicizza
-                </button>
-                <button
-                  type="button"
-                  className="ml-auto flex items-center gap-1 rounded-md border border-red-300 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
-                >
-                  <AlertCircle size={14} />
-                  Scollega
-                </button>
-              </div>
+                  <div className="mt-2 flex items-center justify-between text-xs text-sco-muted-foreground">
+                    <span>{v.mdFilesCount} file .md</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemove(v.id)}
+                      className="text-coral-500 hover:underline"
+                    >
+                      Rimuovi
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
-function Detail({
-  label,
-  value,
-}: {
-  label: string;
-  value: React.ReactNode;
-}) {
-  return (
-    <div>
-      <dt className="text-xs text-sco-muted-foreground">{label}</dt>
-      <dd className="mt-0.5 font-medium">{value}</dd>
+            {activeVault && (
+              <div className="rounded-lg border border-sco-border bg-white p-5 dark:bg-slate-900">
+                <h2 className="text-lg font-semibold text-sco-navy dark:text-sco-text-dark">
+                  {activeVault.name}
+                </h2>
+                <p className="mt-1 truncate text-xs text-sco-muted-foreground">
+                  {activeVault.path}
+                </p>
+                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <div className="text-sco-muted-foreground">File .md</div>
+                    <div className="font-medium">{activeVault.mdFilesCount}</div>
+                  </div>
+                  <div>
+                    <div className="text-sco-muted-foreground">CLAUDE.md</div>
+                    <div className="font-medium">
+                      {activeVault.hasClaudeMd ? (
+                        <Check size={16} className="text-sage-500" />
+                      ) : (
+                        "Mancante"
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-sco-muted-foreground">wiki/</div>
+                    <div className="font-medium">
+                      {activeVault.hasWikiDir ? (
+                        <Check size={16} className="text-sage-500" />
+                      ) : (
+                        "Mancante"
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-sco-muted-foreground">raw/</div>
+                    <div className="font-medium">
+                      {activeVault.hasRawDir ? (
+                        <Check size={16} className="text-sage-500" />
+                      ) : (
+                        "Mancante"
+                      )}
+                    </div>
+                  </div>
+                </div>
+                {!activeVault.isKarpathy && (
+                  <div className="mt-4 rounded-md border border-sco-amber/40 bg-sco-amber/10 px-3 py-2 text-xs text-sco-amber">
+                    Struttura Karpathy parziale o assente. L'agente avra meno
+                    contesto strutturato.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

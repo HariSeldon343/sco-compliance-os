@@ -164,14 +164,44 @@ class VaultDocument:
 
 
 def _parse_yaml_safe(yaml_text: str) -> dict:
-    """Parsing YAML tollerante. Usa pyyaml se disponibile, altrimenti naive."""
+    """Parsing YAML tollerante con fallback a naive parser su YAMLError.
+
+    Strategia v0.4.0 (cantiere fix YAML invalido vault Karpathy):
+    1. Tenta yaml.safe_load standard.
+    2. Su YAMLError (chiave seguita da `- elem` inline, indentazione mista, etc):
+       normalizza il testo (sposta `key: - elem` su 2 righe) e riprova.
+    3. Su nuovo fallimento, fallback a _naive_yaml_parse (estrae solo chiavi top-level
+       come stringhe; perde array nested ma non blocca il vault).
+
+    Pattern Karpathy "vault intoccabile" (decisione Antonio 24/05/2026): il parser
+    deve essere robusto a YAML imperfetto invece di richiedere fix manuali del vault.
+    """
     try:
         import yaml  # type: ignore
-
-        return yaml.safe_load(yaml_text) or {}
     except (ImportError, ModuleNotFoundError):
         logger.warning("pyyaml non disponibile, fallback parser naive (limited)")
         return _naive_yaml_parse(yaml_text)
+
+    try:
+        return yaml.safe_load(yaml_text) or {}
+    except yaml.YAMLError as first_err:
+        # Tentativo 2: normalizza pattern `key: - elem` (lista inline malformata)
+        # in `key:\n  - elem` (forma canonica YAML block-style).
+        normalized = re.sub(
+            r"^(\s*)([A-Za-z_][A-Za-z0-9_]*):\s+-\s+(.+)$",
+            r"\1\2:\n\1  - \3",
+            yaml_text,
+            flags=re.MULTILINE,
+        )
+        try:
+            return yaml.safe_load(normalized) or {}
+        except yaml.YAMLError as second_err:
+            logger.warning(
+                "YAML parse failed twice (first=%s, normalized=%s), fallback naive parser",
+                first_err,
+                second_err,
+            )
+            return _naive_yaml_parse(yaml_text)
 
 
 def _naive_yaml_parse(text: str) -> dict:

@@ -1,56 +1,66 @@
 // SCO Compliance OS — input bottom polished: textarea arrotondata + attachments + mode dropdown
+// Mode dropdown ora persistito nello store chatMode (Conv. 47 single source of truth).
+// Le descrizioni sono in linguaggio semplice (regola 14/05).
 import { useRef, useState, type KeyboardEvent, type ChangeEvent } from "react";
 import {
   Send,
   Paperclip,
   Slash,
   ChevronDown,
-  Sparkles,
+  Check,
   ListChecks,
-  Zap,
+  HelpCircle,
+  Rocket,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { useChatStore } from "@/store/chat-store";
+import { useChatStore, useChatModeStore, type ChatMode } from "@/store/chat-store";
 import { cn } from "@/lib/cn";
 
 const MAX_CHARS = 8000;
 
-type ChatMode = "plan" | "ask" | "auto";
-
 interface ModeConfig {
   value: ChatMode;
   label: string;
+  shortLabel: string;
   description: string;
-  icon: typeof Sparkles;
+  icon: typeof ListChecks;
 }
 
+// Tre modalita di interazione con l'agente. Linguaggio semplice 14/05.
+// Backend non cabla ancora `permission_mode` (carry-over v0.2.0): per ora
+// la scelta vive lato frontend come preferenza utente persistita.
 const MODES: ModeConfig[] = [
   {
     value: "plan",
-    label: "Pianifica",
-    description: "Espone il piano prima di agire",
+    label: "Pianifica prima",
+    shortLabel: "Pianifica",
+    description: "Prima ti mostra il piano. Poi parte solo se sei d'accordo.",
     icon: ListChecks,
   },
   {
     value: "ask",
-    label: "Chiedi",
-    description: "Conferma ogni azione con AskUserQuestion",
-    icon: Sparkles,
+    label: "Chiedi conferma a ogni passo",
+    shortLabel: "Chiedi",
+    description: "Si ferma e ti chiede prima di fare cose importanti.",
+    icon: HelpCircle,
   },
   {
     value: "auto",
-    label: "Senza autorizzazioni",
-    description: "Procede in autonomia (default GOAL persistence)",
-    icon: Zap,
+    label: "Procedi in autonomia",
+    shortLabel: "Autonomo",
+    description:
+      "Va dritto fino al risultato finale. Default consigliato.",
+    icon: Rocket,
   },
 ];
 
 export function ChatInput() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [value, setValue] = useState("");
-  const [mode, setMode] = useState<ChatMode>("ask");
   const [modeOpen, setModeOpen] = useState(false);
+  const mode = useChatModeStore((s) => s.mode);
+  const setMode = useChatModeStore((s) => s.setMode);
   const isStreaming = useChatStore((s) => s.isStreaming);
   const sendMessage = useChatStore((s) => s.sendMessage);
 
@@ -93,7 +103,7 @@ export function ChatInput() {
     toast.info("Slash commands: in arrivo (skill registry stub)");
   };
 
-  const currentMode = MODES.find((m) => m.value === mode)!;
+  const currentMode = MODES.find((m) => m.value === mode) ?? MODES[2];
   const CurrentModeIcon = currentMode.icon;
 
   return (
@@ -157,9 +167,11 @@ export function ChatInput() {
                       : "text-sco-muted-foreground hover:bg-sco-muted hover:text-sco-text dark:hover:text-sco-text-dark",
                   )}
                   title={currentMode.description}
+                  aria-haspopup="listbox"
+                  aria-expanded={modeOpen}
                 >
                   <CurrentModeIcon size={13} />
-                  <span>{currentMode.label}</span>
+                  <span>{currentMode.shortLabel}</span>
                   <ChevronDown
                     size={12}
                     className={cn(
@@ -176,7 +188,14 @@ export function ChatInput() {
                       className="fixed inset-0 z-40"
                       onClick={() => setModeOpen(false)}
                     />
-                    <div className="absolute bottom-full left-0 z-50 mb-1.5 w-72 overflow-hidden rounded-lg border border-sco-border bg-sco-surface-elevated p-1 shadow-xl">
+                    <div
+                      role="listbox"
+                      aria-label="Modalita interazione agente"
+                      className="absolute bottom-full left-0 z-50 mb-1.5 w-80 max-h-96 overflow-y-auto rounded-lg border border-sco-border bg-sco-surface-elevated p-1 shadow-xl"
+                    >
+                      <div className="border-b border-sco-border px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-sco-muted-foreground">
+                        Come deve comportarsi l'agente
+                      </div>
                       {MODES.map((m) => {
                         const ModeIcon = m.icon;
                         const selected = mode === m.value;
@@ -184,6 +203,8 @@ export function ChatInput() {
                           <button
                             key={m.value}
                             type="button"
+                            role="option"
+                            aria-selected={selected}
                             onClick={() => {
                               setMode(m.value);
                               setModeOpen(false);
@@ -205,15 +226,24 @@ export function ChatInput() {
                               )}
                             />
                             <div className="flex-1">
-                              <div
-                                className={cn(
-                                  "text-xs font-semibold",
-                                  selected
-                                    ? "text-sco-blue"
-                                    : "text-sco-text dark:text-sco-text-dark",
+                              <div className="flex items-center gap-1.5">
+                                <div
+                                  className={cn(
+                                    "text-xs font-semibold",
+                                    selected
+                                      ? "text-sco-blue"
+                                      : "text-sco-text dark:text-sco-text-dark",
+                                  )}
+                                >
+                                  {m.label}
+                                </div>
+                                {selected && (
+                                  <Check
+                                    size={12}
+                                    className="text-sco-blue"
+                                    aria-label="selezionato"
+                                  />
                                 )}
-                              >
-                                {m.label}
                               </div>
                               <div className="mt-0.5 text-[11px] leading-snug text-sco-muted-foreground">
                                 {m.description}

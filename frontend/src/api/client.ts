@@ -69,11 +69,13 @@ async function request<T>(
 
 export const apiClient = {
   // ---- Conversations ----
+  // Conv. 47 fix v0.4.0: endpoint backend è /api/chat/conversations (vedi chat_routes.py:164),
+  // l'app puntava erroneamente a /api/conversations facendo fallire sidebar history.
   async listConversations(): Promise<ConversationItem[]> {
-    return request<ConversationItem[]>("/api/conversations");
+    return request<ConversationItem[]>("/api/chat/conversations");
   },
   async getConversationMessages(id: string): Promise<MessageItem[]> {
-    return request<MessageItem[]>(`/api/conversations/${id}/messages`);
+    return request<MessageItem[]>(`/api/chat/conversations/${id}/messages`);
   },
 
   // ---- Conversations CRUD ----
@@ -146,8 +148,10 @@ export const apiClient = {
   },
 
   // ---- Vaults ----
+  // Conv. 47 fix v0.4.0: endpoint backend è /api/vault/list (singolare, vedi vault_routes.py:104),
+  // l'app puntava erroneamente a /api/vaults plurale facendo fallire VaultScreen.
   async listVaults(): Promise<VaultItem[]> {
-    return request<VaultItem[]>("/api/vaults");
+    return request<VaultItem[]>("/api/vault/list");
   },
 
   // ---- Integrations ----

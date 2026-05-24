@@ -9,6 +9,32 @@ import type {
 } from "@/types/api";
 import { apiClient } from "@/api/client";
 
+// Permission mode UX dell'agente. Backend non ha ancora cablaggio param dedicato
+// (carry-over v0.2.0): per ora vive solo lato frontend come preferenza utente
+// persistita. Quando backend esporrà `permission_mode` su POST /api/chat/stream,
+// basterà inoltrarlo dallo store. Pattern Conv. 47 single source of truth.
+export type ChatMode = "plan" | "ask" | "auto";
+
+interface ChatModeState {
+  mode: ChatMode;
+  setMode: (mode: ChatMode) => void;
+}
+
+export const useChatModeStore = create<ChatModeState>()(
+  persist(
+    (set) => ({
+      // Default coerente con regola permanente GOAL-PERSISTENCE 20/05:
+      // "auto" = procede in autonomia fino al completamento della condizione.
+      mode: "auto",
+      setMode: (mode) => set({ mode }),
+    }),
+    {
+      name: "sco-chat-mode",
+      partialize: (s) => ({ mode: s.mode }),
+    },
+  ),
+);
+
 interface ChatState {
   // Mappa conversation_id -> ConversationItem
   conversations: Record<string, ConversationItem>;

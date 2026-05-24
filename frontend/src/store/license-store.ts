@@ -24,6 +24,11 @@ export interface LicenseState {
   errorMessage: string;
   backendVersion: string;
   loading: boolean;
+  // True dopo che il primo fetch è terminato (success o fail).
+  // Necessario per distinguere "fetch in corso" da "no license attivata" —
+  // entrambi danno status="unknown" + is_valid=false (backend ritorna "unknown" anche
+  // dopo fetch quando non c'è license attivata).
+  initialFetchDone: boolean;
 
   // Actions
   fetchStatus: () => Promise<void>;
@@ -46,7 +51,7 @@ interface BackendStatusResponse {
 
 function mapResponse(data: BackendStatusResponse): Omit<
   LicenseState,
-  "loading" | "fetchStatus" | "activate" | "refresh" | "logout"
+  "loading" | "initialFetchDone" | "fetchStatus" | "activate" | "refresh" | "logout"
 > {
   return {
     status: (data.status as LicenseStatus) ?? "unknown",
@@ -72,19 +77,21 @@ export const useLicenseStore = create<LicenseState>((set) => ({
   errorMessage: "",
   backendVersion: "",
   loading: false,
+  initialFetchDone: false,
 
   fetchStatus: async () => {
     set({ loading: true });
     try {
       const res = await fetch(`${BACKEND_URL}/api/license/status`);
       const data: BackendStatusResponse = await res.json();
-      set({ ...mapResponse(data), loading: false });
+      set({ ...mapResponse(data), loading: false, initialFetchDone: true });
     } catch (err) {
       set({
         status: "network_error",
         isValid: false,
         errorMessage: `Errore rete: ${err instanceof Error ? err.message : String(err)}`,
         loading: false,
+        initialFetchDone: true,
       });
     }
   },
@@ -98,7 +105,7 @@ export const useLicenseStore = create<LicenseState>((set) => ({
         body: JSON.stringify({ email, license_key: licenseKey }),
       });
       const data: BackendStatusResponse = await res.json();
-      set({ ...mapResponse(data), loading: false });
+      set({ ...mapResponse(data), loading: false, initialFetchDone: true });
       return Boolean(data.is_valid);
     } catch (err) {
       set({
@@ -106,6 +113,7 @@ export const useLicenseStore = create<LicenseState>((set) => ({
         isValid: false,
         errorMessage: `Errore rete: ${err instanceof Error ? err.message : String(err)}`,
         loading: false,
+        initialFetchDone: true,
       });
       return false;
     }
@@ -118,13 +126,14 @@ export const useLicenseStore = create<LicenseState>((set) => ({
         method: "POST",
       });
       const data: BackendStatusResponse = await res.json();
-      set({ ...mapResponse(data), loading: false });
+      set({ ...mapResponse(data), loading: false, initialFetchDone: true });
     } catch (err) {
       set({
         status: "network_error",
         isValid: false,
         errorMessage: `Errore rete: ${err instanceof Error ? err.message : String(err)}`,
         loading: false,
+        initialFetchDone: true,
       });
     }
   },

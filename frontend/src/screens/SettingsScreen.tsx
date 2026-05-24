@@ -1,7 +1,9 @@
-// SCO Compliance OS — schermata Impostazioni (API keys, modelli, aspetto, privacy)
-// Stub: form base, validazione e persistenza arriveranno in iterazioni successive.
+// SCO Compliance OS — schermata Impostazioni (aspetto, privacy)
+// Pattern Conv. 47 single source of truth: il modello LLM e l'API key Anthropic
+// vivono lato server SCO per tenant. L'app desktop NON deve far scegliere il modello
+// al cliente — è gestito centralmente da SCO Solution Consulting via license + proxy.
 
-import { Key, Cpu, Palette, ShieldCheck } from "lucide-react";
+import { Palette, ShieldCheck, ServerCog } from "lucide-react";
 
 import { useThemeStore, type Theme } from "@/store/theme-store";
 import { cn } from "@/lib/cn";
@@ -18,47 +20,36 @@ export function SettingsScreen() {
             Impostazioni
           </h1>
           <p className="mt-1 text-sm text-sco-muted-foreground">
-            Configura API key, modelli LLM, aspetto e privacy.
+            Aspetto, privacy e informazioni sul modello AI gestito da SCO.
           </p>
         </header>
 
-        {/* API Keys */}
-        <Section icon={Key} title="API Keys">
-          <Field label="Anthropic API Key">
-            <input
-              type="password"
-              placeholder="____________________"
-              className="w-full rounded-md border border-sco-border bg-sco-bg px-3 py-2 text-sm focus:border-sco-blue focus:outline-none"
-            />
-            <p className="mt-1 text-xs text-sco-muted-foreground">
-              Conservata in keyring di sistema (Windows Credential Manager).
+        {/* Modello AI gestito da SCO (disclaimer, no scelta cliente) */}
+        <section className="rounded-lg border border-sco-border bg-sco-surface-elevated p-6">
+          <div className="mb-3 flex items-center gap-2">
+            <ServerCog size={18} className="text-sco-blue" />
+            <h2 className="text-base font-semibold">
+              Modello AI gestito da SCO Solution Consulting
+            </h2>
+          </div>
+          <div className="space-y-3 text-sm text-sco-muted-foreground">
+            <p>
+              Il modello linguistico attivo per il tuo tenant è configurato e
+              mantenuto centralmente da SCO. Non è modificabile dall'app per
+              garantire stabilità, sicurezza e conformità contrattuale.
             </p>
-          </Field>
-          <Field label="OpenAI API Key (opzionale)">
-            <input
-              type="password"
-              placeholder="____________________"
-              className="w-full rounded-md border border-sco-border bg-sco-bg px-3 py-2 text-sm focus:border-sco-blue focus:outline-none"
-            />
-          </Field>
-        </Section>
-
-        {/* Modelli LLM */}
-        <Section icon={Cpu} title="Modelli LLM">
-          <Field label="Modello primario">
-            <select className="w-full rounded-md border border-sco-border bg-sco-bg px-3 py-2 text-sm focus:border-sco-blue focus:outline-none">
-              <option>claude-opus-4-7-1m</option>
-              <option>claude-sonnet-4-7</option>
-              <option>claude-haiku-4-7</option>
-              <option>gpt-5</option>
-            </select>
-          </Field>
-          <Field label="Modello fallback">
-            <select className="w-full rounded-md border border-sco-border bg-sco-bg px-3 py-2 text-sm focus:border-sco-blue focus:outline-none">
-              <option>claude-haiku-4-7</option>
-            </select>
-          </Field>
-        </Section>
+            <p>
+              Per modifiche o richieste, contatta{" "}
+              <a
+                href="mailto:info@scosolution.it"
+                className="font-medium text-sco-blue hover:underline"
+              >
+                info@scosolution.it
+              </a>
+              .
+            </p>
+          </div>
+        </section>
 
         {/* Aspetto */}
         <Section icon={Palette} title="Aspetto">
@@ -90,9 +81,11 @@ export function SettingsScreen() {
         {/* Privacy */}
         <Section icon={ShieldCheck} title="Privacy">
           <p className="text-sm text-sco-muted-foreground">
-            SCO Compliance OS opera localmente. Nessun dato lascia il
-            dispositivo senza conferma esplicita. Le chiamate ai modelli LLM
-            esterni sono opt-in per messaggio.
+            SCO Compliance OS opera localmente sul tuo dispositivo. Nessun dato
+            personale lascia il computer senza conferma esplicita. Le chiamate
+            al modello AI passano attraverso un proxy gestito da SCO Solution
+            Consulting (architettura licenza + proxy), che valida la tua
+            licenza e inoltra le richieste al fornitore del modello.
           </p>
           <label className="mt-3 flex items-center gap-2 text-sm">
             <input
@@ -109,7 +102,7 @@ export function SettingsScreen() {
 }
 
 interface SectionProps {
-  icon: typeof Key;
+  icon: typeof Palette;
   title: string;
   children: React.ReactNode;
 }

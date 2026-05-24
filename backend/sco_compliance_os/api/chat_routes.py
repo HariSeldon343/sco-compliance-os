@@ -19,7 +19,12 @@ from pydantic import BaseModel, Field
 from sco_compliance_os.config import Settings, get_settings
 from sco_compliance_os.core.agent_sdk_runner import build_runner
 from sco_compliance_os.core.logging_setup import get_logger
+from sco_compliance_os.core.post_turn_hook import schedule_on_turn_complete
 from sco_compliance_os.core.store import get_store
+from sco_compliance_os.services.learning.profile_renderer import (
+    render_profile_markdown,
+)
+from sco_compliance_os.services.learning.profile_store import list_preferences
 
 logger = get_logger(__name__)
 
@@ -107,7 +112,7 @@ async def chat_stream(
         )
 
     # Persisti messaggio utente prima dello stream
-    await store.append_message(
+    user_msg = await store.append_message(
         conversation_id=payload.conversation_id,
         role="user",
         content=payload.message,
@@ -115,9 +120,25 @@ async def chat_stream(
 
     model_slug = payload.model_slug or settings.model_default
 
+    # Profile injection: fetch preferenze profilo + render markdown da
+    # prepend al system prompt LLM (single source of truth backend, Conv. 47).
+    # Best-effort: errori loggati ma NON bloccano lo stream chat.
+    profile_markdown = ""
+    try:
+        profile_prefs = await list_preferences(tenant_id="local", limit=50)
+        profile_markdown = render_profile_markdown(profile_prefs)
+    except Exception as exc:
+        logger.warning(
+            "chat_stream.profile_inject_failed",
+            error=str(exc),
+        )
+
     async def event_generator() -> AsyncIterator[str]:
         """Yield SSE events in formato `data: {json}\\n\\n`."""
-        runner = await build_runner(model_slug=model_slug)
+        runner = await build_runner(
+            model_slug=model_slug,
+            profile_markdown=profile_markdown or None,
+        )
         assistant_text_buf: list[str] = []
         ask_user_question_payload: dict[str, Any] | None = None
         tool_calls_buf: list[dict[str, Any]] = []
@@ -147,6 +168,20 @@ async def chat_stream(
                 ask_user_question=ask_user_question_payload,
                 tool_calls=tool_calls_buf or None,
             )
+            # Post-turn hook: estrazione preferenze fire-and-forget.
+            # Pattern best-effort: errori loggati internamente ma NON bloccano
+            # la chiusura dello StreamingResponse SSE.
+            try:
+                schedule_on_turn_complete(
+                    {
+                        "user_message": payload.message,
+                        "assistant_response": "".join(assistant_text_buf),
+                        "turn_id": f"{payload.conversation_id}__{user_msg.id}",
+                    },
+                    tenant_id="local",
+                )
+            except Exception as exc:
+                logger.warning("chat_stream.post_turn_hook_failed", error=str(exc))
 
     return StreamingResponse(
         event_generator(),

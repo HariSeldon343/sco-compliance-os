@@ -1,65 +1,291 @@
-/* SCO Compliance OS — Tailwind 4 + CSS variables brand SCO + reset + scrollbar */
-@import "tailwindcss";
-
-/*
- * Tailwind 4: @theme directive registra le custom colors come utility classes.
- * Pattern @theme inline + var() consente switch dark/light a runtime via classe `.dark` su <html>.
- * Naming convention: --color-NOME → utility bg-NOME / text-NOME / border-NOME.
+/* SCO Compliance OS — Tailwind 4 + premium design tokens
+ *
+ * Pipeline (in ordine di esecuzione):
+ *   1. @import tailwindcss (engine + utilities core)
+ *   2. @import design-tokens.css (popola tutti i --sco-* in :root e .dark
+ *      + keyframes globali sco-* + utility classes glass)
+ *   3. @theme inline (Tailwind 4): mappa i --sco-* in --color-* / --shadow-* /
+ *      --radius-* / --font-* / --animate-* per generare le utility class.
+ *      "inline" → al runtime risolve var(--sco-*) → permette switch dark/light
+ *      mantenendo il binding alle utility Tailwind (es. bg-primary-500).
+ *
+ * Brand SCO preservato:
+ *   sco-navy / sco-blue / sco-amber restano alias semantici (back-compat con
+ *   componenti esistenti). Le palette estese sono complementari.
  */
-@theme inline {
-  --color-sco-navy: var(--sco-navy);
-  --color-sco-blue: var(--sco-blue);
-  --color-sco-amber: var(--sco-amber);
-  --color-sco-bg: var(--sco-bg);
-  --color-sco-bg-dark: var(--sco-bg-dark);
-  --color-sco-text: var(--sco-text);
-  --color-sco-text-dark: var(--sco-text-dark);
-  --color-sco-surface: var(--sco-surface);
-  --color-sco-surface-elevated: var(--sco-surface-elevated);
-  --color-sco-border: var(--sco-border);
-  --color-sco-muted: var(--sco-muted);
-  --color-sco-muted-foreground: var(--sco-muted-foreground);
 
+@import "tailwindcss";
+@import "./styles/design-tokens.css";
+
+/* ============================================================================
+ * @theme inline — Tailwind 4 design token registration
+ *
+ * Mappa: --sco-color-{x} (sorgente in :root/.dark) → --color-{x} (utility Tailwind).
+ * Es: --color-primary-500 → bg-primary-500, text-primary-500, border-primary-500.
+ * ============================================================================ */
+@theme inline {
+  /* --------------------------------------------------------------------------
+   * BRAND SCO — alias semantici (back-compat con componenti esistenti)
+   * -------------------------------------------------------------------------- */
+  --color-sco-navy: var(--sco-color-primary-500);
+  --color-sco-blue: var(--sco-color-secondary-500);
+  --color-sco-amber: var(--sco-color-amber-500);
+  --color-sco-bg: var(--sco-color-background);
+  --color-sco-bg-dark: var(--sco-color-background);
+  --color-sco-text: var(--sco-color-text-primary);
+  --color-sco-text-dark: var(--sco-color-text-primary);
+  --color-sco-surface: var(--sco-color-surface);
+  --color-sco-surface-elevated: var(--sco-color-surface-elevated);
+  --color-sco-border: var(--sco-color-border);
+  --color-sco-muted: var(--sco-color-surface);
+  --color-sco-muted-foreground: var(--sco-color-text-tertiary);
+
+  /* --------------------------------------------------------------------------
+   * SEMANTIC TOKENS — UI building blocks
+   * -------------------------------------------------------------------------- */
+  --color-background: var(--sco-color-background);
+  --color-surface: var(--sco-color-surface);
+  --color-surface-elevated: var(--sco-color-surface-elevated);
+  --color-surface-overlay: var(--sco-color-surface-overlay);
+  --color-text-primary: var(--sco-color-text-primary);
+  --color-text-secondary: var(--sco-color-text-secondary);
+  --color-text-tertiary: var(--sco-color-text-tertiary);
+  --color-text-disabled: var(--sco-color-text-disabled);
+  --color-text-inverse: var(--sco-color-text-inverse);
+  --color-border: var(--sco-color-border);
+  --color-border-strong: var(--sco-color-border-strong);
+  --color-border-subtle: var(--sco-color-border-subtle);
+  --color-primary: var(--sco-color-primary);
+  --color-primary-fg: var(--sco-color-primary-fg);
+  --color-primary-hover: var(--sco-color-primary-hover);
+  --color-secondary: var(--sco-color-secondary);
+  --color-secondary-fg: var(--sco-color-secondary-fg);
+  --color-accent: var(--sco-color-accent);
+  --color-accent-fg: var(--sco-color-accent-fg);
+  --color-success: var(--sco-color-success);
+  --color-danger: var(--sco-color-danger);
+
+  /* --------------------------------------------------------------------------
+   * PALETTE DISCRETA — Tailwind utility (11 step ciascuna)
+   * -------------------------------------------------------------------------- */
+  /* Neutral (warm-cool) */
+  --color-neutral-50: var(--sco-color-neutral-50);
+  --color-neutral-100: var(--sco-color-neutral-100);
+  --color-neutral-200: var(--sco-color-neutral-200);
+  --color-neutral-300: var(--sco-color-neutral-300);
+  --color-neutral-400: var(--sco-color-neutral-400);
+  --color-neutral-500: var(--sco-color-neutral-500);
+  --color-neutral-600: var(--sco-color-neutral-600);
+  --color-neutral-700: var(--sco-color-neutral-700);
+  --color-neutral-800: var(--sco-color-neutral-800);
+  --color-neutral-900: var(--sco-color-neutral-900);
+  --color-neutral-950: var(--sco-color-neutral-950);
+
+  /* Slate (cool gray) */
+  --color-slate-50: var(--sco-color-slate-50);
+  --color-slate-100: var(--sco-color-slate-100);
+  --color-slate-200: var(--sco-color-slate-200);
+  --color-slate-300: var(--sco-color-slate-300);
+  --color-slate-400: var(--sco-color-slate-400);
+  --color-slate-500: var(--sco-color-slate-500);
+  --color-slate-600: var(--sco-color-slate-600);
+  --color-slate-700: var(--sco-color-slate-700);
+  --color-slate-800: var(--sco-color-slate-800);
+  --color-slate-900: var(--sco-color-slate-900);
+  --color-slate-950: var(--sco-color-slate-950);
+
+  /* Primary (navy SCO) */
+  --color-primary-50: var(--sco-color-primary-50);
+  --color-primary-100: var(--sco-color-primary-100);
+  --color-primary-200: var(--sco-color-primary-200);
+  --color-primary-300: var(--sco-color-primary-300);
+  --color-primary-400: var(--sco-color-primary-400);
+  --color-primary-500: var(--sco-color-primary-500);
+  --color-primary-600: var(--sco-color-primary-600);
+  --color-primary-700: var(--sco-color-primary-700);
+  --color-primary-800: var(--sco-color-primary-800);
+  --color-primary-900: var(--sco-color-primary-900);
+  --color-primary-950: var(--sco-color-primary-950);
+
+  /* Secondary (blue SCO) */
+  --color-secondary-50: var(--sco-color-secondary-50);
+  --color-secondary-100: var(--sco-color-secondary-100);
+  --color-secondary-200: var(--sco-color-secondary-200);
+  --color-secondary-300: var(--sco-color-secondary-300);
+  --color-secondary-400: var(--sco-color-secondary-400);
+  --color-secondary-500: var(--sco-color-secondary-500);
+  --color-secondary-600: var(--sco-color-secondary-600);
+  --color-secondary-700: var(--sco-color-secondary-700);
+  --color-secondary-800: var(--sco-color-secondary-800);
+  --color-secondary-900: var(--sco-color-secondary-900);
+  --color-secondary-950: var(--sco-color-secondary-950);
+
+  /* Amber (accent SCO) */
+  --color-amber-50: var(--sco-color-amber-50);
+  --color-amber-100: var(--sco-color-amber-100);
+  --color-amber-200: var(--sco-color-amber-200);
+  --color-amber-300: var(--sco-color-amber-300);
+  --color-amber-400: var(--sco-color-amber-400);
+  --color-amber-500: var(--sco-color-amber-500);
+  --color-amber-600: var(--sco-color-amber-600);
+  --color-amber-700: var(--sco-color-amber-700);
+  --color-amber-800: var(--sco-color-amber-800);
+  --color-amber-900: var(--sco-color-amber-900);
+  --color-amber-950: var(--sco-color-amber-950);
+
+  /* Sage (success) */
+  --color-sage-50: var(--sco-color-sage-50);
+  --color-sage-100: var(--sco-color-sage-100);
+  --color-sage-200: var(--sco-color-sage-200);
+  --color-sage-300: var(--sco-color-sage-300);
+  --color-sage-400: var(--sco-color-sage-400);
+  --color-sage-500: var(--sco-color-sage-500);
+  --color-sage-600: var(--sco-color-sage-600);
+  --color-sage-700: var(--sco-color-sage-700);
+  --color-sage-800: var(--sco-color-sage-800);
+  --color-sage-900: var(--sco-color-sage-900);
+  --color-sage-950: var(--sco-color-sage-950);
+
+  /* Coral (error/danger) */
+  --color-coral-50: var(--sco-color-coral-50);
+  --color-coral-100: var(--sco-color-coral-100);
+  --color-coral-200: var(--sco-color-coral-200);
+  --color-coral-300: var(--sco-color-coral-300);
+  --color-coral-400: var(--sco-color-coral-400);
+  --color-coral-500: var(--sco-color-coral-500);
+  --color-coral-600: var(--sco-color-coral-600);
+  --color-coral-700: var(--sco-color-coral-700);
+  --color-coral-800: var(--sco-color-coral-800);
+  --color-coral-900: var(--sco-color-coral-900);
+  --color-coral-950: var(--sco-color-coral-950);
+
+  /* Accent secondari (palette singola) */
+  --color-lavender: var(--sco-color-lavender);
+  --color-mint: var(--sco-color-mint);
+  --color-sky: var(--sco-color-sky);
+  --color-rose: var(--sco-color-rose);
+  --color-gold: var(--sco-color-gold);
+
+  /* --------------------------------------------------------------------------
+   * FONT FAMILY — sans (Inter, brand), display (Plus Jakarta Sans), mono, serif
+   * -------------------------------------------------------------------------- */
   --font-sans:
     "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display:
+    "Plus Jakarta Sans", "Inter", system-ui, -apple-system, sans-serif;
   --font-mono:
-    "Source Code Pro", ui-monospace, SFMono-Regular, Menlo, monospace;
+    "JetBrains Mono", "Source Code Pro", "SF Mono", Consolas, ui-monospace,
+    SFMono-Regular, Menlo, monospace;
+  --font-serif:
+    "Newsreader", "Source Serif Pro", Georgia, "Times New Roman", serif;
 
+  /* --------------------------------------------------------------------------
+   * FONT SIZE — scala custom 12 step con line-height + letter-spacing calibrato
+   * -------------------------------------------------------------------------- */
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+  --text-2xs--letter-spacing: 0em;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.125rem;
+  --text-xs--letter-spacing: 0em;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.125rem;
+  --text-sm--letter-spacing: -0.005em;
+  --text-base: 0.9375rem;
+  --text-base--line-height: 1.375rem;
+  --text-base--letter-spacing: -0.01em;
+  --text-lg: 1.0625rem;
+  --text-lg--line-height: 1.625rem;
+  --text-lg--letter-spacing: -0.015em;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.75rem;
+  --text-xl--letter-spacing: -0.02em;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 2rem;
+  --text-2xl--letter-spacing: -0.025em;
+  --text-3xl: 1.875rem;
+  --text-3xl--line-height: 2.375rem;
+  --text-3xl--letter-spacing: -0.03em;
+  --text-4xl: 2.25rem;
+  --text-4xl--line-height: 2.75rem;
+  --text-4xl--letter-spacing: -0.035em;
+  --text-5xl: 3rem;
+  --text-5xl--line-height: 3.5rem;
+  --text-5xl--letter-spacing: -0.04em;
+  --text-6xl: 3.75rem;
+  --text-6xl--line-height: 4.25rem;
+  --text-6xl--letter-spacing: -0.045em;
+  --text-7xl: 4.5rem;
+  --text-7xl--line-height: 5rem;
+  --text-7xl--letter-spacing: -0.05em;
+
+  /* --------------------------------------------------------------------------
+   * BORDER RADIUS — 10 step (xs → 5xl + full)
+   * -------------------------------------------------------------------------- */
+  --radius-xs: var(--sco-radius-xs);
+  --radius-sm: var(--sco-radius-sm);
+  --radius-md: var(--sco-radius-md);
+  --radius-lg: var(--sco-radius-lg);
+  --radius-xl: var(--sco-radius-xl);
+  --radius-2xl: var(--sco-radius-2xl);
+  --radius-3xl: var(--sco-radius-3xl);
+  --radius-4xl: var(--sco-radius-4xl);
+  --radius-5xl: var(--sco-radius-5xl);
+  --radius-full: var(--sco-radius-full);
+
+  /* --------------------------------------------------------------------------
+   * SHADOW — 11 token premium
+   * -------------------------------------------------------------------------- */
+  --shadow-xs: var(--sco-shadow-xs);
+  --shadow-subtle: var(--sco-shadow-subtle);
+  --shadow-soft: var(--sco-shadow-soft);
+  --shadow-medium: var(--sco-shadow-medium);
+  --shadow-large: var(--sco-shadow-large);
+  --shadow-float: var(--sco-shadow-float);
+  --shadow-crisp: var(--sco-shadow-crisp);
+  --shadow-cmd-palette: var(--sco-shadow-cmd-palette);
+  --shadow-glow: var(--sco-shadow-glow);
+  --shadow-glow-lg: var(--sco-shadow-glow-lg);
+  --shadow-glow-amber: var(--sco-shadow-glow-amber);
+
+  /* --------------------------------------------------------------------------
+   * EASING — utility class via timing-function (es: ease-material)
+   * -------------------------------------------------------------------------- */
+  --ease-material: var(--sco-ease-material);
+  --ease-bottom-tab: var(--sco-ease-bottom-tab);
+  --ease-glow-pulse: var(--sco-ease-glow-pulse);
+  --ease-out-quart: var(--sco-ease-out-quart);
+  --ease-in-out-quart: var(--sco-ease-in-out-quart);
+  --ease-out-expo: var(--sco-ease-out-expo);
+  --ease-snap: var(--sco-ease-snap);
+
+  /* --------------------------------------------------------------------------
+   * CONTAINER — chat width (back-compat con componenti esistenti)
+   * -------------------------------------------------------------------------- */
   --container-chat: 48rem;
+  --container-prose: 65ch;
+  --container-prose-wide: 75ch;
+
+  /* --------------------------------------------------------------------------
+   * ANIMATION — 10 utility (Tailwind 4 --animate-{name} riferisce keyframes
+   * definiti in design-tokens.css come @keyframes sco-{name})
+   * -------------------------------------------------------------------------- */
+  --animate-fade-in: sco-fade-in 320ms var(--sco-ease-material) both;
+  --animate-fade-up: sco-fade-up 420ms var(--sco-ease-out-expo) both;
+  --animate-slide-in: sco-slide-in 360ms var(--sco-ease-out-quart) both;
+  --animate-slide-right: sco-slide-right 360ms var(--sco-ease-out-quart) both;
+  --animate-scale-in: sco-scale-in 240ms var(--sco-ease-out-expo) both;
+  --animate-shimmer: sco-shimmer 2.4s linear infinite;
+  --animate-glow-pulse: sco-glow-pulse 2.8s var(--sco-ease-glow-pulse) infinite;
+  --animate-float: sco-float 4.2s ease-in-out infinite;
+  --animate-ticker: sco-ticker 24s linear infinite;
+  --animate-pulse-soft: sco-pulse-soft 1.4s ease-in-out infinite;
 }
 
+/* ============================================================================
+ * BASE — reset + body typography + theme transitions
+ * ============================================================================ */
 @layer base {
-  :root {
-    /* Palette brand SCO (light mode default) */
-    --sco-navy: #302e5c;
-    --sco-blue: #0074b4;
-    --sco-amber: #ffa727;
-
-    --sco-bg: #ffffff;
-    --sco-bg-dark: #1a1a2e;
-    --sco-text: #1a1a1a;
-    --sco-text-dark: #f5f5f5;
-
-    /* Grigi semantici (light) */
-    --sco-surface: #f8f9fb;
-    --sco-surface-elevated: #ffffff;
-    --sco-border: #e5e7eb;
-    --sco-muted: #f3f4f6;
-    --sco-muted-foreground: #6b7280;
-  }
-
-  .dark {
-    /* Override per dark mode */
-    --sco-bg: #0f0f1e;
-    --sco-text: #f5f5f5;
-
-    --sco-surface: #1a1a2e;
-    --sco-surface-elevated: #252540;
-    --sco-border: #3a3a5a;
-    --sco-muted: #252540;
-    --sco-muted-foreground: #a1a1aa;
-  }
-
   html,
   body,
   #root {
@@ -68,39 +294,56 @@
     padding: 0;
   }
 
+  html {
+    /* Smooth scrolling per navigation interna */
+    scroll-behavior: smooth;
+    /* Render font ottimale su tutti i sistemi */
+    font-feature-settings:
+      "rlig" 1,
+      "calt" 1;
+  }
+
   body {
-    font-family:
-      "Inter",
-      system-ui,
-      -apple-system,
-      "Segoe UI",
-      Roboto,
-      sans-serif;
+    font-family: var(--font-sans);
+    font-size: 0.9375rem;
+    line-height: 1.375rem;
+    letter-spacing: -0.01em;
+    background: var(--sco-color-background);
+    color: var(--sco-color-text-primary);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background: var(--sco-bg);
-    color: var(--sco-text);
+    text-rendering: optimizeLegibility;
+    /* Smooth theme switch */
+    transition:
+      background-color var(--sco-duration-medium) var(--sco-ease-material),
+      color var(--sco-duration-medium) var(--sco-ease-material);
   }
 
-  /* Scrollbar custom (palette navy) */
-  ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-  }
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  ::-webkit-scrollbar-thumb {
-    background: var(--sco-border);
-    border-radius: 4px;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    background: var(--sco-navy);
+  /* Heading typography default — display font per gerarchia visiva */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--sco-color-text-primary);
   }
 
-  /* Code block (markdown) typography */
+  /* Code blocks (markdown + UI) */
   code,
-  pre {
-    font-family: "Source Code Pro", ui-monospace, SFMono-Regular, monospace;
+  pre,
+  kbd,
+  samp {
+    font-family: var(--font-mono);
+    font-feature-settings: "liga" 0, "calt" 1;
+  }
+
+  /* Long-form serif (per editor wiki, documenti rendering) */
+  .prose-serif {
+    font-family: var(--font-serif);
+    font-feature-settings: "kern" 1, "liga" 1, "onum" 1;
   }
 }

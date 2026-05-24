@@ -1,0 +1,511 @@
+/* ============================================================================
+ * SCO Compliance OS — Design Tokens (premium clean-room inspiration)
+ *
+ * Architettura:
+ *   - Brand SCO preservato: navy #302e5c, blue #0074b4, amber #ffa727 restano
+ *     dominanti. Le palette accent sono SECONDARIE per stati semantici e accenti.
+ *   - Tailwind 4: tutti i token vivono come CSS variables nello scope :root /
+ *     .dark con prefisso --sco-*. Il file index.css le espone come utility
+ *     Tailwind tramite @theme inline.
+ *   - Dark mode è il tema principale (UX consulenziale, sessioni lunghe).
+ *   - Clean-room: nessuna copia di CSS/config OpenHuman. Solo architettura.
+ *
+ * Naming convention (in :root):
+ *   --sco-color-{scope}-{step}   palette discreta (es. --sco-color-neutral-500)
+ *   --sco-color-{semantic}       token semantico (es. --sco-color-bg)
+ *   --sco-shadow-{name}          shadow token (es. --sco-shadow-glow)
+ *   --sco-radius-{size}          border-radius token
+ *   --sco-ease-{name}            easing curve
+ *   --sco-duration-{name}        transition duration
+ *
+ * Tailwind utility derivate (esposte da @theme in index.css):
+ *   bg-primary-500, text-neutral-400, border-coral-300, shadow-glow,
+ *   rounded-3xl, animate-fade-up, ease-material, ecc.
+ * ============================================================================ */
+
+@layer base {
+  :root {
+    /* ========================================================================
+     * PALETTE NEUTRAL — 11 step shadcn-style (warm-cool neutral)
+     * ======================================================================== */
+    --sco-color-neutral-50: #fafafa;
+    --sco-color-neutral-100: #f5f5f5;
+    --sco-color-neutral-200: #e5e5e5;
+    --sco-color-neutral-300: #d4d4d4;
+    --sco-color-neutral-400: #a3a3a3;
+    --sco-color-neutral-500: #737373;
+    --sco-color-neutral-600: #525252;
+    --sco-color-neutral-700: #404040;
+    --sco-color-neutral-800: #262626;
+    --sco-color-neutral-900: #171717;
+    --sco-color-neutral-950: #0a0a0a;
+
+    /* ========================================================================
+     * PALETTE SLATE — 11 step cool gray (per surface elevated, hover state)
+     * ======================================================================== */
+    --sco-color-slate-50: #f8fafc;
+    --sco-color-slate-100: #f1f5f9;
+    --sco-color-slate-200: #e2e8f0;
+    --sco-color-slate-300: #cbd5e1;
+    --sco-color-slate-400: #94a3b8;
+    --sco-color-slate-500: #64748b;
+    --sco-color-slate-600: #475569;
+    --sco-color-slate-700: #334155;
+    --sco-color-slate-800: #1e293b;
+    --sco-color-slate-900: #0f172a;
+    --sco-color-slate-950: #020617;
+
+    /* ========================================================================
+     * PALETTE PRIMARY — navy SCO #302e5c con scale derivata
+     * ======================================================================== */
+    --sco-color-primary-50: #eeeef5;
+    --sco-color-primary-100: #d4d3e6;
+    --sco-color-primary-200: #aaa7cc;
+    --sco-color-primary-300: #7f7bb3;
+    --sco-color-primary-400: #555099;
+    --sco-color-primary-500: #302e5c;
+    --sco-color-primary-600: #28264e;
+    --sco-color-primary-700: #211f40;
+    --sco-color-primary-800: #1a1832;
+    --sco-color-primary-900: #131124;
+    --sco-color-primary-950: #0a0916;
+
+    /* ========================================================================
+     * PALETTE SECONDARY — blue SCO #0074b4 con scale derivata
+     * ======================================================================== */
+    --sco-color-secondary-50: #e6f1f8;
+    --sco-color-secondary-100: #b8d8eb;
+    --sco-color-secondary-200: #8abede;
+    --sco-color-secondary-300: #5ba4d1;
+    --sco-color-secondary-400: #2d8bc4;
+    --sco-color-secondary-500: #0074b4;
+    --sco-color-secondary-600: #006298;
+    --sco-color-secondary-700: #00507c;
+    --sco-color-secondary-800: #003e60;
+    --sco-color-secondary-900: #002c44;
+    --sco-color-secondary-950: #001a28;
+
+    /* ========================================================================
+     * PALETTE AMBER — accent SCO #ffa727 con scale derivata
+     * ======================================================================== */
+    --sco-color-amber-50: #fff7e6;
+    --sco-color-amber-100: #ffe7ba;
+    --sco-color-amber-200: #ffd380;
+    --sco-color-amber-300: #ffbf52;
+    --sco-color-amber-400: #ffb33d;
+    --sco-color-amber-500: #ffa727;
+    --sco-color-amber-600: #e08a17;
+    --sco-color-amber-700: #b86f10;
+    --sco-color-amber-800: #8f5409;
+    --sco-color-amber-900: #663b04;
+    --sco-color-amber-950: #3d2202;
+
+    /* ========================================================================
+     * PALETTE SAGE — success verde (state semantico OK / pass / verified)
+     * ======================================================================== */
+    --sco-color-sage-50: #ecfdf5;
+    --sco-color-sage-100: #d1fae5;
+    --sco-color-sage-200: #a7f3d0;
+    --sco-color-sage-300: #6ee7b7;
+    --sco-color-sage-400: #4ade80;
+    --sco-color-sage-500: #34c759;
+    --sco-color-sage-600: #16a34a;
+    --sco-color-sage-700: #15803d;
+    --sco-color-sage-800: #166534;
+    --sco-color-sage-900: #14532d;
+    --sco-color-sage-950: #052e16;
+
+    /* ========================================================================
+     * PALETTE CORAL — error/danger rosso (state semantico KO / fail / blocco)
+     * ======================================================================== */
+    --sco-color-coral-50: #fef2f2;
+    --sco-color-coral-100: #fee2e2;
+    --sco-color-coral-200: #fecaca;
+    --sco-color-coral-300: #fca5a5;
+    --sco-color-coral-400: #f87171;
+    --sco-color-coral-500: #ef4444;
+    --sco-color-coral-600: #dc2626;
+    --sco-color-coral-700: #b91c1c;
+    --sco-color-coral-800: #991b1b;
+    --sco-color-coral-900: #7f1d1d;
+    --sco-color-coral-950: #450a0a;
+
+    /* ========================================================================
+     * PALETTE ACCENT — colori secondari per UI ricca (badges, charts, tags)
+     * ======================================================================== */
+    --sco-color-lavender: #9b8afb;
+    --sco-color-mint: #6ee7b7;
+    --sco-color-sky: #7dd3fc;
+    --sco-color-rose: #fda4af;
+    --sco-color-gold: #fcd34d;
+
+    /* ========================================================================
+     * TOKEN SEMANTICI — light mode (default base, overridden by .dark)
+     * ======================================================================== */
+    --sco-color-background: #ffffff;
+    --sco-color-surface: #f8f9fb;
+    --sco-color-surface-elevated: #ffffff;
+    --sco-color-surface-overlay: rgba(255, 255, 255, 0.85);
+    --sco-color-text-primary: #0a0a0a;
+    --sco-color-text-secondary: #404040;
+    --sco-color-text-tertiary: #737373;
+    --sco-color-text-disabled: #a3a3a3;
+    --sco-color-text-inverse: #fafafa;
+    --sco-color-border: #e5e7eb;
+    --sco-color-border-strong: #d4d4d4;
+    --sco-color-border-subtle: #f5f5f5;
+    --sco-color-primary: var(--sco-color-primary-500);
+    --sco-color-primary-fg: #ffffff;
+    --sco-color-primary-hover: var(--sco-color-primary-600);
+    --sco-color-secondary: var(--sco-color-secondary-500);
+    --sco-color-secondary-fg: #ffffff;
+    --sco-color-accent: var(--sco-color-amber-500);
+    --sco-color-accent-fg: #1a1a1a;
+    --sco-color-success: var(--sco-color-sage-500);
+    --sco-color-success-fg: #ffffff;
+    --sco-color-danger: var(--sco-color-coral-500);
+    --sco-color-danger-fg: #ffffff;
+
+    /* Selection */
+    --sco-color-selection-bg: rgba(0, 116, 180, 0.18);
+    --sco-color-selection-fg: var(--sco-color-primary-700);
+
+    /* ========================================================================
+     * BORDER RADIUS — 10 step (xs 0.25rem → 5xl 2rem + full)
+     * ======================================================================== */
+    --sco-radius-xs: 0.25rem;
+    --sco-radius-sm: 0.375rem;
+    --sco-radius-md: 0.5rem;
+    --sco-radius-lg: 0.75rem;
+    --sco-radius-xl: 1rem;
+    --sco-radius-2xl: 1.25rem;
+    --sco-radius-3xl: 1.5rem;
+    --sco-radius-4xl: 1.75rem;
+    --sco-radius-5xl: 2rem;
+    --sco-radius-full: 9999px;
+
+    /* ========================================================================
+     * SHADOW — 11 token premium (xs, subtle, soft, medium, large, float,
+     * crisp, cmd-palette, glow, glow-lg, glow-amber)
+     * ======================================================================== */
+    --sco-shadow-xs: 0 1px 2px 0 rgba(15, 17, 36, 0.05);
+    --sco-shadow-subtle:
+      0 1px 2px 0 rgba(15, 17, 36, 0.04),
+      0 1px 3px 0 rgba(15, 17, 36, 0.06);
+    --sco-shadow-soft:
+      0 2px 4px 0 rgba(15, 17, 36, 0.04),
+      0 4px 8px -2px rgba(15, 17, 36, 0.08);
+    --sco-shadow-medium:
+      0 4px 8px -2px rgba(15, 17, 36, 0.06),
+      0 8px 16px -4px rgba(15, 17, 36, 0.1);
+    --sco-shadow-large:
+      0 8px 16px -4px rgba(15, 17, 36, 0.08),
+      0 16px 32px -8px rgba(15, 17, 36, 0.12);
+    --sco-shadow-float:
+      0 12px 24px -8px rgba(15, 17, 36, 0.12),
+      0 24px 48px -12px rgba(15, 17, 36, 0.16);
+    --sco-shadow-crisp:
+      0 0 0 1px rgba(15, 17, 36, 0.06),
+      0 2px 4px 0 rgba(15, 17, 36, 0.06);
+    --sco-shadow-cmd-palette:
+      0 0 0 1px rgba(15, 17, 36, 0.08),
+      0 8px 32px -4px rgba(15, 17, 36, 0.16),
+      0 24px 64px -16px rgba(15, 17, 36, 0.24);
+    --sco-shadow-glow: 0 0 30px -5px rgba(0, 116, 180, 0.3);
+    --sco-shadow-glow-lg:
+      0 0 60px -10px rgba(0, 116, 180, 0.4),
+      0 0 20px -5px rgba(48, 46, 92, 0.2);
+    --sco-shadow-glow-amber: 0 0 30px -5px rgba(255, 167, 39, 0.35);
+
+    /* ========================================================================
+     * EASING — curve cubic-bezier premium (Material, BottomTabBar, glow-pulse)
+     * ======================================================================== */
+    --sco-ease-material: cubic-bezier(0.4, 0, 0.2, 1);
+    --sco-ease-bottom-tab: cubic-bezier(0.22, 1, 0.36, 1);
+    --sco-ease-glow-pulse: cubic-bezier(0.4, 0, 0.6, 1);
+    --sco-ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+    --sco-ease-in-out-quart: cubic-bezier(0.76, 0, 0.24, 1);
+    --sco-ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+    --sco-ease-snap: cubic-bezier(0.5, 0, 0.1, 1);
+
+    /* ========================================================================
+     * DURATION — scala 6 step
+     * ======================================================================== */
+    --sco-duration-fast: 120ms;
+    --sco-duration-base: 180ms;
+    --sco-duration-medium: 260ms;
+    --sco-duration-slow: 400ms;
+    --sco-duration-slower: 600ms;
+    --sco-duration-slowest: 1000ms;
+  }
+
+  /* ==========================================================================
+   * DARK MODE — override semantic tokens (palette discrete restano invariate)
+   * ========================================================================== */
+  .dark {
+    --sco-color-background: #0a0a14;
+    --sco-color-surface: #0f0f1e;
+    --sco-color-surface-elevated: #16162a;
+    --sco-color-surface-overlay: rgba(15, 15, 30, 0.85);
+    --sco-color-text-primary: #fafafa;
+    --sco-color-text-secondary: #d4d4d4;
+    --sco-color-text-tertiary: #a3a3a3;
+    --sco-color-text-disabled: #525252;
+    --sco-color-text-inverse: #0a0a0a;
+    --sco-color-border: #2a2a40;
+    --sco-color-border-strong: #3a3a5a;
+    --sco-color-border-subtle: #1a1a2e;
+    --sco-color-primary: var(--sco-color-secondary-400);
+    --sco-color-primary-fg: #ffffff;
+    --sco-color-primary-hover: var(--sco-color-secondary-300);
+    --sco-color-secondary: var(--sco-color-secondary-500);
+    --sco-color-secondary-fg: #ffffff;
+    --sco-color-accent: var(--sco-color-amber-400);
+    --sco-color-accent-fg: #1a1a1a;
+    --sco-color-success: var(--sco-color-sage-400);
+    --sco-color-danger: var(--sco-color-coral-400);
+    --sco-color-selection-bg: rgba(0, 116, 180, 0.32);
+    --sco-color-selection-fg: #fafafa;
+
+    /* Shadow rebalance per fondo scuro */
+    --sco-shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+    --sco-shadow-subtle:
+      0 1px 2px 0 rgba(0, 0, 0, 0.4),
+      0 1px 3px 0 rgba(0, 0, 0, 0.5);
+    --sco-shadow-soft:
+      0 2px 4px 0 rgba(0, 0, 0, 0.4),
+      0 4px 8px -2px rgba(0, 0, 0, 0.5);
+    --sco-shadow-medium:
+      0 4px 8px -2px rgba(0, 0, 0, 0.5),
+      0 8px 16px -4px rgba(0, 0, 0, 0.6);
+    --sco-shadow-large:
+      0 8px 16px -4px rgba(0, 0, 0, 0.6),
+      0 16px 32px -8px rgba(0, 0, 0, 0.7);
+    --sco-shadow-float:
+      0 12px 24px -8px rgba(0, 0, 0, 0.7),
+      0 24px 48px -12px rgba(0, 0, 0, 0.8);
+    --sco-shadow-crisp:
+      0 0 0 1px rgba(255, 255, 255, 0.04),
+      0 2px 4px 0 rgba(0, 0, 0, 0.6);
+    --sco-shadow-cmd-palette:
+      0 0 0 1px rgba(255, 255, 255, 0.08),
+      0 8px 32px -4px rgba(0, 0, 0, 0.6),
+      0 24px 64px -16px rgba(0, 0, 0, 0.7);
+    --sco-shadow-glow: 0 0 40px -5px rgba(45, 139, 196, 0.45);
+    --sco-shadow-glow-lg:
+      0 0 80px -10px rgba(45, 139, 196, 0.55),
+      0 0 24px -5px rgba(85, 80, 153, 0.35);
+    --sco-shadow-glow-amber: 0 0 40px -5px rgba(255, 167, 39, 0.45);
+  }
+
+  /* ==========================================================================
+   * SCROLLBAR — custom premium (sottile, hover navy/secondary)
+   * ========================================================================== */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--sco-color-border-strong) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--sco-color-border-strong);
+    border-radius: var(--sco-radius-full);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    transition: background var(--sco-duration-base) var(--sco-ease-material);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--sco-color-primary);
+    background-clip: padding-box;
+    border: 2px solid transparent;
+  }
+
+  /* ==========================================================================
+   * SELECTION — palette brand (light + dark coerenti)
+   * ========================================================================== */
+  ::selection {
+    background: var(--sco-color-selection-bg);
+    color: var(--sco-color-selection-fg);
+  }
+
+  /* ==========================================================================
+   * FOCUS RING — coerente con primary brand SCO
+   * ========================================================================== */
+  :focus-visible {
+    outline: 2px solid var(--sco-color-secondary);
+    outline-offset: 2px;
+    border-radius: var(--sco-radius-sm);
+  }
+}
+
+/* ============================================================================
+ * KEYFRAMES — 9 animation premium (vivono fuori da @layer per essere globali)
+ * ============================================================================ */
+@keyframes sco-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes sco-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes sco-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes sco-slide-right {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes sco-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes sco-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+@keyframes sco-glow-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 20px -5px rgba(0, 116, 180, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 40px -5px rgba(0, 116, 180, 0.55);
+  }
+}
+@keyframes sco-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+@keyframes sco-ticker {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+@keyframes sco-pulse-soft {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ============================================================================
+ * UTILITY CLASSES — glass morphism + premium effects
+ * ============================================================================ */
+@layer utilities {
+  /* Glass effect base (cards, popover, command palette) */
+  .glass {
+    background: var(--sco-color-surface-overlay);
+    backdrop-filter: blur(12px) saturate(180%);
+    -webkit-backdrop-filter: blur(12px) saturate(180%);
+    border: 1px solid var(--sco-color-border-subtle);
+    box-shadow: var(--sco-shadow-medium);
+  }
+
+  /* Glass forte (modali, dialog) */
+  .glass-strong {
+    background: var(--sco-color-surface-overlay);
+    backdrop-filter: blur(24px) saturate(200%);
+    -webkit-backdrop-filter: blur(24px) saturate(200%);
+    border: 1px solid var(--sco-color-border);
+    box-shadow: var(--sco-shadow-cmd-palette);
+  }
+
+  /* Glass leggero (header sticky, toast) */
+  .glass-subtle {
+    background: var(--sco-color-surface-overlay);
+    backdrop-filter: blur(8px) saturate(160%);
+    -webkit-backdrop-filter: blur(8px) saturate(160%);
+    border-bottom: 1px solid var(--sco-color-border-subtle);
+  }
+
+  /* Premium gradient testi */
+  .text-gradient-brand {
+    background: linear-gradient(
+      135deg,
+      var(--sco-color-primary-500) 0%,
+      var(--sco-color-secondary-500) 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+
+  .text-gradient-amber {
+    background: linear-gradient(
+      135deg,
+      var(--sco-color-amber-500) 0%,
+      var(--sco-color-amber-600) 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+
+  /* Transitions theme switch fluide */
+  .theme-transition {
+    transition:
+      background-color var(--sco-duration-medium) var(--sco-ease-material),
+      color var(--sco-duration-medium) var(--sco-ease-material),
+      border-color var(--sco-duration-medium) var(--sco-ease-material);
+  }
+
+  /* Surface utility (semantica diretta) */
+  .surface-1 {
+    background: var(--sco-color-surface);
+  }
+  .surface-2 {
+    background: var(--sco-color-surface-elevated);
+  }
+}
