@@ -1,7 +1,7 @@
 {
   "name": "sco-compliance-os-frontend",
   "private": true,
-  "version": "0.7.2",
+  "version": "0.7.3",
   "type": "module",
   "description": "SCO Compliance OS — Personal AI for Italian Compliance. Frontend React 19 + Vite 6 + Tailwind 4.",
   "scripts": {

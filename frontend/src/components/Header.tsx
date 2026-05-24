@@ -5,13 +5,27 @@ import { useNavigate } from "react-router-dom";
 
 import { useThemeStore, type Theme } from "@/store/theme-store";
 import { useChatStore } from "@/store/chat-store";
+import { useLicenseStore } from "@/store/license-store";
 import { cn } from "@/lib/cn";
 
-// Stub utente loggato — verrà sostituito da auth reale via backend
-const STUB_USER = {
-  name: "Antonio Amodeo",
-  email: "a.oedoma@gmail.com",
-};
+// Conv. 47 enforcement v0.7.3: utente reale da useLicenseStore (email license attiva).
+// Era STUB_USER hardcoded "Antonio Amodeo / a.oedoma@gmail.com" da v0.0.1 demo iniziale.
+// Carry-over Sessione 8+: derivare name reale da first/last name su SaaS tenant_id
+// (oggi solo email disponibile pre-onboarding profile completion).
+function emailToInitials(email: string): string {
+  if (!email) return "??";
+  const local = email.split("@")[0] ?? "";
+  return local.slice(0, 2).toUpperCase();
+}
+
+function emailToDisplayName(email: string): string {
+  if (!email) return "Utente";
+  const local = email.split("@")[0] ?? "";
+  return local
+    .split(/[._-]/)
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .join(" ");
+}
 
 const THEME_OPTIONS: { value: Theme; label: string; icon: typeof Sun }[] = [
   { value: "light", label: "Chiaro", icon: Sun },
@@ -43,11 +57,11 @@ export function Header() {
     setTheme(next!);
   };
 
-  const initials = STUB_USER.name
-    .split(" ")
-    .map((p) => p[0])
-    .join("")
-    .slice(0, 2);
+  // Conv. 47 v0.7.3: user reale da license attiva, no STUB_USER hardcoded.
+  const licenseEmail = useLicenseStore((s) => s.email);
+  const userEmail = licenseEmail || "utente@locale";
+  const userName = emailToDisplayName(userEmail);
+  const initials = emailToInitials(userEmail);
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-sco-border bg-sco-bg px-6">
@@ -88,7 +102,7 @@ export function Header() {
               {initials}
             </div>
             <span className="hidden text-sm font-medium md:inline">
-              {STUB_USER.name}
+              {userName}
             </span>
             <ChevronDown
               size={13}
@@ -109,10 +123,10 @@ export function Header() {
               <div className="absolute right-0 z-50 mt-1.5 w-60 overflow-hidden rounded-lg border border-sco-border bg-sco-surface-elevated p-1 shadow-xl">
                 <div className="border-b border-sco-border px-3 py-2.5">
                   <div className="text-sm font-semibold text-sco-text dark:text-sco-text-dark">
-                    {STUB_USER.name}
+                    {userName}
                   </div>
                   <div className="truncate text-xs text-sco-muted-foreground">
-                    {STUB_USER.email}
+                    {userEmail}
                   </div>
                 </div>
                 <div className="py-1">

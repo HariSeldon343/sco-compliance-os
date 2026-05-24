@@ -234,14 +234,28 @@ async def get_memory_tree_summaries(
         day=day,
         limit=limit,
     )
-    builder = TreeBuilder()
-    nodes = await builder.list_summaries_by_filter(
-        source=source,
-        level=level,
-        topic=topic,
-        day=day,
-        limit=limit,
-    )
+    # v0.7.3: graceful empty su tabella inesistente (Wave 1 legacy table 'summaries'
+    # mai migrata in v0.6.0+ dove la Fase 4 ha introdotto mem_tree_summaries).
+    # Senza questo handler il WikiView frontend riceve HTTP 500 e mostra
+    # "Backend non raggiungibile" anche se il backend e' online (Antonio segnalato
+    # bug v0.7.2). Carry-over Sessione 8+: refactor WikiView per leggere da
+    # mem_tree_summaries (Fase 4) + endpoint /api/wiki/* (ALPHA v0.4.0).
+    try:
+        builder = TreeBuilder()
+        nodes = await builder.list_summaries_by_filter(
+            source=source,
+            level=level,
+            topic=topic,
+            day=day,
+            limit=limit,
+        )
+    except Exception as exc:  # noqa: BLE001 - graceful degradation tabella mancante
+        logger.warning(
+            "memory.tree_summaries.graceful_empty",
+            error=str(exc),
+            reason="Wave 1 'summaries' table assente, restituisco lista vuota per compat WikiView",
+        )
+        return []
     return [
         TreeSummaryItem(
             id=n.id,
@@ -271,7 +285,17 @@ async def get_top_hotness(
     from sco_compliance_os.services.memory.hotness import get_top_hot_chunks
 
     logger.info("memory.hotness.top.requested", n=n)
-    snapshots = await get_top_hot_chunks(n=n)
+    # v0.7.3: graceful empty su tabella inesistente (Wave 1 legacy 'scores').
+    # Stesso pattern di /tree-summaries: tabella scores mai migrata in v0.6.0+.
+    try:
+        snapshots = await get_top_hot_chunks(n=n)
+    except Exception as exc:  # noqa: BLE001 - graceful degradation tabella mancante
+        logger.warning(
+            "memory.hotness.top.graceful_empty",
+            error=str(exc),
+            reason="Wave 1 'scores' table assente, lista vuota per WikiView compat",
+        )
+        return []
     return [
         HotnessItem(
             chunk_id=s.chunk_id,
