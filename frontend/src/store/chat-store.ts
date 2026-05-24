@@ -6,6 +6,7 @@ import type {
   ConversationItem,
   MessageItem,
   AskUserQuestionWidget,
+  WikiIngestProposal,
 } from "@/types/api";
 import { apiClient } from "@/api/client";
 
@@ -64,9 +65,22 @@ interface ChatState {
   // auto-crea "Configurazione iniziale del vault X") e auto-select + toast.
   lastFetchAt: number | null;
   knownConversationIds: Set<string>;
+  // v0.8.1 fix auto-navigation: ID dell'ultima conversation auto-naviata in modo
+  // automatico (post-vault.registered). Serve a non ri-naviare se l'utente ha
+  // gia` cambiato chat manualmente (rispetta scelta utente). Se null, prossimo
+  // "Configurazione iniziale" viene auto-selezionato.
+  lastAutoNavigated: string | null;
   // Mappa "messageId__segmentIndex" -> InlineAskAnswer (Conv. 48 carry-over,
   // stato widget inline ask question vive qui finche backend non cabla endpoint).
   inlineAskAnswers: Record<string, InlineAskAnswer>;
+  // v0.8.1 hook wiki ingest: mappa message_id -> WikiIngestProposal ricevuta
+  // via SSE event wiki_ingest_proposal alla fine dello stream chat. Il widget
+  // WikiIngestProposalCard renderizza la proposta sotto la bubble assistant.
+  // Pattern Conv. 47: proposal_id deterministico, scrittura idempotente.
+  // Mappa message_id -> "dismissed" se l'utente ha scartato la card senza
+  // confermare alcuna ingestion (no re-render alla riapertura conversation).
+  wikiIngestProposals: Record<string, WikiIngestProposal>;
+  wikiIngestDismissed: Record<string, true>;
 
   // Actions
   setActiveConversation: (id: string | null) => void;
@@ -111,6 +125,10 @@ interface ChatState {
   // v1.0.2 fix sidebar visibility: fetch conversations dal backend + merge + auto-select
   // nuove "Configurazione iniziale del vault X" + toast notifica utente.
   fetchConversations: (opts?: { silent?: boolean }) => Promise<ConversationItem[]>;
+  // v0.8.1 hook wiki ingest: action per scartare la proposta (utente clicca
+  // X sulla card) o confermare salvataggio (rimuove la card dopo write OK).
+  dismissWikiIngestProposal: (messageId: string) => void;
+  removeWikiIngestProposal: (messageId: string) => void;
 }
 
 // Conv. 47 enforcement v0.7.2: conversations vivono ESCLUSIVAMENTE backend SQLite
@@ -133,7 +151,10 @@ export const useChatStore = create<ChatState>()(
       error: null,
       lastFetchAt: null,
       knownConversationIds: new Set<string>(),
+      lastAutoNavigated: null,
       inlineAskAnswers: {},
+      wikiIngestProposals: {},
+      wikiIngestDismissed: {},
 
       setActiveConversation: (id) => {
         set({ activeConversationId: id });
@@ -276,6 +297,21 @@ export const useChatStore = create<ChatState>()(
               } else if (event.kind === "error") {
                 const errMsg = String((event.data as { message?: string })?.message ?? "errore stream");
                 set({ error: errMsg });
+              } else if (event.kind === "wiki_ingest_proposal") {
+                // v0.8.1 hook: il backend ha analizzato il messaggio assistant
+                // appena emesso (allegati / URL / search results) e ha trovato
+                // candidati per ingest wiki. Salva la proposal nello store
+                // indicizzata per message_id (quello del backend, non il client
+                // ID ottimistico). La card si renderizza in ChatArea.
+                const proposal = event.data as unknown as WikiIngestProposal;
+                if (proposal?.message_id) {
+                  set((s) => ({
+                    wikiIngestProposals: {
+                      ...s.wikiIngestProposals,
+                      [proposal.message_id]: proposal,
+                    },
+                  }));
+                }
               } else if (event.kind === "done") {
                 set({ isStreaming: false });
               }
@@ -527,10 +563,41 @@ export const useChatStore = create<ChatState>()(
 
       clearError: () => set({ error: null }),
 
-      // v1.0.2 fix sidebar visibility: pull esplicito + merge con state corrente.
-      // Pattern Conv. 47/48: backend single source of truth. Auto-detect nuove
-      // "Configurazione iniziale del vault X" → toast + auto-select se non c'è
-      // active conversation in corso (no preempt UX se utente sta lavorando altrove).
+      // v0.8.1 hook wiki ingest: scarta la proposta (utente clicca "X" sulla card).
+      // La card non si renderizza piu' per quel message_id finche la sessione e'
+      // attiva (la flag persiste in localStorage via zustand persist).
+      dismissWikiIngestProposal: (messageId) => {
+        set((s) => {
+          const { [messageId]: _removed, ...restProposals } = s.wikiIngestProposals;
+          return {
+            wikiIngestProposals: restProposals,
+            wikiIngestDismissed: { ...s.wikiIngestDismissed, [messageId]: true },
+          };
+        });
+      },
+
+      // v0.8.1 hook wiki ingest: rimuovi la proposta DOPO una confirm OK.
+      // Non marca come dismissed: se in futuro la stessa conversation triggera
+      // un'altra proposta per lo stesso message, la mostriamo di nuovo.
+      removeWikiIngestProposal: (messageId) => {
+        set((s) => {
+          const { [messageId]: _removed, ...restProposals } = s.wikiIngestProposals;
+          return { wikiIngestProposals: restProposals };
+        });
+      },
+
+      // v1.0.2 fix sidebar visibility + v0.8.1 fix auto-navigation: pull esplicito
+      // + merge con state corrente. Pattern Conv. 47/48: backend single source of
+      // truth. Auto-detect nuove "Configurazione iniziale del vault X" → toast +
+      // auto-select aggressivo (rispettando solo `lastAutoNavigated` per non
+      // ri-naviare se l'utente ha gia` cambiato chat dopo un'auto-nav precedente).
+      //
+      // v0.8.1 Goal A: il bug "non parte da sola, devo selezionare da Recenti"
+      // era causato da check troppo restrittivo (`!state.activeConversationId`).
+      // Quando vault.registered triggera, l'utente vede welcome screen ma puo'
+      // gia` aver visitato qualche chat → activeConversationId non null. Nuova
+      // logica: auto-select se la conv welcome e' diversa da quella gia` auto-
+      // naviata (flag lastAutoNavigated) E utente NON sta streaming (no preempt).
       fetchConversations: async (opts) => {
         const silent = opts?.silent ?? true;
         try {
@@ -553,10 +620,18 @@ export const useChatStore = create<ChatState>()(
           const nextKnown = new Set<string>(known);
           for (const conv of list) nextKnown.add(conv.id);
 
-          // Auto-select nuova "Configurazione iniziale" SOLO se non c'è active
-          // conversation in corso (rispetta scelta utente in altri contesti).
+          // v0.8.1 fix Bug auto-nav: auto-select aggressivo per "Configurazione
+          // iniziale". Condizioni di blocco esplicite:
+          //   - NON e' configWelcome (no candidate)
+          //   - utente sta streaming (don't preempt)
+          //   - conv welcome e' la STESSA gia` auto-naviata prima
+          //     (lastAutoNavigated → rispetta scelta utente di andare altrove)
+          // NB: il check precedente "!activeConversationId" era troppo restrittivo
+          // e causava il bug Antonio v0.8.0 ("ho dovuto io selezionare da Recenti").
           const shouldAutoSelect =
-            configWelcome && !state.activeConversationId && !state.isStreaming;
+            !!configWelcome &&
+            !state.isStreaming &&
+            state.lastAutoNavigated !== configWelcome.id;
 
           set({
             conversations: newConvs,
@@ -566,9 +641,11 @@ export const useChatStore = create<ChatState>()(
 
           // Se auto-select scattato → chiama setActiveConversation (NON set diretto)
           // così triggera anche il fetch messaggi della conversation appena creata
-          // (Conv. 48: backend single source of truth dei messaggi).
+          // (Conv. 48: backend single source of truth dei messaggi). Inoltre marca
+          // lastAutoNavigated per non ri-naviare al prossimo polling (5s).
           if (shouldAutoSelect && configWelcome) {
             get().setActiveConversation(configWelcome.id);
+            set({ lastAutoNavigated: configWelcome.id });
           }
 
           // Toast notifica nuova conversation di configurazione (lazy import sonner
@@ -586,6 +663,7 @@ export const useChatStore = create<ChatState>()(
                       label: "Apri",
                       onClick: () => {
                         get().setActiveConversation(configWelcome.id);
+                        set({ lastAutoNavigated: configWelcome.id });
                       },
                     },
               },
@@ -637,6 +715,8 @@ export const useChatStore = create<ChatState>()(
       // NB v1.0.2: knownConversationIds (Set) NON va in localStorage (no JSON
       // serializzabile + comunque ricostruito dal primo fetchConversations al mount).
       // lastFetchAt non persiste per forzare refresh ogni cold start.
+      // v0.8.1: lastAutoNavigated persiste per non ri-naviare al cold start su
+      // conversation gia` viste in sessione precedente (rispetta scelta utente).
       partialize: (s) => ({
         conversations: s.conversations,
         messagesByConv: s.messagesByConv,
@@ -645,6 +725,11 @@ export const useChatStore = create<ChatState>()(
         // al reload (carry-over finche backend non cabla endpoint dedicato e
         // restituisce stato widget come parte del payload messaggio).
         inlineAskAnswers: s.inlineAskAnswers,
+        lastAutoNavigated: s.lastAutoNavigated,
+        // v0.8.1 wiki ingest dismissed: persiste per non re-mostrare la card
+        // sui messaggi che l'utente ha gia` scartato. Le proposals vere NON
+        // vengono persistite (sono effimere, rigenerate al prossimo stream).
+        wikiIngestDismissed: s.wikiIngestDismissed,
       }),
     },
   ),

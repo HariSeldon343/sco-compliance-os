@@ -30,6 +30,7 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -70,6 +71,21 @@ CREATE INDEX IF NOT EXISTS idx_user_profile_category
     ON user_profile (category);
 CREATE INDEX IF NOT EXISTS idx_user_profile_last_seen
     ON user_profile (last_seen_at DESC);
+
+-- v0.8.1 cantiere DEV-OS-SETUP-DEEP-SCAN: team member persistence per
+-- modalita solo vs team. Pattern Conv. 47 single source of truth backend:
+-- il modo "solo / team" + nome team + ruolo team del singolo membro vive
+-- in tabella dedicata, NON come preference slugged (preference e' free-text,
+-- team_member e' strutturato a 4 campi fissi).
+CREATE TABLE IF NOT EXISTS team_member (
+    tenant_id TEXT PRIMARY KEY,
+    is_team_mode INTEGER NOT NULL DEFAULT 0,
+    team_name TEXT NULL,
+    team_member_role TEXT NULL,
+    member_full_name TEXT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 """
 
 
@@ -292,3 +308,160 @@ async def count_preferences(
         ) as cur:
             row = await cur.fetchone()
             return int(row[0]) if row else 0
+
+
+# ----- Team Member CRUD (v0.8.1 cantiere DEV-OS-SETUP-DEEP-SCAN) -----
+
+
+@dataclass
+class TeamMember:
+    """Stato modalita solo vs team del singolo tenant.
+
+    Pattern Conv. 47 single source of truth: lo stato vive solo qui, mai
+    duplicato come preference slugged o cache process-local.
+
+    Attributes:
+        tenant_id: ID tenant (default 'local' per single-machine).
+        is_team_mode: True se l'utente lavora in team, False se solo.
+        team_name: Nome del team (solo se is_team_mode=True).
+        team_member_role: Ruolo specifico dell'utente nel team.
+        member_full_name: Nome+cognome dell'utente (raccolto domanda 1/10).
+        created_at: ISO timestamp prima registrazione.
+        updated_at: ISO timestamp ultimo aggiornamento.
+    """
+
+    tenant_id: str = "local"
+    is_team_mode: bool = False
+    team_name: str | None = None
+    team_member_role: str | None = None
+    member_full_name: str | None = None
+    created_at: str = ""
+    updated_at: str = ""
+
+
+def _row_to_team_member(row: aiosqlite.Row) -> TeamMember:
+    """Deserializza una row team_member in TeamMember dataclass."""
+    return TeamMember(
+        tenant_id=row["tenant_id"],
+        is_team_mode=bool(row["is_team_mode"]),
+        team_name=row["team_name"],
+        team_member_role=row["team_member_role"],
+        member_full_name=row["member_full_name"],
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+async def upsert_team_member(
+    *,
+    tenant_id: str = "local",
+    is_team_mode: bool,
+    team_name: str | None = None,
+    team_member_role: str | None = None,
+    member_full_name: str | None = None,
+    db_path: Path | None = None,
+) -> TeamMember:
+    """Upsert idempotente del team member per tenant.
+
+    Su INSERT: created_at = updated_at = now.
+    Su UPDATE: preserva created_at, aggiorna updated_at + tutti gli altri campi.
+
+    Pattern Conv. 47 single source of truth: idempotente, safe a chiamate
+    ripetute (es. utente rifa onboarding -> aggiorna invece di duplicare).
+
+    Args:
+        tenant_id: ID tenant.
+        is_team_mode: True se team, False se solo.
+        team_name: nome team (richiesto se is_team_mode=True).
+        team_member_role: ruolo specifico nel team.
+        member_full_name: nome+cognome utente (raccolto domanda 1/10).
+        db_path: override del path DB (testing).
+
+    Returns:
+        TeamMember effettivamente persistito.
+    """
+    now = datetime.now(UTC).isoformat()
+    async with _connection(db_path) as db:
+        await db.execute(
+            """
+            INSERT INTO team_member
+                (tenant_id, is_team_mode, team_name, team_member_role,
+                 member_full_name, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(tenant_id) DO UPDATE SET
+                is_team_mode = excluded.is_team_mode,
+                team_name = excluded.team_name,
+                team_member_role = excluded.team_member_role,
+                member_full_name = excluded.member_full_name,
+                updated_at = excluded.updated_at
+            """,
+            (
+                tenant_id,
+                1 if is_team_mode else 0,
+                team_name,
+                team_member_role,
+                member_full_name,
+                now,
+                now,
+            ),
+        )
+        await db.commit()
+    logger.info(
+        "team_member.upsert tenant=%s is_team_mode=%s team_name=%r role=%r",
+        tenant_id,
+        is_team_mode,
+        team_name,
+        team_member_role,
+    )
+    return await get_team_member(tenant_id=tenant_id, db_path=db_path) or TeamMember(
+        tenant_id=tenant_id,
+        is_team_mode=is_team_mode,
+        team_name=team_name,
+        team_member_role=team_member_role,
+        member_full_name=member_full_name,
+        created_at=now,
+        updated_at=now,
+    )
+
+
+async def get_team_member(
+    *,
+    tenant_id: str = "local",
+    db_path: Path | None = None,
+) -> TeamMember | None:
+    """Recupera il TeamMember corrente per tenant.
+
+    Returns:
+        TeamMember se esiste record per tenant_id, None altrimenti.
+    """
+    async with _connection(db_path) as db:
+        async with db.execute(
+            "SELECT * FROM team_member WHERE tenant_id = ?",
+            (tenant_id,),
+        ) as cur:
+            row = await cur.fetchone()
+            if row is None:
+                return None
+            return _row_to_team_member(row)
+
+
+async def delete_team_member(
+    *,
+    tenant_id: str = "local",
+    db_path: Path | None = None,
+) -> bool:
+    """Rimuove record team_member per tenant.
+
+    Returns:
+        True se record esisteva ed e' stato cancellato, False altrimenti.
+    """
+    async with _connection(db_path) as db:
+        cur = await db.execute(
+            "DELETE FROM team_member WHERE tenant_id = ?",
+            (tenant_id,),
+        )
+        await db.commit()
+        deleted = (cur.rowcount or 0) > 0
+    if deleted:
+        logger.info("team_member.deleted tenant=%s", tenant_id)
+    return deleted

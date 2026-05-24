@@ -25,6 +25,7 @@ from __future__ import annotations
 
 __all__ = [
     "autoingest",
+    "deep_scanner",
     "extractors",
     "parser",
     "query",

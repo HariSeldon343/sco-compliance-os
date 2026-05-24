@@ -15,6 +15,9 @@ import type {
   VaultItem,
   WikiCategory,
   WikiFileDetail,
+  WikiIngestConfirmRequest,
+  WikiIngestConfirmResponse,
+  WikiIngestProposal,
   WikiListResponse,
   WikiStatsResponse,
 } from "@/types/api";
@@ -456,6 +459,83 @@ export const apiClient = {
   /** Statistiche aggregate Memory Tree bucket-seal (count by status + source_kind). */
   async getMemoryTreeStats(): Promise<TreeStatsResponse> {
     return request<TreeStatsResponse>("/api/memory/tree/stats");
+  },
+
+  // ---- Wiki Ingest Proposal (v0.8.1 hook chat -> wiki) ----
+  // POST /api/wiki/ingest/proposal: chiama analyze_message_for_wiki_ingest
+  // lato backend. Idempotente (proposal_id deterministico).
+  // POST /api/wiki/ingest/confirm: scrive il file nella destinazione scelta.
+
+  /**
+   * Analizza un messaggio assistant + i suoi allegati / URL / search results
+   * e restituisce la proposta classificata per ingest wiki.
+   *
+   * Tipicamente NON serve invocarlo direttamente: l'evento SSE
+   * `wiki_ingest_proposal` arriva automaticamente alla fine dello stream
+   * chat e contiene gia la WikiIngestProposal. Questo endpoint resta
+   * disponibile per re-fetch (cache miss, refresh manuale).
+   */
+  async analyzeWikiIngestProposal(payload: {
+    conversation_id: string;
+    message_id: string;
+    message_content?: string;
+    attachments?: Array<{
+      path: string;
+      mime_type?: string;
+      title?: string;
+      content_preview?: string;
+    }>;
+    search_results?: Array<{
+      url: string;
+      title: string;
+      snippet?: string;
+    }>;
+  }): Promise<WikiIngestProposal> {
+    const res = await fetch(`${BACKEND_URL}/api/wiki/ingest/proposal`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new ApiError(
+        res.status,
+        "wiki_ingest_proposal_error",
+        `HTTP ${res.status} ${body}`,
+      );
+    }
+    return (await res.json()) as WikiIngestProposal;
+  },
+
+  /**
+   * Conferma la proposta e crea il file wiki nella destinazione scelta.
+   * L'utente puo' aver modificato destination / slug / frontmatter / body_md
+   * rispetto al suggerimento iniziale (single source of truth Conv. 47).
+   */
+  async confirmWikiIngest(
+    payload: WikiIngestConfirmRequest,
+    params: { vault_path?: string } = {},
+  ): Promise<WikiIngestConfirmResponse> {
+    const search = new URLSearchParams();
+    if (params.vault_path) search.set("vault_path", params.vault_path);
+    const qs = search.toString();
+    const url = qs
+      ? `${BACKEND_URL}/api/wiki/ingest/confirm?${qs}`
+      : `${BACKEND_URL}/api/wiki/ingest/confirm`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new ApiError(
+        res.status,
+        "wiki_ingest_confirm_error",
+        `HTTP ${res.status} ${body}`,
+      );
+    }
+    return (await res.json()) as WikiIngestConfirmResponse;
   },
 };
 

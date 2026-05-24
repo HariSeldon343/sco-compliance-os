@@ -294,13 +294,101 @@ async def chat_stream(
             yield f"data: {json.dumps({'kind': 'error', 'data': {'message': str(exc)}})}\n\n"
         finally:
             # Persisti messaggio assistant con stato widget Conv. 48
-            await store.append_message(
+            assistant_msg = await store.append_message(
                 conversation_id=payload.conversation_id,
                 role="assistant",
                 content="".join(assistant_text_buf),
                 ask_user_question=ask_user_question_payload,
                 tool_calls=tool_calls_buf or None,
             )
+
+            # v0.8.1 hook proposta ingest wiki: analizza il contenuto + tool_calls
+            # web_search per detectare allegati / URL / search results candidati
+            # all'ingest nel wiki. Emette evento SSE wiki_ingest_proposal se ci
+            # sono candidati. Best-effort: errori loggati ma NON bloccano lo stream.
+            try:
+                from sco_compliance_os.services.chat.wiki_proposal import (
+                    analyze_message_for_wiki_ingest,
+                )
+
+                # Estrai search results dai tool_calls web_search (se presenti).
+                search_hits: list[dict[str, Any]] = []
+                for tc in tool_calls_buf:
+                    tool_name = (tc.get("tool_name") or tc.get("name") or "").lower()
+                    if "web_search" not in tool_name and "search" not in tool_name:
+                        continue
+                    # I risultati possono vivere in result, content, output.
+                    raw_result = (
+                        tc.get("result") or tc.get("content") or tc.get("output")
+                    )
+                    if isinstance(raw_result, list):
+                        for hit in raw_result:
+                            if isinstance(hit, dict):
+                                search_hits.append(hit)
+                    elif isinstance(raw_result, dict):
+                        hits_list = raw_result.get("hits") or raw_result.get(
+                            "results", []
+                        )
+                        if isinstance(hits_list, list):
+                            for hit in hits_list:
+                                if isinstance(hit, dict):
+                                    search_hits.append(hit)
+
+                # Estrai allegati dai tool_calls Read/upload (heuristica).
+                attachment_hits: list[dict[str, Any]] = []
+                for tc in tool_calls_buf:
+                    tool_name = (tc.get("tool_name") or tc.get("name") or "").lower()
+                    if tool_name in {"read", "upload", "attachment_extract"}:
+                        # Cerca path nei common args.
+                        args = tc.get("args") or tc.get("input") or {}
+                        if isinstance(args, dict):
+                            file_path = (
+                                args.get("file_path")
+                                or args.get("path")
+                                or args.get("filename")
+                            )
+                            if file_path:
+                                attachment_hits.append(
+                                    {
+                                        "path": str(file_path),
+                                        "mime_type": "",
+                                        "content_preview": str(
+                                            tc.get("result", "")
+                                        )[:4000],
+                                    }
+                                )
+
+                proposal = analyze_message_for_wiki_ingest(
+                    conversation_id=payload.conversation_id,
+                    message_id=assistant_msg.id,
+                    message_content="".join(assistant_text_buf),
+                    attachments=attachment_hits,
+                    search_results=search_hits,
+                )
+                if not proposal.is_empty:
+                    yield (
+                        "data: "
+                        + json.dumps(
+                            {
+                                "kind": "wiki_ingest_proposal",
+                                "data": proposal.to_dict(),
+                            },
+                            ensure_ascii=False,
+                        )
+                        + "\n\n"
+                    )
+                    logger.info(
+                        "chat_stream.wiki_ingest_proposal_emitted",
+                        proposal_id=proposal.proposal_id,
+                        slots=len(proposal.slots),
+                        has_strong=proposal.has_strong_candidate,
+                    )
+            except Exception as wp_exc:
+                logger.warning(
+                    "chat_stream.wiki_ingest_proposal_failed",
+                    error=str(wp_exc),
+                )
+
             # Post-turn hook: estrazione preferenze fire-and-forget.
             # Pattern best-effort: errori loggati internamente ma NON bloccano
             # la chiusura dello StreamingResponse SSE.

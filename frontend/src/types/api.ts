@@ -272,3 +272,63 @@ export interface TreeStatsResponse {
   counts_by_source_kind: Record<string, number>;
   total: number;
 }
+
+// ===== Wiki Ingest Proposal (v0.8.1 hook chat -> wiki) =====
+// Allineato 1:1 al Pydantic backend `WikiIngestProposalResponse` / `WikiIngestSlotOut`
+// (vedi backend/sco_compliance_os/api/wiki_routes.py sezione ingest).
+
+/** Destinazione finale di un ingest wiki: 5 categorie canoniche + memory_tree fallback. */
+export type WikiIngestDestination =
+  | "sources"
+  | "entities"
+  | "concepts"
+  | "synthesis"
+  | "glossari"
+  | "memory_tree";
+
+/** Tipo di candidato detectato (allegato file, link nel content, search hit). */
+export type WikiIngestSourceType = "attachment" | "url" | "search_result";
+
+/** Singolo slot della proposta (un candidato classificato). */
+export interface WikiIngestSlot {
+  source_type: WikiIngestSourceType;
+  title: string;
+  identifier: string; // path | url | url+index
+  summary: string;
+  suggested_destination: WikiIngestDestination;
+  suggested_slug: string;
+  suggested_frontmatter: Record<string, unknown>;
+  confidence: number; // 0.0 - 1.0
+  rationale: string;
+}
+
+/** Proposta complessiva emessa via SSE event `wiki_ingest_proposal`. */
+export interface WikiIngestProposal {
+  proposal_id: string;
+  conversation_id: string;
+  message_id: string;
+  created_at: string; // ISO 8601
+  slots: WikiIngestSlot[];
+  has_strong_candidate: boolean;
+}
+
+/** Body POST /api/wiki/ingest/confirm */
+export interface WikiIngestConfirmRequest {
+  proposal_id: string;
+  slot_index: number;
+  destination: WikiIngestDestination;
+  slug: string;
+  frontmatter: Record<string, unknown>;
+  body_md: string;
+  source_identifier?: string;
+  source_type?: WikiIngestSourceType | "";
+}
+
+/** Response POST /api/wiki/ingest/confirm */
+export interface WikiIngestConfirmResponse {
+  written: boolean;
+  file_path: string;
+  destination: WikiIngestDestination;
+  slug: string;
+  overwrite: boolean;
+}

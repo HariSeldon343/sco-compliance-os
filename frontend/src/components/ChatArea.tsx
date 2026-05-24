@@ -20,6 +20,7 @@ import { cn } from "@/lib/cn";
 import { ThinkingIndicator } from "@/components/ThinkingIndicator";
 import { AudioPlayer } from "@/components/voice/AudioPlayer";
 import { AskQuestionCard } from "@/components/AskQuestionCard";
+import { WikiIngestProposalCard } from "@/components/WikiIngestProposalCard";
 import {
   parseInlineWidgets,
   type ContentSegment,
@@ -172,6 +173,13 @@ function MessageBubble({ message }: MessageBubbleProps) {
     (s) => s.answerInlineAskQuestion,
   );
   const inlineAskAnswers = useChatStore((s) => s.inlineAskAnswers);
+  // v0.8.1 hook wiki ingest: proposal correlata a questo message_id e flag dismiss.
+  const wikiProposal = useChatStore(
+    (s) => s.wikiIngestProposals[message.id],
+  );
+  const wikiDismissed = useChatStore(
+    (s) => s.wikiIngestDismissed[message.id] === true,
+  );
   const isUser = message.role === "user";
 
   // Parser inline tag (v1.0.2 fix bug widget AskUserQuestion non renderizzato).
@@ -305,6 +313,16 @@ function MessageBubble({ message }: MessageBubbleProps) {
             ))}
           </div>
         )}
+
+        {/* v0.8.1 hook wiki ingest: card "Vuoi salvare nel wiki?" sotto la bubble
+           assistant quando il backend ha emesso SSE event wiki_ingest_proposal
+           e l'utente non l'ha ancora scartata o confermata. */}
+        {!isUser &&
+          wikiProposal &&
+          !wikiDismissed &&
+          wikiProposal.slots.length > 0 && (
+            <WikiIngestProposalCard proposal={wikiProposal} messageId={message.id} />
+          )}
 
         {/* Widget AskUserQuestion strutturato (Conv. 48 — persistito in DB lato
            backend nel campo ask_user_question_json). Ha priorita su quello inline:

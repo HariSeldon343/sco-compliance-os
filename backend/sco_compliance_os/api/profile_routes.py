@@ -25,11 +25,15 @@ from sco_compliance_os.services.learning.profile_renderer import (
     render_profile_markdown,
 )
 from sco_compliance_os.services.learning.profile_store import (
+    TeamMember,
     count_preferences,
     delete_preference,
+    delete_team_member,
+    get_team_member,
     list_preferences,
     pin_preference,
     unpin_preference,
+    upsert_team_member,
 )
 from sco_compliance_os.services.learning.user_profile import (
     Preference,
@@ -258,6 +262,116 @@ async def unpin_pref(
         slug=slug,
         action="unpin",
         message=f"Preferenza '{slug}' unpinned.",
+    )
+
+
+# ----- Endpoint team-member (v0.8.1 cantiere DEV-OS-SETUP-DEEP-SCAN) -----
+
+
+class TeamMemberOut(BaseModel):
+    """Schema response team member."""
+
+    tenant_id: str
+    is_team_mode: bool
+    team_name: str | None = None
+    team_member_role: str | None = None
+    member_full_name: str | None = None
+    created_at: str
+    updated_at: str
+
+
+class TeamMemberUpsertRequest(BaseModel):
+    """Richiesta POST /api/profile/team-member.
+
+    Pattern Conv. 47 single source of truth: backend e' la fonte autoritativa.
+    Il frontend POSTa qui i dati raccolti dalle domande 1+2 di os-setup.
+    """
+
+    is_team_mode: bool
+    team_name: str | None = Field(default=None, max_length=200)
+    team_member_role: str | None = Field(default=None, max_length=200)
+    member_full_name: str | None = Field(default=None, max_length=200)
+    tenant_id: str = Field(default="local", max_length=80)
+
+
+def _team_member_to_out(tm: TeamMember) -> TeamMemberOut:
+    """Adatta TeamMember dataclass a TeamMemberOut Pydantic."""
+    return TeamMemberOut(
+        tenant_id=tm.tenant_id,
+        is_team_mode=tm.is_team_mode,
+        team_name=tm.team_name,
+        team_member_role=tm.team_member_role,
+        member_full_name=tm.member_full_name,
+        created_at=tm.created_at,
+        updated_at=tm.updated_at,
+    )
+
+
+@router.get("/team-member", response_model=TeamMemberOut | None)
+async def get_team_member_endpoint(
+    tenant_id: str = Query(default="local"),
+) -> TeamMemberOut | None:
+    """Recupera stato team member del tenant. Ritorna null se non registrato."""
+    tm = await get_team_member(tenant_id=tenant_id)
+    if tm is None:
+        logger.info("profile.team_member.get tenant=%s found=False", tenant_id)
+        return None
+    logger.info(
+        "profile.team_member.get tenant=%s found=True is_team=%s",
+        tenant_id,
+        tm.is_team_mode,
+    )
+    return _team_member_to_out(tm)
+
+
+@router.post("/team-member", response_model=TeamMemberOut)
+async def upsert_team_member_endpoint(
+    payload: TeamMemberUpsertRequest,
+) -> TeamMemberOut:
+    """Upsert idempotente del team member.
+
+    Se l'utente sceglie modalita team, team_name e team_member_role dovrebbero
+    essere popolati. Se sceglie modalita solo, possono restare null.
+    """
+    # Validazione coerenza: team mode richiede team_name almeno
+    if payload.is_team_mode and not payload.team_name:
+        raise HTTPException(
+            status_code=422,
+            detail="Modalita team selezionata ma team_name mancante.",
+        )
+
+    tm = await upsert_team_member(
+        tenant_id=payload.tenant_id,
+        is_team_mode=payload.is_team_mode,
+        team_name=payload.team_name,
+        team_member_role=payload.team_member_role,
+        member_full_name=payload.member_full_name,
+    )
+    logger.info(
+        "profile.team_member.upsert tenant=%s is_team_mode=%s",
+        payload.tenant_id,
+        payload.is_team_mode,
+    )
+    return _team_member_to_out(tm)
+
+
+@router.delete("/team-member", response_model=ProfileActionResponse)
+async def delete_team_member_endpoint(
+    tenant_id: str = Query(default="local"),
+) -> ProfileActionResponse:
+    """Rimuove record team member del tenant."""
+    deleted = await delete_team_member(tenant_id=tenant_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Team member non trovato per tenant '{tenant_id}'",
+        )
+    logger.info("profile.team_member.delete tenant=%s", tenant_id)
+    return ProfileActionResponse(
+        success=True,
+        slug="team-member",
+        action="delete",
+        message=f"Team member del tenant '{tenant_id}' rimosso.",
     )
 
 

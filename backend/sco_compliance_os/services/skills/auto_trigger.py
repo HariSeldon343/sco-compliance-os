@@ -43,6 +43,7 @@ from sco_compliance_os.core.events import EventBus
 from sco_compliance_os.core.logging_setup import get_logger
 from sco_compliance_os.core.store import get_store
 from sco_compliance_os.services.skills.runner import execute_skill
+from sco_compliance_os.services.vault.deep_scanner import deep_scan_vault
 from sco_compliance_os.services.vault.scaffolder import (
     auto_organize_vault,
     inspect_missing_components,
@@ -194,6 +195,95 @@ async def handle_vault_registered(payload: dict[str, Any]) -> None:
     # 2. Scan vault structure per context runtime.
     structure_snapshot = await _scan_vault_structure(vault_root)
 
+    # 2-bis. DEEP SCAN PROFONDA v0.8.1 (cantiere DEV-OS-SETUP-DEEP-SCAN):
+    # Esegui scan profonda PRIMA delle 10 domande os-setup. Il report markdown
+    # leggibile viene appeso come messaggio assistant alla conversation, cosi'
+    # l'utente vede subito lo stato del vault prima di rispondere alle domande.
+    # Pattern Conv. 35 RESEARCH-BEFORE-ACT: niente domanda 1 senza analisi
+    # reale del filesystem.
+    deep_scan_report_dict: dict[str, Any] = {}
+    deep_scan_markdown = ""
+    try:
+        deep_report = deep_scan_vault(vault_root, vault_name=vault_name)
+        deep_scan_markdown = deep_report.markdown_summary
+        # Serializza in dict JSON-friendly per context runtime skill.
+        deep_scan_report_dict = {
+            "total_files": deep_report.total_files,
+            "files_by_extension": deep_report.files_by_extension,
+            "md_files_parsed": deep_report.md_files_parsed,
+            "files_scanned_capped": deep_report.files_scanned_capped,
+            "entity_type_distribution": deep_report.entity_type_distribution,
+            "ambito_canonico_distribution": deep_report.ambito_canonico_distribution,
+            "status_distribution": deep_report.status_distribution,
+            "tags_top": deep_report.tags_top,
+            "sigle_top": deep_report.sigle_top,
+            "clienti_citati": deep_report.clienti_citati,
+            "clienti_count": deep_report.clienti_count,
+            "languages_detected": deep_report.languages_detected,
+            "framework_occurrences": deep_report.framework_occurrences,
+            "scan_duration_sec": deep_report.scan_duration_sec,
+            "has_claude_md": deep_report.has_claude_md,
+            "has_wiki": deep_report.has_wiki,
+            "has_raw": deep_report.has_raw,
+            "has_business": deep_report.has_business,
+            "has_giornaliero": deep_report.has_giornaliero,
+        }
+        logger.info(
+            "auto_trigger.deep_scan_completed",
+            vault_id=vault_id,
+            conv_id=conv_id,
+            total_files=deep_report.total_files,
+            md_parsed=deep_report.md_files_parsed,
+            clienti=deep_report.clienti_count,
+            framework_top=len(deep_report.framework_occurrences),
+            duration_sec=deep_report.scan_duration_sec,
+        )
+    except Exception as exc:
+        # Pattern Conv. 44 lesson 1 CircuitBreaker: fallimento deep scan
+        # non blocca il resto del flow os-setup. L'utente vede comunque
+        # le domande, semplicemente senza pre-report.
+        logger.exception(
+            "auto_trigger.deep_scan_failed",
+            vault_id=vault_id,
+            conv_id=conv_id,
+            error=str(exc),
+        )
+        deep_scan_markdown = (
+            f"## Scansione profonda del vault \"{vault_name}\"\n\n"
+            f"La scansione profonda non e' riuscita "
+            f"(motivo tecnico, log loggato). "
+            f"Procedo direttamente con le 10 domande di profilazione.\n\n---\n"
+        )
+
+    # Appendi il report deep scan come messaggio assistant ALLA conversation
+    # PRIMA di invocare os-setup. Cosi' l'utente vede in chat:
+    #   1. Report deep scan markdown ricco
+    #   2. Domande 1..10 dell'os-setup (in messaggi successivi del bot)
+    if deep_scan_markdown:
+        try:
+            await store.append_message(
+                conversation_id=conv_id,
+                role="assistant",
+                content=deep_scan_markdown,
+                tool_calls=[
+                    {
+                        "kind": "deep_scan_report",
+                        "vault_id": vault_id,
+                        "total_files": deep_scan_report_dict.get("total_files", 0),
+                        "clienti_count": deep_scan_report_dict.get("clienti_count", 0),
+                        "framework_count": len(
+                            deep_scan_report_dict.get("framework_occurrences", [])
+                        ),
+                    }
+                ],
+            )
+        except Exception as exc:
+            logger.exception(
+                "auto_trigger.deep_scan_persist_failed",
+                conv_id=conv_id,
+                error=str(exc),
+            )
+
     # Conv. 47 single source of truth: nome campo univoco.
     # Pattern DEV-OPTIMIZER-AUTO v1.0.0: usa il valore DETECTED dal filesystem
     # invece del payload (single source of truth = filesystem stato attuale,
@@ -210,6 +300,7 @@ async def handle_vault_registered(payload: dict[str, Any]) -> None:
         "vault_name": vault_name,
         "is_sco_structure": is_sco_structure,
         "conversation_id": conv_id,
+        "deep_scan_report": deep_scan_report_dict,
         **structure_snapshot,
     }
 

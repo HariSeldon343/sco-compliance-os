@@ -1,0 +1,404 @@
+[
+  {
+    "fonte": "NIS2",
+    "riferimento": "Art. 20",
+    "area_requisito": "Governance organi direttivi",
+    "documenti_correlati": "POL-001, DOC-001, PRC-001, REP-001"
+  },
+  {
+    "fonte": "NIS2",
+    "riferimento": "Art. 21(2)(a)",
+    "area_requisito": "Politiche analisi rischi e sicurezza",
+    "documenti_correlati": "POL-002, PRC-002, PRO-001, REG-002"
+  },
+  {
+    "fonte": "NIS2",
+    "riferimento": "Art. 21(2)(b)",
+    "area_requisito": "Gestione incidenti",
+    "documenti_correlati": "POL-013, PRC-012, PRO-036-040, PLB-001-005"
+  },
+  {
+    "fonte": "NIS2",
+    "riferimento": "Art. 21(2)(c)",
+    "area_requisito": "Continuità operativa e disaster recovery",
+    "documenti_correlati": "POL-014, PIA-003, PIA-004, PRO-011, PRO-041-042"
+  },
+  {
+    "fonte": "NIS2",
+    "riferimento": "Art. 21(2)(d)",
+    "area_requisito": "Sicurezza supply chain",
+    "documenti_correlati": "POL-003, PRC-016, PRO-047-049, REG-016"
+  },
+  {
+    "fonte": "NIS2",
+    "riferimento": "Art. 21(2)(e)",
+    "area_requisito": "Sicurezza acquisizione, sviluppo, manutenzione",
+    "documenti_correlati": "POL-010, PRC-010, PRO-022-023, PRO-026-028"
+  },
+  {
+    "fonte": "NIS2",
+    "riferimento": "Art. 21(2)(f)",
+    "area_requisito": "Valutazione efficacia misure",
+    "documenti_correlati": "PRC-017, PIA-007, PRO-050-051"
+  },
+  {
+    "fonte": "NIS2",
+    "riferimento": "Art. 21(2)(g)",
+    "area_requisito": "Pratiche igiene informatica e formazione",
+    "documenti_correlati": "POL-015, PRC-015, PIA-006, PRO-046"
+  },
+  {
+    "fonte": "NIS2",
+    "riferimento": "Art. 21(2)(h)",
+    "area_requisito": "Politiche crittografia",
+    "documenti_correlati": "POL-007, PRC-005, PRO-009-010"
+  },
+  {
+    "fonte": "NIS2",
+    "riferimento": "Art. 21(2)(i)",
+    "area_requisito": "Sicurezza risorse umane e controllo accessi",
+    "documenti_correlati": "POL-005, POL-016, PRC-004, PRO-005-008, PRO-052-053"
+  },
+  {
+    "fonte": "NIS2",
+    "riferimento": "Art. 21(2)(j)",
+    "area_requisito": "Autenticazione multi-fattore",
+    "documenti_correlati": "LG-001, PRO-008"
+  },
+  {
+    "fonte": "NIS2",
+    "riferimento": "Art. 23",
+    "area_requisito": "Notifica incidenti",
+    "documenti_correlati": "PRO-038, REG-013"
+  },
+  {
+    "fonte": "L90/2024",
+    "riferimento": "Art. 1",
+    "area_requisito": "Notifica incidenti 24h/72h",
+    "documenti_correlati": "PRO-038, REG-013"
+  },
+  {
+    "fonte": "L90/2024",
+    "riferimento": "Art. 8(c)",
+    "area_requisito": "Documento ruoli e organizzazione",
+    "documenti_correlati": "DOC-001"
+  },
+  {
+    "fonte": "L90/2024",
+    "riferimento": "Art. 8(d)",
+    "area_requisito": "Piano programmatico sicurezza",
+    "documenti_correlati": "PIA-001"
+  },
+  {
+    "fonte": "L90/2024",
+    "riferimento": "Art. 8(e)",
+    "area_requisito": "Interventi gestione rischi",
+    "documenti_correlati": "PIA-002, PRC-002"
+  },
+  {
+    "fonte": "L90/2024",
+    "riferimento": "Art. 8(f)",
+    "area_requisito": "Adozione misure linee guida ACN",
+    "documenti_correlati": "Tutti i documenti PRO e IO"
+  },
+  {
+    "fonte": "L90/2024",
+    "riferimento": "Art. 8(g)",
+    "area_requisito": "Monitoraggio minacce e vulnerabilità",
+    "documenti_correlati": "PRC-008, PRO-020-022, PRC-014"
+  },
+  {
+    "fonte": "L90/2024",
+    "riferimento": "Art. 14",
+    "area_requisito": "Contratti pubblici beni/servizi informatici",
+    "documenti_correlati": "DOC-005, PRO-048"
+  },
+  {
+    "fonte": "ACN-DET",
+    "riferimento": "GV.OC - Contesto organizzativo",
+    "area_requisito": "Governance e stakeholder",
+    "documenti_correlati": "POL-001, REG-001, PRC-017"
+  },
+  {
+    "fonte": "ACN-DET",
+    "riferimento": "GV.RM - Gestione rischio",
+    "area_requisito": "Risk management",
+    "documenti_correlati": "POL-002, PRC-002, PRO-001-002"
+  },
+  {
+    "fonte": "ACN-DET",
+    "riferimento": "GV.RR - Ruoli e responsabilità",
+    "area_requisito": "Organizzazione sicurezza",
+    "documenti_correlati": "DOC-001, PRO-054"
+  },
+  {
+    "fonte": "ACN-DET",
+    "riferimento": "GV.PO - Policy",
+    "area_requisito": "Politiche sicurezza",
+    "documenti_correlati": "POL-001-016, PRO-055"
+  },
+  {
+    "fonte": "ACN-DET",
+    "riferimento": "GV.OV - Supervisione",
+    "area_requisito": "Monitoraggio e reporting direzione",
+    "documenti_correlati": "PRC-001, REP-001, PRO-056"
+  },
+  {
+    "fonte": "ACN-DET",
+    "riferimento": "GV.SC - Supply chain",
+    "area_requisito": "Gestione fornitori",
+    "documenti_correlati": "POL-003, PRC-016, PRO-047-049"
+  },
+  {
+    "fonte": "ACN-DET",
+    "riferimento": "ID.AM - Asset management",
+    "area_requisito": "Gestione asset",
+    "documenti_correlati": "PRC-003, REG-003-006, PRO-003-004"
+  },
+  {
+    "fonte": "ACN-DET",
+    "riferimento": "ID.RA - Risk assessment",
+    "area_requisito": "Valutazione rischi e vulnerabilità",
+    "documenti_correlati": "PRC-002, PRO-001, PRO-020-021, REG-002"
+  },
+  {
+    "fonte": "ACN-DET",
+    "riferimento": "ID.SC - Supply chain risk",
+    "area_requisito": "Rischio fornitori",
+    "documenti_correlati": "PRO-047, REG-016"
+  },
+  {
+    "fonte": "ACN-DET",
+    "riferimento": "PR.AA - Accessi e autenticazione",
+    "area_requisito": "Controllo accessi",
+    "documenti_correlati": "POL-005, PRC-004, PRO-005-008"
+  },
+  {
+    "fonte": "ACN-DET",
+    "riferimento": "PR.AT - Awareness e training",
+    "area_requisito": "Formazione",
+    "documenti_correlati": "POL-015, PRC-015, PIA-006, REG-015"
+  },
+  {
+    "fonte": "ACN-DET",
+    "riferimento": "PR.DS - Data security",
+    "area_requisito": "Protezione dati",
+    "documenti_correlati": "POL-006-007, PRO-009-012"
+  },
+  {
+    "fonte": "ACN-DET",
+    "riferimento": "PR.IP - Information protection",
+    "area_requisito": "Change management",
+    "documenti_correlati": "PRC-009, PRO-024-025"
+  },
+  {
+    "fonte": "ACN-DET",
+    "riferimento": "PR.IR - Infrastructure resilience",
+    "area_requisito": "Sicurezza reti",
+    "documenti_correlati": "POL-008, PRC-006, PRO-013-016"
+  },
+  {
+    "fonte": "ACN-DET",
+    "riferimento": "PR.PS - Platform security",
+    "area_requisito": "Sicurezza endpoint e applicazioni",
+    "documenti_correlati": "POL-009-010, PRC-007, PRC-010, PRO-017-019"
+  },
+  {
+    "fonte": "ACN-DET",
+    "riferimento": "PR.AC - Physical access",
+    "area_requisito": "Sicurezza fisica",
+    "documenti_correlati": "POL-011, PRO-029-031"
+  },
+  {
+    "fonte": "ACN-DET",
+    "riferimento": "DE.CM - Continuous monitoring",
+    "area_requisito": "Monitoraggio continuo",
+    "documenti_correlati": "POL-012, PRC-011, PRO-032-035, MAN-001"
+  },
+  {
+    "fonte": "ACN-DET",
+    "riferimento": "DE.AE - Adverse event analysis",
+    "area_requisito": "Analisi eventi",
+    "documenti_correlati": "PRO-033, PRO-034"
+  },
+  {
+    "fonte": "ACN-DET",
+    "riferimento": "RS.MA - Incident management",
+    "area_requisito": "Gestione incidenti",
+    "documenti_correlati": "POL-013, PRC-012, PRO-036-040, PLB-001-005"
+  },
+  {
+    "fonte": "ACN-DET",
+    "riferimento": "RS.AN - Incident analysis",
+    "area_requisito": "Analisi incidenti",
+    "documenti_correlati": "PRO-036, PRO-039-040"
+  },
+  {
+    "fonte": "ACN-DET",
+    "riferimento": "RS.CO - Incident communication",
+    "area_requisito": "Comunicazione incidenti",
+    "documenti_correlati": "PRO-037-038, PRO-043"
+  },
+  {
+    "fonte": "ACN-DET",
+    "riferimento": "RS.IM - Incident improvement",
+    "area_requisito": "Lessons learned",
+    "documenti_correlati": "PRO-040"
+  },
+  {
+    "fonte": "ACN-DET",
+    "riferimento": "RC.RP - Recovery planning",
+    "area_requisito": "Continuità e recovery",
+    "documenti_correlati": "POL-014, PIA-003-005, PRO-041-042"
+  },
+  {
+    "fonte": "ACN-DET",
+    "riferimento": "RC.CO - Recovery communication",
+    "area_requisito": "Comunicazione ripristino",
+    "documenti_correlati": "PRO-043"
+  },
+  {
+    "fonte": "ISO27001",
+    "riferimento": "5.1-5.3",
+    "area_requisito": "Leadership e policy",
+    "documenti_correlati": "POL-001, DOC-001, PRC-001"
+  },
+  {
+    "fonte": "ISO27001",
+    "riferimento": "6.1-6.2",
+    "area_requisito": "Risk assessment e treatment",
+    "documenti_correlati": "PRC-002, PRO-001-002, DOC-002, PIA-002"
+  },
+  {
+    "fonte": "ISO27001",
+    "riferimento": "7.5",
+    "area_requisito": "Documented information",
+    "documenti_correlati": "PRO-055"
+  },
+  {
+    "fonte": "ISO27001",
+    "riferimento": "8.1-8.3",
+    "area_requisito": "Operational planning and control",
+    "documenti_correlati": "PRC-009, PRO-024-025"
+  },
+  {
+    "fonte": "ISO27001",
+    "riferimento": "9.1-9.3",
+    "area_requisito": "Performance evaluation",
+    "documenti_correlati": "REP-001, PRO-056, PIA-007"
+  },
+  {
+    "fonte": "ISO27001",
+    "riferimento": "10.1-10.2",
+    "area_requisito": "Improvement",
+    "documenti_correlati": "PRC-019, PRO-051, REG-017"
+  },
+  {
+    "fonte": "ISO27001",
+    "riferimento": "A.5 Organizational",
+    "area_requisito": "Controlli organizzativi",
+    "documenti_correlati": "POL-001-016, PRO vari, REG vari"
+  },
+  {
+    "fonte": "ISO27001",
+    "riferimento": "A.6 People",
+    "area_requisito": "Controlli personale",
+    "documenti_correlati": "POL-016, PRO-052-054"
+  },
+  {
+    "fonte": "ISO27001",
+    "riferimento": "A.7 Physical",
+    "area_requisito": "Controlli fisici",
+    "documenti_correlati": "POL-011, PRO-029-031"
+  },
+  {
+    "fonte": "ISO27001",
+    "riferimento": "A.8 Technological",
+    "area_requisito": "Controlli tecnologici",
+    "documenti_correlati": "Tutte le PRO tecniche, LG, MAN"
+  },
+  {
+    "fonte": "AgID-MM",
+    "riferimento": "ABSC1",
+    "area_requisito": "Inventario dispositivi",
+    "documenti_correlati": "REG-003"
+  },
+  {
+    "fonte": "AgID-MM",
+    "riferimento": "ABSC2",
+    "area_requisito": "Inventario software",
+    "documenti_correlati": "REG-004"
+  },
+  {
+    "fonte": "AgID-MM",
+    "riferimento": "ABSC3",
+    "area_requisito": "Configurazioni sicure",
+    "documenti_correlati": "PRO-017, LG-002-003"
+  },
+  {
+    "fonte": "AgID-MM",
+    "riferimento": "ABSC4",
+    "area_requisito": "Vulnerability management",
+    "documenti_correlati": "PRC-008, PRO-020-022"
+  },
+  {
+    "fonte": "AgID-MM",
+    "riferimento": "ABSC5",
+    "area_requisito": "Gestione account privilegiati",
+    "documenti_correlati": "PRO-006, REG-007"
+  },
+  {
+    "fonte": "AgID-MM",
+    "riferimento": "ABSC8",
+    "area_requisito": "Difese malware",
+    "documenti_correlati": "PRO-018, PRC-007"
+  },
+  {
+    "fonte": "AgID-MM",
+    "riferimento": "ABSC10",
+    "area_requisito": "Copie di sicurezza",
+    "documenti_correlati": "PRO-011"
+  },
+  {
+    "fonte": "AgID-MM",
+    "riferimento": "ABSC13",
+    "area_requisito": "Protezione dati",
+    "documenti_correlati": "POL-006, PRO-009-012"
+  },
+  {
+    "fonte": "FNCS 2025",
+    "riferimento": "GV - Govern",
+    "area_requisito": "Governance cybersecurity",
+    "documenti_correlati": "Tutti i documenti POL, PRC-001, DOC-001"
+  },
+  {
+    "fonte": "FNCS 2025",
+    "riferimento": "ID - Identify",
+    "area_requisito": "Identificazione asset e rischi",
+    "documenti_correlati": "PRC-002-003, REG-002-006, DOC-004"
+  },
+  {
+    "fonte": "FNCS 2025",
+    "riferimento": "PR - Protect",
+    "area_requisito": "Protezione",
+    "documenti_correlati": "POL-005-011, PRO-005-031"
+  },
+  {
+    "fonte": "FNCS 2025",
+    "riferimento": "DE - Detect",
+    "area_requisito": "Rilevazione",
+    "documenti_correlati": "POL-012, PRC-011, PRO-032-035"
+  },
+  {
+    "fonte": "FNCS 2025",
+    "riferimento": "RS - Respond",
+    "area_requisito": "Risposta",
+    "documenti_correlati": "POL-013, PRC-012, PLB-001-005"
+  },
+  {
+    "fonte": "FNCS 2025",
+    "riferimento": "RC - Recover",
+    "area_requisito": "Ripristino",
+    "documenti_correlati": "POL-014, PIA-003-005, PRO-041-043"
+  }
+]

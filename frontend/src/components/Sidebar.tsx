@@ -22,7 +22,7 @@ import { cn } from "@/lib/cn";
 
 // Fallback version se backend /health non risponde. Conv. 47 enforcement:
 // fonte autoritativa = backend_version da GET /health (vedi useBackendVersion hook).
-const APP_VERSION_FALLBACK = "0.8.0";
+const APP_VERSION_FALLBACK = "0.8.1";
 
 interface NavItem {
   to: string;
@@ -34,6 +34,8 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Chat", icon: MessageSquare },
   // Wave 2 OpenHuman replica — Wiki Memory Tree gerarchico L0/L1/L2
   { to: "/wiki", label: "Wiki", icon: FolderTree },
+  // v0.8.1 DEV-SUBAGENT-BUILDER: gestione skill + wizard creazione
+  { to: "/skills", label: "Skills", icon: Sparkles },
   { to: "/integrations", label: "Integrazioni", icon: Plug },
   { to: "/vault", label: "Vault", icon: Database },
   { to: "/memory", label: "Memoria", icon: Brain },
@@ -91,6 +93,11 @@ export function Sidebar() {
   const setActive = useChatStore((s) => s.setActiveConversation);
   const createConv = useChatStore((s) => s.createConversation);
   const fetchConversations = useChatStore((s) => s.fetchConversations);
+  // v0.8.1 fix auto-navigation: track lastAutoNavigated per intercettare
+  // auto-select dello store e triggera react-router navigate('/'). Lo store
+  // non puo` chiamare useNavigate (e' un hook), quindi il pattern e' "store
+  // marca, sidebar reagisce con effect".
+  const lastAutoNavigated = useChatStore((s) => s.lastAutoNavigated);
 
   // v1.0.2 fix sidebar visibility: auto-fetch al mount + polling 5s.
   // Backend è single source of truth (Conv. 47): la sidebar deve riflettere
@@ -105,6 +112,43 @@ export function Sidebar() {
     }, 5000);
     return () => clearInterval(intervalId);
   }, [fetchConversations]);
+
+  // v0.8.1 fix auto-navigation: quando store auto-seleziona una nuova
+  // "Configurazione iniziale" (lastAutoNavigated cambia), forza navigate('/')
+  // cosi` l'utente vede subito il contenuto della chat invece di restare
+  // su /vault o /settings o /integrations. Pattern: store marca, sidebar
+  // reagisce con effect.
+  useEffect(() => {
+    if (lastAutoNavigated && activeId === lastAutoNavigated) {
+      // Verifica che siamo effettivamente atterrati sulla welcome chat
+      // dell'auto-nav (no race con manuali setActive concorrenti).
+      if (window.location.pathname !== "/") {
+        navigate("/");
+      }
+    }
+  }, [lastAutoNavigated, activeId, navigate]);
+
+  // v0.8.1 fix auto-navigation: fallback ridondante per assicurare auto-select
+  // anche in scenari edge dove fetchConversations potrebbe non aver scattato.
+  // Watch conversations dictionary: se compare nuova "Configurazione iniziale"
+  // non ancora auto-naviata E utente e' su welcome screen → seleziona +
+  // naviga. Pattern Conv. 47/48 single source of truth: deduce dallo store.
+  useEffect(() => {
+    const configWelcome = Object.values(conversations).find((c) =>
+      c.title.startsWith("Configurazione iniziale del vault"),
+    );
+    if (!configWelcome) return;
+    // Salta se gia` auto-naviata (rispetta scelta utente di muoversi altrove)
+    if (lastAutoNavigated === configWelcome.id) return;
+    // Salta se l'utente sta gia` su una conv (no preempt: utente lavora altrove)
+    if (activeId && activeId !== configWelcome.id) return;
+    // Tutte condizioni OK → auto-select + naviga
+    setActive(configWelcome.id);
+    useChatStore.setState({ lastAutoNavigated: configWelcome.id });
+    if (window.location.pathname !== "/") {
+      navigate("/");
+    }
+  }, [conversations, activeId, lastAutoNavigated, setActive, navigate]);
 
   // Conv. 47 enforcement v0.7.1: vault attivo + versione = single source of truth.
   // Vault da useVaultStore (era hardcoded "Second Brain" pre-v0.7.1).

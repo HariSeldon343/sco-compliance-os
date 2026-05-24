@@ -10,6 +10,7 @@ import { SettingsScreen } from "./screens/SettingsScreen";
 import { IntegrationsScreen } from "./screens/IntegrationsScreen";
 import { VaultScreen } from "./screens/VaultScreen";
 import { MemoryScreen } from "./screens/MemoryScreen";
+import { SkillsScreen } from "./screens/SkillsScreen";
 import { WikiView } from "./components/WikiView";
 
 import "./index.css";
@@ -26,6 +27,8 @@ const router = createBrowserRouter([
       { path: "integrations", element: <IntegrationsScreen /> },
       { path: "vault", element: <VaultScreen /> },
       { path: "memory", element: <MemoryScreen /> },
+      // v0.8.1 DEV-SUBAGENT-BUILDER: gestione skill custom + wizard + advanced
+      { path: "skills", element: <SkillsScreen /> },
       // Wave 2 OpenHuman replica — Memory Tree gerarchico L0/L1/L2 navigabile
       { path: "wiki", element: <WikiView /> },
     ],

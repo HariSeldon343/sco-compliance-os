@@ -39,6 +39,7 @@ from sco_compliance_os.api import (
     memory_routes,
     onboarding_routes,
     profile_routes,
+    skill_builder_routes,
     skills_routes,
     subconscious_routes,
     tokenjuice_routes,
@@ -464,6 +465,9 @@ def create_app() -> FastAPI:
     app.include_router(autofetch_routes.router)
     app.include_router(profile_routes.router)
     app.include_router(skills_routes.router)
+    # v0.8.1 DEV-SUBAGENT-BUILDER: 2 router (builder POST + skills CRUD PATCH/DELETE)
+    app.include_router(skill_builder_routes.router)
+    app.include_router(skill_builder_routes.router_skills_crud)
     app.include_router(voice_routes.router)
     app.include_router(llm_routes.router)
 
