@@ -87,6 +87,7 @@ export function Header() {
         <button
           type="button"
           onClick={() => setSessionEndOpen(true)}
+          data-tour="header-end-session"
           className="flex items-center gap-1.5 rounded-md border border-sco-border bg-sco-surface-elevated px-2.5 py-1.5 text-xs font-medium text-sco-muted-foreground transition-colors hover:border-sco-blue/40 hover:bg-sco-blue/5 hover:text-sco-text dark:hover:text-sco-text-dark"
           title="Manutieni il vault con os-ottimizzatore prima di chiudere la sessione"
           aria-label="Fine sessione: manutieni vault con os-ottimizzatore"

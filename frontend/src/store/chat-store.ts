@@ -169,9 +169,15 @@ export const useChatStore = create<ChatState>()(
         const conv = state.conversations[id];
         const isConfigWelcome =
           conv?.title?.startsWith("Configurazione iniziale del vault") ?? false;
-        // Conv backend + (no cache OPPURE è "Configurazione iniziale" che potrebbe
-        // avere messaggi nuovi aggiunti dal skill loader post-vault.registered)
-        if (!isOptimisticConv && (cached.length === 0 || isConfigWelcome)) {
+        const isOptimizerWelcome =
+          conv?.title?.startsWith("Ottimizzazione iniziale del vault") ?? false;
+        // Conv backend + (no cache OPPURE è "Configurazione/Ottimizzazione iniziale"
+        // che potrebbe avere messaggi nuovi aggiunti dal skill loader
+        // post-vault.registered / post-setup.completed)
+        if (
+          !isOptimisticConv &&
+          (cached.length === 0 || isConfigWelcome || isOptimizerWelcome)
+        ) {
           void apiClient
             .getConversationMessages(id)
             .then((msgs) => {
@@ -224,19 +230,40 @@ export const useChatStore = create<ChatState>()(
         let convId = state.activeConversationId;
         const now = new Date().toISOString();
 
-        // Se non c'è conversation attiva OPPURE è una stub (non backend) → crea backend
+        // v0.13.2 hotfix Bug bullet vuoto su 2ª chat NUOVA consecutiva:
+        // `createConversation` (line ~191) crea stub locale con id
+        // `conv-<timestamp>-<rand>`. La precedente check `startsWith("stub-")`
+        // NON matchava mai perché il prefisso reale è "conv-" → stub veniva
+        // trattato come backend conv → backend rispondeva 404 → bullet vuoto.
+        // Backend conv id è UUID (vedi backend/.../store.py `_new_uuid`) che
+        // mai inizia con "conv-" o "stub-". Quindi un id che inizia con "conv-"
+        // o "stub-" è SEMPRE uno stub frontend non promosso.
         const existing = convId ? state.conversations[convId] : null;
-        const isBackendConv = existing && !existing.id.startsWith("stub-");
+        const isStubId = existing && (
+          existing.id.startsWith("conv-") || existing.id.startsWith("stub-")
+        );
+        const isBackendConv = existing && !isStubId;
 
         if (!convId || !isBackendConv) {
           try {
             const newConv = await apiClient.createConversation();
+            // v0.13.2 hotfix: rimuovi stub locale (se esisteva) per evitare
+            // duplicati nella sidebar che mostrerebbero conv-<rand> orfana.
+            const stubIdToRemove = convId && isStubId ? convId : null;
             convId = newConv.id;
-            set((s) => ({
-              conversations: { ...s.conversations, [newConv.id]: newConv },
-              messagesByConv: { ...s.messagesByConv, [newConv.id]: [] },
-              activeConversationId: newConv.id,
-            }));
+            set((s) => {
+              const conversations = { ...s.conversations };
+              const messagesByConv = { ...s.messagesByConv };
+              if (stubIdToRemove) {
+                delete conversations[stubIdToRemove];
+                delete messagesByConv[stubIdToRemove];
+              }
+              return {
+                conversations: { ...conversations, [newConv.id]: newConv },
+                messagesByConv: { ...messagesByConv, [newConv.id]: [] },
+                activeConversationId: newConv.id,
+              };
+            });
           } catch (err) {
             set({
               error: `Errore creazione conversation: ${err instanceof Error ? err.message : err}`,
@@ -606,10 +633,17 @@ export const useChatStore = create<ChatState>()(
           const known = state.knownConversationIds;
 
           // Detect nuove conversations comparse dal backend post-vault.registered
+          // o post-setup.completed (v0.13.2 DEV-AUTO-OPTIMIZER).
           const newOnes = list.filter((c) => !known.has(c.id) && !state.conversations[c.id]);
           const configWelcome = newOnes.find((c) =>
             c.title.startsWith("Configurazione iniziale del vault"),
           );
+          const optimizerWelcome = newOnes.find((c) =>
+            c.title.startsWith("Ottimizzazione iniziale del vault"),
+          );
+          // Priorita: optimizer ha priorita su config welcome quando entrambe
+          // compaiono nello stesso polling (caso post-setup completion).
+          const welcomeCandidate = optimizerWelcome ?? configWelcome;
 
           // Merge: backend è autoritativo per shape/title/updated_at; preserva messagesByConv
           const newConvs: Record<string, ConversationItem> = { ...state.conversations };
@@ -621,17 +655,16 @@ export const useChatStore = create<ChatState>()(
           for (const conv of list) nextKnown.add(conv.id);
 
           // v0.8.1 fix Bug auto-nav: auto-select aggressivo per "Configurazione
-          // iniziale". Condizioni di blocco esplicite:
-          //   - NON e' configWelcome (no candidate)
+          // iniziale" e "Ottimizzazione iniziale" (v0.13.2 DEV-AUTO-OPTIMIZER).
+          // Condizioni di blocco esplicite:
+          //   - NON e' welcomeCandidate (no candidate)
           //   - utente sta streaming (don't preempt)
           //   - conv welcome e' la STESSA gia` auto-naviata prima
           //     (lastAutoNavigated → rispetta scelta utente di andare altrove)
-          // NB: il check precedente "!activeConversationId" era troppo restrittivo
-          // e causava il bug Antonio v0.8.0 ("ho dovuto io selezionare da Recenti").
           const shouldAutoSelect =
-            !!configWelcome &&
+            !!welcomeCandidate &&
             !state.isStreaming &&
-            state.lastAutoNavigated !== configWelcome.id;
+            state.lastAutoNavigated !== welcomeCandidate.id;
 
           set({
             conversations: newConvs,
@@ -643,31 +676,31 @@ export const useChatStore = create<ChatState>()(
           // così triggera anche il fetch messaggi della conversation appena creata
           // (Conv. 48: backend single source of truth dei messaggi). Inoltre marca
           // lastAutoNavigated per non ri-naviare al prossimo polling (5s).
-          if (shouldAutoSelect && configWelcome) {
-            get().setActiveConversation(configWelcome.id);
-            set({ lastAutoNavigated: configWelcome.id });
+          if (shouldAutoSelect && welcomeCandidate) {
+            get().setActiveConversation(welcomeCandidate.id);
+            set({ lastAutoNavigated: welcomeCandidate.id });
           }
 
-          // Toast notifica nuova conversation di configurazione (lazy import sonner
-          // per evitare overhead bundle in chunk store; sonner è già caricato
-          // da main.tsx in chunk principale via Toaster, l'import è dedup-ed).
-          if (!silent && configWelcome) {
+          // Toast notifica nuova conversation di configurazione/ottimizzazione
+          // (lazy import sonner per evitare overhead bundle in chunk store).
+          if (!silent && welcomeCandidate) {
             const { toast } = await import("sonner");
-            toast.success(
-              `Configurazione vault completata: nuova conversazione "${configWelcome.title}"`,
-              {
-                duration: 6000,
-                action: shouldAutoSelect
-                  ? undefined
-                  : {
-                      label: "Apri",
-                      onClick: () => {
-                        get().setActiveConversation(configWelcome.id);
-                        set({ lastAutoNavigated: configWelcome.id });
-                      },
+            const isOptimizer = welcomeCandidate === optimizerWelcome;
+            const toastMsg = isOptimizer
+              ? `Ottimizzazione del vault avviata: "${welcomeCandidate.title}"`
+              : `Configurazione vault completata: nuova conversazione "${welcomeCandidate.title}"`;
+            toast.success(toastMsg, {
+              duration: 6000,
+              action: shouldAutoSelect
+                ? undefined
+                : {
+                    label: "Apri",
+                    onClick: () => {
+                      get().setActiveConversation(welcomeCandidate.id);
+                      set({ lastAutoNavigated: welcomeCandidate.id });
                     },
-              },
-            );
+                  },
+            });
           }
 
           return list;

@@ -216,6 +216,8 @@
       0 0 60px -10px rgba(0, 116, 180, 0.4),
       0 0 20px -5px rgba(48, 46, 92, 0.2);
     --sco-shadow-glow-amber: 0 0 30px -5px rgba(255, 167, 39, 0.35);
+    /* v0.13.2 PSI-2: shadow inner-glow (focus state) openhuman-inspired clean-room */
+    --sco-shadow-inner-glow: inset 0 0 12px rgba(0, 116, 180, 0.15);
 
     /* ========================================================================
      * EASING — curve cubic-bezier premium (Material, BottomTabBar, glow-pulse)
@@ -296,6 +298,8 @@
       0 0 80px -10px rgba(45, 139, 196, 0.55),
       0 0 24px -5px rgba(85, 80, 153, 0.35);
     --sco-shadow-glow-amber: 0 0 40px -5px rgba(255, 167, 39, 0.45);
+    /* v0.13.2 PSI-2: inner-glow dark mode (focus state piu` visibile su fondo scuro) */
+    --sco-shadow-inner-glow: inset 0 0 14px rgba(45, 139, 196, 0.25);
   }
 
   /* ==========================================================================
@@ -466,6 +470,29 @@
     backdrop-filter: blur(8px) saturate(160%);
     -webkit-backdrop-filter: blur(8px) saturate(160%);
     border-bottom: 1px solid var(--sco-color-border-subtle);
+  }
+
+  /* v0.13.2 PSI-2: glass-surface — utility class openhuman-inspired clean-room
+     per applicazione su Dialog, Popover, Tooltip, modal e card. Differisce da
+     .glass (alias esistente) per backdrop-filter ancora piu` aggressivo (20px
+     blur + 180% saturate) e palette dedicata light/dark. Brand-neutral (white
+     fade per light mode, black fade per dark mode), si compone bene con
+     gradient overlay decorativi. */
+  .glass-surface {
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  /* Dark mode variant esplicito (per usi su sfondo chiaro intenzionale).
+     Auto-applica quando il parent ha la classe .dark del theme switcher SCO. */
+  .glass-surface-dark,
+  .dark .glass-surface {
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.06);
   }
 
   /* Premium gradient testi */

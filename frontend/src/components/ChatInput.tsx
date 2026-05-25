@@ -139,7 +139,8 @@ export function ChatInput() {
         {/* Composer container arrotondato 2xl con focus ring blu */}
         <div
           className={cn(
-            "flex flex-col overflow-visible rounded-2xl border bg-sco-surface-elevated shadow-sm transition-all duration-150 focus-within:border-sco-blue focus-within:shadow-md focus-within:ring-2 focus-within:ring-sco-blue/20",
+            // v0.13.2 PSI-2: inner-glow focus state per visual depth percepita
+            "flex flex-col overflow-visible rounded-2xl border bg-sco-surface-elevated shadow-sm transition-all duration-150 focus-within:border-sco-blue focus-within:shadow-inner-glow focus-within:ring-2 focus-within:ring-sco-blue/20",
             overLimit ? "border-red-500" : "border-sco-border",
           )}
         >
@@ -151,6 +152,7 @@ export function ChatInput() {
             onKeyDown={handleKeyDown}
             placeholder="Scrivi un messaggio..."
             rows={1}
+            data-tour="chat-input-textarea"
             className="resize-none border-0 bg-transparent px-4 pt-3.5 pb-2 text-sm leading-relaxed text-sco-text placeholder:text-sco-muted-foreground/70 focus:outline-none dark:text-sco-text-dark"
             disabled={isStreaming}
           />
@@ -316,13 +318,15 @@ export function ChatInput() {
                 type="button"
                 onClick={handleSend}
                 disabled={!canSend}
+                data-tour="chat-send-button"
                 whileHover={canSend ? { scale: 1.05 } : undefined}
                 whileTap={canSend ? { scale: 0.92 } : undefined}
                 transition={{ duration: 0.12, ease: "easeOut" }}
                 className={cn(
+                  // v0.13.2 PSI-2: shadow-crisp per definizione button (active state)
                   "relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg transition-colors duration-150",
                   canSend
-                    ? "bg-sco-blue text-white shadow-sm hover:bg-sco-navy hover:shadow"
+                    ? "bg-sco-blue text-white shadow-crisp hover:bg-sco-navy hover:shadow-medium"
                     : "cursor-not-allowed bg-sco-muted text-sco-muted-foreground",
                 )}
                 title="Invia (Invio)"

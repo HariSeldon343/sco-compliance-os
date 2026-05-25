@@ -1,12 +1,18 @@
 // SCO Compliance OS — schermata Memoria: Memory Tree reale da backend /api/memory/tree
+// + Memory Heatmap GitHub-style v0.13.2 PSI-2 P0 feature.
 // Pattern Conv. 47 + Conv. 48 enforcement: single source of truth backend, niente stub hardcoded.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Brain, ChevronRight, ChevronDown, FileText, RefreshCw } from "lucide-react";
+import { Brain, ChevronRight, ChevronDown, FileText, RefreshCw, Activity } from "lucide-react";
 
 import { ApiError } from "@/api/client";
 import { cn } from "@/lib/cn";
 import { EmptyState, ErrorState } from "@/components/ui/EmptyState";
+import {
+  MemoryHeatmap,
+  fetchMemoryActivity,
+  type ActivityResponse,
+} from "@/components/MemoryHeatmap";
 
 interface MemoryNodeRemote {
   id: string;
@@ -42,6 +48,7 @@ type LoadState = "idle" | "loading" | "ok" | "error";
 
 export function MemoryScreen() {
   const [tree, setTree] = useState<MemoryTreeResponse | null>(null);
+  const [activity, setActivity] = useState<ActivityResponse | null>(null);
   const [state, setState] = useState<LoadState>("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -49,8 +56,24 @@ export function MemoryScreen() {
     setState("loading");
     setError(null);
     try {
-      const data = await fetchMemoryTree();
-      setTree(data);
+      // Carica tree + activity in parallelo per ridurre TTFB percepito.
+      // Heatmap e` indipendente dal tree, se uno fallisce l'altro continua.
+      const [treeRes, activityRes] = await Promise.allSettled([
+        fetchMemoryTree(),
+        fetchMemoryActivity(240),
+      ]);
+      if (treeRes.status === "fulfilled") {
+        setTree(treeRes.value);
+      } else {
+        throw treeRes.reason;
+      }
+      if (activityRes.status === "fulfilled") {
+        setActivity(activityRes.value);
+      } else {
+        // Heatmap graceful empty: log ma non fallire l'intera schermata
+        console.warn("memory.activity.fetch_failed", activityRes.reason);
+        setActivity({ days: 240, total: 0, points: [] });
+      }
       setState("ok");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Errore sconosciuto";
@@ -132,6 +155,30 @@ export function MemoryScreen() {
             secondaryCtaLabel="Vai a Connettori"
             secondaryCtaHref="/integrations"
           />
+        )}
+
+        {/* v0.13.2 PSI-2: Memory Heatmap GitHub-style (8-month × 7-day grid).
+            Sempre visibile (anche quando tree e` vuoto) — pattern memoria
+            consulenziale persistente. */}
+        {state === "ok" && activity && (
+          <div className="mb-6 rounded-lg border border-sco-border bg-sco-surface-elevated p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Activity size={14} className="text-sco-blue" />
+                <h2 className="text-sm font-semibold text-sco-text dark:text-sco-text-dark">
+                  Attivita` ultimi 240 giorni
+                </h2>
+              </div>
+              <span className="text-xs text-sco-muted-foreground">
+                {activity.total === 0
+                  ? "Nessun chunk ingerito"
+                  : `${activity.total} ${activity.total === 1 ? "chunk" : "chunks"} totali`}
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <MemoryHeatmap data={activity.points} days={activity.days} />
+            </div>
+          </div>
         )}
 
         {state === "ok" && tree && tree.total_count > 0 && (

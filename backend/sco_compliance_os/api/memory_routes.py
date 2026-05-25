@@ -176,6 +176,61 @@ async def get_memory_stats() -> dict[str, Any]:
     }
 
 
+# ----- Memory Heatmap GitHub-style — v0.13.2 PSI-2 P0 feature -----
+
+
+class ActivityPoint(BaseModel):
+    """Singolo punto della heatmap GitHub-style: data ISO + numero di chunk."""
+
+    date: str = Field(..., description="Data ISO YYYY-MM-DD (timezone server-local).")
+    count: int = Field(..., ge=0, description="Numero chunk ingeriti quel giorno.")
+
+
+class ActivityResponse(BaseModel):
+    """Response per GET /api/memory/activity."""
+
+    days: int = Field(..., description="Finestra temporale richiesta (giorni).")
+    total: int = Field(..., ge=0, description="Somma totale chunk nella finestra.")
+    points: list[ActivityPoint] = Field(
+        default_factory=list,
+        description="Punti attivita` (solo giorni con count>0; frontend interpola level 0 per i gap).",
+    )
+
+
+@router.get("/activity", response_model=ActivityResponse)
+async def get_memory_activity(
+    days: int = Query(
+        default=240,
+        ge=7,
+        le=365,
+        description="Finestra temporale in giorni (default 240 per 8 mesi × 30 giorni).",
+    ),
+) -> ActivityResponse:
+    """Aggrega attivita` memory tree per giorno (Memory Heatmap GitHub-style).
+
+    Pattern openhuman-inspired clean-room: griglia 8-mese × 7-day, 5 intensity
+    level computati lato frontend. Backend ritorna solo i raw counts per
+    giorno, il frontend mappa min/max -> levels 0..4.
+
+    Single source of truth: tabella ``mem_tree_chunks`` (tutte le source_kind).
+    Conv. 47 enforcement: il frontend non hardcoda mock data.
+
+    Args:
+        days: finestra temporale (7..365, default 240).
+
+    Returns:
+        ActivityResponse con lista (date_iso, count). Giorni vuoti omessi
+        per ridurre payload; frontend li tratta come level 0.
+    """
+    from sco_compliance_os.services.memory.tree_store import activity_by_day
+
+    logger.info("memory.activity.requested", days=days)
+    rows = await activity_by_day(days=days)
+    points = [ActivityPoint(date=d, count=c) for d, c in rows]
+    total = sum(p.count for p in points)
+    return ActivityResponse(days=days, total=total, points=points)
+
+
 # ----- Wave 1 OpenHuman replica: tree + hotness endpoints -----
 
 

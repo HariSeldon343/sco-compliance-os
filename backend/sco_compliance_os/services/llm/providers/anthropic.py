@@ -137,14 +137,28 @@ class AnthropicProvider(LLMProvider):
                     seq += 1
 
                 final_message = await stream.get_final_message()
+                # v0.13.2 Bug B fix OMEGA-2: espone cache_read_input_tokens +
+                # cache_creation_input_tokens per validare cache hit ratio +
+                # observability prompt caching ephemeral (Anthropic SDK >=0.96).
+                usage_full: dict[str, Any] = {
+                    "input_tokens": final_message.usage.input_tokens,
+                    "output_tokens": final_message.usage.output_tokens,
+                }
+                cache_read = getattr(
+                    final_message.usage, "cache_read_input_tokens", None
+                )
+                cache_create = getattr(
+                    final_message.usage, "cache_creation_input_tokens", None
+                )
+                if cache_read is not None:
+                    usage_full["cache_read_input_tokens"] = cache_read
+                if cache_create is not None:
+                    usage_full["cache_creation_input_tokens"] = cache_create
                 yield ChunkEvent(
                     kind="done",
                     data={
                         "stop_reason": final_message.stop_reason,
-                        "usage": {
-                            "input_tokens": final_message.usage.input_tokens,
-                            "output_tokens": final_message.usage.output_tokens,
-                        },
+                        "usage": usage_full,
                         "model": final_message.model,
                         "provider": self.name,
                     },

@@ -493,6 +493,76 @@ async def chat_stream(
                             skill_name=conv.active_skill,
                             final_step=conv.active_skill_step,
                         )
+
+                        # v0.13.2 DEV-AUTO-OPTIMIZER: emit setup.completed event
+                        # post-os-setup completion. Subscriber:
+                        # optimizer_trigger.handle_setup_completed (registered
+                        # by main.py lifespan via register_default_subscribers()).
+                        # Pattern Conv. 47 SSOT: emit SEMPRE su completion marker,
+                        # subscriber decide ramo (toggle env, fallback graceful).
+                        if conv.active_skill == "os-setup":
+                            try:
+                                from sco_compliance_os.core.events import EventBus
+                                from sco_compliance_os.services.skills.auto_trigger import (
+                                    EVENT_SETUP_COMPLETED,
+                                )
+
+                                # Risolvi vault_path/vault_name dal vault registry
+                                # (single source of truth filesystem).
+                                vault_path_resolved = ""
+                                vault_name_resolved = "Vault"
+                                vault_id_resolved = ""
+                                try:
+                                    from pathlib import Path as _Path
+
+                                    from sco_compliance_os.api.vault_routes import (
+                                        _load_registry,
+                                    )
+
+                                    registry_path = _Path(settings.vault_registry_path)
+                                    entries = _load_registry(registry_path)
+                                    if entries:
+                                        # Usa l'ultima entry attiva come default.
+                                        # Carry-over v0.13.3: conversation -> vault
+                                        # binding strutturato (per ora single-vault MVP).
+                                        last_entry = entries[-1]
+                                        vault_path_resolved = str(
+                                            last_entry.get("path", "")
+                                        )
+                                        vault_name_resolved = str(
+                                            last_entry.get("name", "Vault")
+                                        )
+                                        vault_id_resolved = str(
+                                            last_entry.get("id", "")
+                                        )
+                                except Exception as reg_exc:
+                                    logger.warning(
+                                        "chat_stream.optimizer_vault_lookup_failed",
+                                        error=str(reg_exc),
+                                    )
+
+                                EventBus.instance().schedule_publish(
+                                    EVENT_SETUP_COMPLETED,
+                                    {
+                                        "vault_id": vault_id_resolved,
+                                        "vault_path": vault_path_resolved,
+                                        "vault_name": vault_name_resolved,
+                                        "completion_conv_id": payload.conversation_id,
+                                        "completion_skill_name": conv.active_skill,
+                                    },
+                                )
+                                logger.info(
+                                    "chat_stream.optimizer_event_published",
+                                    event_type=EVENT_SETUP_COMPLETED,
+                                    conv_id=payload.conversation_id,
+                                    vault_id=vault_id_resolved,
+                                    vault_path=vault_path_resolved,
+                                )
+                            except Exception as opt_exc:
+                                logger.warning(
+                                    "chat_stream.optimizer_event_publish_failed",
+                                    error=str(opt_exc),
+                                )
                     else:
                         next_step = (conv.active_skill_step or 0) + 1
                         await store.set_active_skill(

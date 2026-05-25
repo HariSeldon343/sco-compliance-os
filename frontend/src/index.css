@@ -247,6 +247,8 @@
   --shadow-glow: var(--sco-shadow-glow);
   --shadow-glow-lg: var(--sco-shadow-glow-lg);
   --shadow-glow-amber: var(--sco-shadow-glow-amber);
+  /* v0.13.2 PSI-2: inner-glow (focus state input) */
+  --shadow-inner-glow: var(--sco-shadow-inner-glow);
 
   /* --------------------------------------------------------------------------
    * EASING — utility class via timing-function (es: ease-material)

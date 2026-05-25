@@ -55,6 +55,10 @@ logger = get_logger(__name__)
 # Event types pubblicati dal sistema.
 EVENT_VAULT_REGISTERED = "vault.registered"
 EVENT_VAULT_REGISTERED_POST_SETUP = "vault.registered_post_setup"
+# v0.13.2 hotfix DEV-AUTO-OPTIMIZER: setup.completed event emesso dal chat handler
+# quando il messaggio assistant contiene il marker "Profilo registrato:" (Q10/10
+# completed). Subscriber: optimizer_trigger.handle_setup_completed.
+EVENT_SETUP_COMPLETED = "setup.completed"
 
 
 async def _scan_vault_structure(vault_root: Path) -> dict[str, Any]:
@@ -629,14 +633,42 @@ def register_default_subscribers() -> None:
 
     Idempotente: re-registrazione dello stesso handler aggiungerebbe duplicato,
     quindi controlliamo presenza prima.
+
+    v0.13.2 DEV-AUTO-OPTIMIZER: wira anche handle_setup_completed sul nuovo
+    evento EVENT_SETUP_COMPLETED (emesso dal chat handler quando completion
+    marker "Profilo registrato:" rilevato).
     """
     bus = EventBus.instance()
-    existing = bus._subscribers.get(EVENT_VAULT_REGISTERED, [])  # noqa: SLF001
-    if handle_vault_registered in existing:
-        logger.debug("skills.auto_trigger.already_registered")
-        return
-    bus.subscribe(EVENT_VAULT_REGISTERED, handle_vault_registered)
-    logger.info(
-        "skills.auto_trigger.registered_subscriber",
-        event_type=EVENT_VAULT_REGISTERED,
-    )
+
+    # vault.registered -> handle_vault_registered (os-setup + auto-organize)
+    existing_vault = bus._subscribers.get(EVENT_VAULT_REGISTERED, [])
+    if handle_vault_registered not in existing_vault:
+        bus.subscribe(EVENT_VAULT_REGISTERED, handle_vault_registered)
+        logger.info(
+            "skills.auto_trigger.registered_subscriber",
+            event_type=EVENT_VAULT_REGISTERED,
+        )
+
+    # setup.completed -> handle_setup_completed (os-ottimizzatore + cache warmup)
+    # Import locale per evitare circular import (optimizer_trigger importa da
+    # questo modulo per le costanti).
+    try:
+        from sco_compliance_os.services.skills.optimizer_trigger import (
+            handle_setup_completed,
+        )
+
+        existing_setup = bus._subscribers.get(EVENT_SETUP_COMPLETED, [])
+        if handle_setup_completed not in existing_setup:
+            bus.subscribe(EVENT_SETUP_COMPLETED, handle_setup_completed)
+            logger.info(
+                "skills.auto_trigger.registered_subscriber",
+                event_type=EVENT_SETUP_COMPLETED,
+                handler="handle_setup_completed",
+            )
+    except ImportError as exc:
+        # Optimizer module non disponibile: log warning ma non bloccare boot.
+        # Pattern Conv. 44 lesson 1 CircuitBreaker.
+        logger.warning(
+            "skills.auto_trigger.optimizer_subscriber_skipped",
+            error=str(exc),
+        )

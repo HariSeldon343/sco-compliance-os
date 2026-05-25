@@ -25,7 +25,7 @@ import { cn } from "@/lib/cn";
 // fonte autoritativa = backend_version da GET /health (vedi useBackendVersion hook).
 // v0.10.0: import diretto da package.json via Vite define __APP_VERSION__.
 const APP_VERSION_FALLBACK =
-  (typeof __APP_VERSION__ !== "undefined" && __APP_VERSION__) || "0.13.1";
+  (typeof __APP_VERSION__ !== "undefined" && __APP_VERSION__) || "0.13.2";
 
 interface NavItem {
   to: string;
@@ -136,20 +136,26 @@ export function Sidebar() {
   // v0.8.1 fix auto-navigation: fallback ridondante per assicurare auto-select
   // anche in scenari edge dove fetchConversations potrebbe non aver scattato.
   // Watch conversations dictionary: se compare nuova "Configurazione iniziale"
-  // non ancora auto-naviata E utente e' su welcome screen → seleziona +
-  // naviga. Pattern Conv. 47/48 single source of truth: deduce dallo store.
+  // o "Ottimizzazione iniziale" (v0.13.2 DEV-AUTO-OPTIMIZER) non ancora
+  // auto-naviata E utente e' su welcome screen → seleziona + naviga.
+  // Pattern Conv. 47/48 single source of truth: deduce dallo store.
   useEffect(() => {
+    const optimizerWelcome = Object.values(conversations).find((c) =>
+      c.title.startsWith("Ottimizzazione iniziale del vault"),
+    );
     const configWelcome = Object.values(conversations).find((c) =>
       c.title.startsWith("Configurazione iniziale del vault"),
     );
-    if (!configWelcome) return;
+    // Priorita: optimizer ha priorita su config welcome quando entrambe attive.
+    const welcomeCandidate = optimizerWelcome ?? configWelcome;
+    if (!welcomeCandidate) return;
     // Salta se gia` auto-naviata (rispetta scelta utente di muoversi altrove)
-    if (lastAutoNavigated === configWelcome.id) return;
+    if (lastAutoNavigated === welcomeCandidate.id) return;
     // Salta se l'utente sta gia` su una conv (no preempt: utente lavora altrove)
-    if (activeId && activeId !== configWelcome.id) return;
+    if (activeId && activeId !== welcomeCandidate.id) return;
     // Tutte condizioni OK → auto-select + naviga
-    setActive(configWelcome.id);
-    useChatStore.setState({ lastAutoNavigated: configWelcome.id });
+    setActive(welcomeCandidate.id);
+    useChatStore.setState({ lastAutoNavigated: welcomeCandidate.id });
     if (window.location.pathname !== "/") {
       navigate("/");
     }
@@ -380,11 +386,15 @@ export function Sidebar() {
         <ul className="space-y-0.5">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
+            // v0.13.2 PSI-2: data-tour stable selectors per react-joyride walkthrough
+            // first-launch. Stessi attributi compatibili anche con futuri snapshot test.
+            const tourId = `sidebar-${item.to === "/" ? "chat" : item.to.replace("/", "")}`;
             return (
               <li key={item.to}>
                 <NavLink
                   to={item.to}
                   end={item.to === "/"}
+                  data-tour={tourId}
                   className={({ isActive }) =>
                     cn(
                       "flex items-center gap-2.5 rounded-md text-sm transition-colors duration-150",

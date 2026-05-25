@@ -622,6 +622,44 @@ async def count_by_source_kind(db_path: Path | None = None) -> dict[str, int]:
     return out
 
 
+async def activity_by_day(
+    days: int = 240,
+    db_path: Path | None = None,
+) -> list[tuple[str, int]]:
+    """Aggrega attivita` per giorno per Memory Heatmap GitHub-style (v0.13.2 PSI-2).
+
+    Conta chunks ingeriti su ``mem_tree_chunks`` (tutte le source_kind incluse
+    chat + email + document + vault_file + note) negli ultimi N giorni.
+    Pattern: GROUP BY date(created_at_ms / 1000, 'unixepoch', 'localtime').
+
+    Returns:
+        Lista di tuple (date_iso_YYYY-MM-DD, count) ordinata per data ASC.
+        Solo giorni con almeno 1 attivita`. Il frontend completa i giorni
+        mancanti come "level 0" nella griglia 8-mese × 7-day.
+    """
+    out: list[tuple[str, int]] = []
+    now_ms = int(time.time() * 1000)
+    cutoff_ms = now_ms - days * 86_400_000
+    try:
+        async with _tree_breaker:
+            async with _connection(db_path) as db:
+                async with db.execute(
+                    """SELECT
+                        date(created_at_ms / 1000, 'unixepoch') AS day,
+                        COUNT(*) AS cnt
+                    FROM mem_tree_chunks
+                    WHERE created_at_ms >= ?
+                    GROUP BY day
+                    ORDER BY day ASC""",
+                    (cutoff_ms,),
+                ) as cur:
+                    async for row in cur:
+                        out.append((str(row["day"]), int(row["cnt"])))
+    except (CircuitBreakerOpenError, Exception) as exc:
+        logger.warning("activity_by_day: errore (graceful empty): %s", exc)
+    return out
+
+
 async def mark_chunks_sealed(
     chunk_ids: list[str],
     parent_summary_id: str,
@@ -728,6 +766,7 @@ __all__ = [
     "CircuitBreakerOpenError",
     "_connection",
     "_tree_breaker",
+    "activity_by_day",
     "bulk_upsert_chunks",
     "count_by_source_kind",
     "count_by_status",

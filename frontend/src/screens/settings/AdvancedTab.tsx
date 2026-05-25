@@ -15,10 +15,13 @@ import {
   Trash2,
   ExternalLink,
   ShieldCheck,
+  Compass,
 } from "lucide-react";
 
 import { useIntegrationsStore } from "@/store/integrations-store";
 import { useLicenseStore } from "@/store/license-store";
+import { useWalkthroughStore } from "@/store/walkthrough-store";
+import { resetWalkthroughFlag } from "@/components/WalkthroughTour";
 import { cn } from "@/lib/cn";
 
 const APP_VERSION_FALLBACK = "0.8.1";
@@ -27,6 +30,7 @@ export function AdvancedTab() {
   const integrations = useIntegrationsStore((s) => s.integrations);
   const initialFetchDone = useIntegrationsStore((s) => s.initialFetchDone);
   const fetchIntegrations = useIntegrationsStore((s) => s.fetchIntegrations);
+  const triggerTour = useWalkthroughStore((s) => s.triggerTour);
 
   const backendVersionLicense = useLicenseStore((s) => s.backendVersion);
   const [backendVersion, setBackendVersion] = useState<string>(
@@ -217,6 +221,28 @@ export function AdvancedTab() {
             </span>
           </button>
         </div>
+      </Card>
+
+      {/* v0.13.2 PSI-2: Tour guidato on-demand */}
+      <Card icon={Compass} title="Tour guidato">
+        <p className="mb-3 text-xs text-sco-muted-foreground">
+          Rivedi il walkthrough delle 10 funzionalita` principali dell'app:
+          chat, wiki, grafo, skills, vault, memoria, impostazioni, fine
+          sessione, input chat, invio. Utile per orientarsi se hai saltato il
+          tour al primo avvio o vuoi rivederlo dopo un update.
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            resetWalkthroughFlag();
+            triggerTour();
+          }}
+          className="inline-flex w-full items-center gap-2 rounded-md border border-sco-border bg-sco-bg px-4 py-2.5 text-sm transition-colors hover:border-sco-blue hover:bg-sco-blue/5"
+        >
+          <Compass size={14} className="text-sco-blue" />
+          <span className="flex-1 text-left">Mostra tour guidato</span>
+          <span className="text-xs text-sco-muted-foreground">10 step</span>
+        </button>
       </Card>
 
       {/* Info app */}

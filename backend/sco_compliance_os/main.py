@@ -86,12 +86,20 @@ _subconscious_loop: SubconsciousTickLoop | None = None
 _autofetch_loop: AutoFetchLoop | None = None
 _seal_scheduler_task: asyncio.Task | None = None
 _seal_scheduler_stop: asyncio.Event | None = None
+_cache_refresh_task: asyncio.Task | None = None
+_cache_refresh_stop: asyncio.Event | None = None
 
 
 # Default seal scheduler tick interval (5 min). Overridable via env
 # SCO_SEAL_SCHEDULER_INTERVAL_SECONDS (hard floor 60s).
 _SEAL_SCHEDULER_DEFAULT_INTERVAL_SECONDS = 300
 _SEAL_SCHEDULER_MIN_INTERVAL_SECONDS = 60
+
+# Default cache refresh interval (4 min, sotto TTL 5 min Anthropic ephemeral
+# cache). Overridable via env SCO_CACHE_REFRESH_INTERVAL_SECONDS.
+# v0.13.2 DEV-AUTO-OPTIMIZER: mantiene cache calda fra una chat e l'altra.
+_CACHE_REFRESH_DEFAULT_INTERVAL_SECONDS = 240
+_CACHE_REFRESH_MIN_INTERVAL_SECONDS = 60
 
 
 async def _seal_scheduler_loop(
@@ -143,6 +151,62 @@ async def _seal_scheduler_loop(
     log.info("seal_scheduler.stop")
 
 
+async def _cache_refresh_loop(
+    interval_seconds: int, stop_event: asyncio.Event
+) -> None:
+    """Background loop: chiama optimizer_trigger.refresh_cache ogni N secondi.
+
+    Mantiene calda la cache ephemeral Anthropic (TTL 5 min) cosi' la prima
+    chat utente non paga il cold-start. Tick default 4 min (240s).
+
+    Pattern Conv. 41 tracciatura: logger structured ogni tick con input_tokens
+    + success bool. Pattern Conv. 44 lesson 1: protetto da stop_event,
+    cancellabile da shutdown lifespan.
+
+    Disabilitabile via env ``SCO_AUTO_OPTIMIZER_ENABLED=0`` (stessa toggle del
+    DEV-AUTO-OPTIMIZER, principio: se l'optimizer e' off, anche il keep-alive
+    cache e' off — risparmio API call inutili).
+    """
+    from sco_compliance_os.services.skills.optimizer_trigger import (
+        _is_auto_optimizer_enabled,
+        refresh_cache,
+    )
+
+    log = structlog.get_logger(__name__)
+    log.info(
+        "cache_refresh.start",
+        interval_seconds=interval_seconds,
+    )
+    while not stop_event.is_set():
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=interval_seconds)
+            if stop_event.is_set():
+                break
+        except asyncio.TimeoutError:
+            pass
+
+        # Re-check toggle a ogni tick: l'utente puo' aver disabilitato runtime.
+        if not _is_auto_optimizer_enabled():
+            log.debug("cache_refresh.tick_skipped_disabled")
+            continue
+
+        try:
+            result = await refresh_cache()
+            log.info(
+                "cache_refresh.tick_complete",
+                success=result.get("success", False),
+                input_tokens=result.get("input_tokens", 0),
+            )
+        except Exception as exc:
+            log.warning(
+                "cache_refresh.tick_error",
+                error=str(exc),
+                exc_type=type(exc).__name__,
+            )
+
+    log.info("cache_refresh.stop")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Lifespan handler: init DB schema + Memory Tree + Auto-fetch scheduler + cleanup.
@@ -152,6 +216,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
     global _active_scheduler, _subconscious_loop, _autofetch_loop
     global _seal_scheduler_task, _seal_scheduler_stop
+    global _cache_refresh_task, _cache_refresh_stop
     settings = get_settings()
     settings.ensure_data_dir()
 
@@ -259,6 +324,29 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             name="seal_scheduler",
         )
 
+    # v0.13.2 DEV-AUTO-OPTIMIZER: cache refresh scheduler.
+    # Mantiene calda la cache ephemeral Anthropic (TTL 5min, tick 4min).
+    # Toggle via env SCO_AUTO_OPTIMIZER_ENABLED (default 1).
+    auto_optimizer_enabled = (
+        os.environ.get("SCO_AUTO_OPTIMIZER_ENABLED", "1").strip()
+        not in ("0", "false", "False", "no", "off")
+    )
+    cache_refresh_interval_raw = int(
+        os.environ.get(
+            "SCO_CACHE_REFRESH_INTERVAL_SECONDS",
+            str(_CACHE_REFRESH_DEFAULT_INTERVAL_SECONDS),
+        )
+    )
+    cache_refresh_interval = max(
+        _CACHE_REFRESH_MIN_INTERVAL_SECONDS, cache_refresh_interval_raw
+    )
+    if auto_optimizer_enabled:
+        _cache_refresh_stop = asyncio.Event()
+        _cache_refresh_task = asyncio.create_task(
+            _cache_refresh_loop(cache_refresh_interval, _cache_refresh_stop),
+            name="cache_refresh_scheduler",
+        )
+
     # v0.6.0 DEV-VAULT-AUTOINGEST: wire file event callback + avvia watcher
     # per ogni vault gia' registrato + lancia sync iniziale.
     # Import locale per evitare import circolare (vault_routes importa watcher).
@@ -312,6 +400,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         subconscious_running=_subconscious_loop.is_running(),
         seal_scheduler_enabled=seal_scheduler_enabled,
         seal_scheduler_interval=seal_interval,
+        auto_optimizer_enabled=auto_optimizer_enabled,
+        cache_refresh_interval=cache_refresh_interval,
         vault_watcher_enabled=True,
         user_id=user_id,
     )
@@ -331,6 +421,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             _seal_scheduler_task.cancel()
         _seal_scheduler_task = None
         _seal_scheduler_stop = None
+
+    # Shutdown pulito cache refresh scheduler (v0.13.2 DEV-AUTO-OPTIMIZER)
+    if _cache_refresh_stop is not None:
+        _cache_refresh_stop.set()
+    if _cache_refresh_task is not None:
+        try:
+            await asyncio.wait_for(_cache_refresh_task, timeout=10.0)
+        except asyncio.TimeoutError:
+            structlog.get_logger(__name__).warning(
+                "backend.shutdown.cache_refresh_timeout"
+            )
+            _cache_refresh_task.cancel()
+        _cache_refresh_task = None
+        _cache_refresh_stop = None
 
     # Shutdown pulito vault watchers (v0.6.0)
     try:

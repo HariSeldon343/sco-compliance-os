@@ -48,7 +48,6 @@ Pattern Conv. 35 verifica fonti: il classificatore privilegia fonti istituzional
 from __future__ import annotations
 
 import hashlib
-import logging
 import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -56,13 +55,17 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlparse
 
+from sco_compliance_os.core.logging_setup import get_logger
 from sco_compliance_os.services.vault.parser import (
     AMBITO_CANONICO,
     ENTITY_TYPES,
 )
 from sco_compliance_os.services.wiki.parser import WIKI_CATEGORIES
 
-logger = logging.getLogger(__name__)
+# v0.13.2 hotfix: questo modulo usa structlog kwargs (proposal_id=..., url=...)
+# che sono incompatibili con stdlib `logging.Logger`. Migrato a structlog wrapper
+# via `get_logger()` per coerenza con il resto del backend.
+logger = get_logger(__name__)
 
 
 # ----------------------------------------------------------------------------

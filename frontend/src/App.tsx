@@ -28,14 +28,20 @@ import { MascotOverlay } from "@/components/mascot/MascotOverlay";
 import { CommandPalette } from "@/components/commands/CommandPalette";
 import { useDefaultCommands } from "@/components/commands/useDefaultCommands";
 import { BottomTabBar } from "@/components/nav/BottomTabBar";
+import { WalkthroughTour } from "@/components/WalkthroughTour";
 import { useThemeStore } from "@/store/theme-store";
 import { useLayoutStore } from "@/store/layout-store";
+import { useWalkthroughStore } from "@/store/walkthrough-store";
 
 export default function App() {
   const theme = useThemeStore((s) => s.theme);
   const applyTheme = useThemeStore((s) => s.applyTheme);
   const layoutMode = useLayoutStore((s) => s.mode);
   const location = useLocation();
+
+  // v0.13.2 PSI-2: walkthrough first-launch (auto) + on-demand (forceRun)
+  const walkthroughForceRun = useWalkthroughStore((s) => s.forceRun);
+  const resetWalkthroughTrigger = useWalkthroughStore((s) => s.resetTrigger);
 
   // Sync classe `dark` su <html> all'avvio + ai cambi di tema
   useEffect(() => {
@@ -99,6 +105,13 @@ export default function App() {
         {/* BottomTabBar pill floating (alternative layout) */}
         {layoutMode === "bottom-tab" && <BottomTabBar />}
       </div>
+
+      {/* v0.13.2 PSI-2: Walkthrough first-launch joyride 10-step.
+          Auto-trigger se flag localStorage assente; on-demand via store. */}
+      <WalkthroughTour
+        forceRun={walkthroughForceRun}
+        onFinish={resetWalkthroughTrigger}
+      />
     </AuthGate>
   );
 }

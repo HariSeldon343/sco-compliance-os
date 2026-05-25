@@ -1,4 +1,4 @@
-// SCO Compliance OS — WelcomeScreen hero animato (v0.13.0 PSI clean-room)
+// SCO Compliance OS — WelcomeScreen hero animato (v0.13.0 PSI clean-room + v0.13.2 PSI-2)
 //
 // Componente standalone usato come "empty state" della ChatArea quando
 // non c'è ancora una conversation attiva o messaggi presenti. Premium
@@ -6,27 +6,32 @@
 //
 // Animation stack (Framer Motion 12 + Tailwind 4 keyframes):
 //   1. Logo SCO con glow pulse + scale-in (entrance)
-//   2. Titolo "Cosa lavoriamo oggi?" con char-by-char reveal stagger
+//   2. v0.13.2 Typing welcome carousel — 3 varianti italiane in rotazione
+//      (typing 55ms, deleting 36ms, pause 1400ms, gap 250ms). Usa profilo nome
+//      se presente (fallback "consulente"). Pattern openhuman-inspired clean-room
+//      (NO copia codice GPL-3.0 da openhuman-main).
 //   3. Sottotitolo fade-up con delay
 //   4. 4 suggestion card stagger entrance + hover shine effect
 //   5. Tagline "Privato. Tuo. Italiano." con stagger ciascuna parola
 //
 // Clean-room legal: tutte le animation timing + sequencing sono originali.
 // NON e' una copia di openhuman-main hero (codebase GPL-3.0 non aperto).
-// Pattern di stagger reveal e' tecnica standard di motion design.
+// Pattern di stagger reveal + typing carousel e' tecnica standard di motion design.
 //
 // Performance:
 //   - LazyMotion non usato qui (welcome screen e' frequente come empty state,
 //     non vale caching/lazyload). Bundle increase ~50KB gzip framer-motion.
-//   - Char-by-char reveal e' overkill solo se messo su 200+ char. Qui ho
-//     11 char ("Cosa lavoriamo oggi?") → 11 motion.span = trascurabile.
+//   - Typing carousel via setTimeout state machine. Cleanup su unmount.
 //
 // Accessibility:
-//   - prefers-reduced-motion → static fallback (Framer Motion auto-handles)
+//   - prefers-reduced-motion → static fallback Framer Motion + skip typing
+//     animation (mostra solo 1° variante senza loop).
 //   - Tutti gli href button ancora cliccabili durante animation (no
 //     pointer-events disabled)
 //   - aria-label preserved sui button suggestion
+//   - aria-live="polite" su typing carousel per screen reader announcement
 
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, type Variants } from "framer-motion";
 import {
   ShieldCheck,
@@ -37,7 +42,19 @@ import {
 } from "lucide-react";
 
 import { useChatStore } from "@/store/chat-store";
+import { useProfileStore } from "@/store/profile-store";
 import { cn } from "@/lib/cn";
+
+// ===== Typing carousel state machine (v0.13.2 PSI-2 P0 feature) =====
+// Pattern: array di welcome variants -> typing letter-by-letter -> pause ->
+// deleting letter-by-letter -> gap -> next variant.
+// Timing originali (clean-room): 55ms typing, 36ms deleting, 1400ms pause,
+// 250ms gap. Non sono i timing originali di openhuman-main (mai aperto per
+// boundary GPL-3.0), sono calibrati ad hoc per registro italiano + UX SCO.
+const TYPING_DELAY = 55;
+const DELETING_DELAY = 36;
+const PAUSE_AFTER_FULL = 1400;
+const GAP_BETWEEN_VARIANTS = 250;
 
 // 4 suggestion card branded compliance — 2x2 grid stile OpenHuman-inspired clean-room
 // Identico contenuto del vecchio inline hero in ChatArea (back-compat invariato).
@@ -79,30 +96,6 @@ const SUGGESTIONS = [
     iconBg: "bg-red-500/10",
   },
 ];
-
-// Variants stagger per char-by-char reveal del titolo
-const titleContainerVariants: Variants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      delayChildren: 0.2,
-      staggerChildren: 0.045,
-    },
-  },
-};
-
-const charVariants: Variants = {
-  hidden: { opacity: 0, y: 12 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: {
-      duration: 0.4,
-      ease: [0.16, 1, 0.3, 1], // ease-out-expo
-    },
-  },
-};
 
 // Variants stagger per griglia 4 card
 const gridVariants: Variants = {
@@ -149,11 +142,112 @@ const taglineWordVariants: Variants = {
   },
 };
 
-const TITLE_TEXT = "Cosa lavoriamo oggi?";
 const TAGLINE_WORDS = ["Privato.", "Tuo.", "Italiano."];
+
+// Reduced-motion detector hook — cooperare con prefers-reduced-motion
+function usePrefersReducedMotion(): boolean {
+  const [prefersReduced, setPrefersReduced] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setPrefersReduced(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setPrefersReduced(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  return prefersReduced;
+}
 
 export function WelcomeScreen() {
   const sendMessage = useChatStore((s) => s.sendMessage);
+  const profileNome = useProfileStore((s) => s.nome);
+  const prefersReducedMotion = usePrefersReducedMotion();
+
+  // Nome utente o fallback. Capitalize primo carattere se profile.nome ha contenuto.
+  const displayName = useMemo(() => {
+    const trimmed = (profileNome ?? "").trim();
+    if (!trimmed) return "consulente";
+    // Solo prima parola (es. "Antonio Silvestro" -> "Antonio")
+    return trimmed.split(/\s+/)[0];
+  }, [profileNome]);
+
+  // Welcome variants — array di stringhe italiane parametrizzate sul nome.
+  // useMemo cosi cambia solo quando displayName cambia.
+  const welcomeVariants = useMemo<string[]>(
+    () => [
+      `Bentornato, ${displayName}`,
+      `Vediamo le compliance, ${displayName}`,
+      "Tempo di focus",
+    ],
+    [displayName],
+  );
+
+  // ===== Typing carousel state machine =====
+  // currentVariantIdx: indice array welcomeVariants attualmente in scena.
+  // displayText: testo visibile (sub-string del variant corrente).
+  // phase: 'typing' | 'pausing' | 'deleting' | 'gap'.
+  const [currentVariantIdx, setCurrentVariantIdx] = useState(0);
+  const [displayText, setDisplayText] = useState("");
+  const [phase, setPhase] = useState<"typing" | "pausing" | "deleting" | "gap">(
+    "typing",
+  );
+  const timeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    // Reduced-motion fallback: mostra solo la 1° variante full, niente carousel.
+    if (prefersReducedMotion) {
+      setDisplayText(welcomeVariants[0]);
+      setPhase("pausing");
+      return;
+    }
+
+    const currentVariant = welcomeVariants[currentVariantIdx];
+    let delay = TYPING_DELAY;
+
+    if (phase === "typing") {
+      if (displayText.length < currentVariant.length) {
+        delay = TYPING_DELAY;
+        timeoutRef.current = window.setTimeout(() => {
+          setDisplayText(currentVariant.slice(0, displayText.length + 1));
+        }, delay);
+      } else {
+        // Raggiunto full text -> pausa
+        setPhase("pausing");
+      }
+    } else if (phase === "pausing") {
+      delay = PAUSE_AFTER_FULL;
+      timeoutRef.current = window.setTimeout(() => {
+        setPhase("deleting");
+      }, delay);
+    } else if (phase === "deleting") {
+      if (displayText.length > 0) {
+        delay = DELETING_DELAY;
+        timeoutRef.current = window.setTimeout(() => {
+          setDisplayText(displayText.slice(0, -1));
+        }, delay);
+      } else {
+        // Variant svuotato -> gap -> prossima variante
+        setPhase("gap");
+      }
+    } else if (phase === "gap") {
+      delay = GAP_BETWEEN_VARIANTS;
+      timeoutRef.current = window.setTimeout(() => {
+        setCurrentVariantIdx((idx) => (idx + 1) % welcomeVariants.length);
+        setPhase("typing");
+      }, delay);
+    }
+
+    return () => {
+      if (timeoutRef.current !== null) {
+        window.clearTimeout(timeoutRef.current);
+      }
+    };
+  }, [
+    displayText,
+    phase,
+    currentVariantIdx,
+    welcomeVariants,
+    prefersReducedMotion,
+  ]);
 
   return (
     <div className="flex h-full flex-col items-center justify-center overflow-y-auto px-6 py-12">
@@ -174,24 +268,26 @@ export function WelcomeScreen() {
           </div>
         </motion.div>
 
-        {/* Titolo con char-by-char reveal */}
+        {/* v0.13.2 PSI-2: Typing welcome carousel */}
         <motion.h1
-          variants={titleContainerVariants}
-          initial="hidden"
-          animate="visible"
-          aria-label={TITLE_TEXT}
-          className="font-display text-3xl font-semibold tracking-tight text-sco-text dark:text-sco-text-dark md:text-4xl"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.2 }}
+          aria-live="polite"
+          aria-label={welcomeVariants[currentVariantIdx]}
+          className="font-display text-3xl font-semibold tracking-tight text-sco-text dark:text-sco-text-dark md:text-4xl min-h-[2.5rem] md:min-h-[3rem]"
         >
-          {TITLE_TEXT.split("").map((ch, idx) => (
+          <span>{displayText}</span>
+          {!prefersReducedMotion && (
             <motion.span
-              key={`${ch}-${idx}`}
-              variants={charVariants}
-              className="inline-block whitespace-pre"
               aria-hidden="true"
+              animate={{ opacity: [1, 1, 0, 0] }}
+              transition={{ duration: 1.0, repeat: Infinity, ease: "linear" }}
+              className="ml-0.5 inline-block text-sco-blue"
             >
-              {ch === " " ? " " : ch}
+              |
             </motion.span>
-          ))}
+          )}
         </motion.h1>
 
         {/* Sottotitolo fade-up con delay (visible dopo il titolo) */}
@@ -230,7 +326,7 @@ export function WelcomeScreen() {
                   transition: { duration: 0.2, ease: "easeOut" },
                 }}
                 whileTap={{ scale: 0.97, transition: { duration: 0.1 } }}
-                className="group relative flex items-start gap-3 overflow-hidden rounded-xl border border-sco-border bg-sco-surface-elevated p-4 text-left shadow-subtle transition-shadow duration-200 hover:border-sco-blue/60 hover:shadow-medium"
+                className="group relative flex items-start gap-3 overflow-hidden rounded-xl border border-sco-border bg-sco-surface-elevated p-4 text-left shadow-subtle transition-shadow duration-200 hover:border-sco-blue/60 hover:shadow-float"
               >
                 {/* Shine effect overlay sweeping left→right on hover */}
                 <span
