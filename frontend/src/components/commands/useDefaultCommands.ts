@@ -20,6 +20,7 @@ import {
   LogOut,
   Search,
   Sparkles,
+  Network,
 } from "lucide-react";
 
 import { useCommandRegistry, type CommandDef } from "./CommandRegistry";
@@ -57,6 +58,17 @@ export function useDefaultCommands() {
         hint: "G poi W",
         action: (close) => {
           navigate("/wiki");
+          close();
+        },
+      },
+      {
+        id: "nav.grafo",
+        label: "Apri Grafo",
+        category: "navigation",
+        icon: Network,
+        keywords: ["grafo", "graph", "rete", "force directed", "visualizzazione"],
+        action: (close) => {
+          navigate("/grafo");
           close();
         },
       },

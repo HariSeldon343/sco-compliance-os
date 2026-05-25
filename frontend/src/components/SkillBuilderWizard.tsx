@@ -1,4 +1,4 @@
-// SCO Compliance OS — Wizard semplice per creare sub-agent in 7 step
+﻿// SCO Compliance OS — Wizard semplice per creare sub-agent in 7 step
 //
 // Goal v0.8.1: "chiunque puo' costruire un sub-agent specializzato semplicemente
 // rispondendo a 7 domande in chat". Pattern Ask Question Card riusato per
@@ -13,7 +13,7 @@
 //      sicurezza-lavoro / multi-dominio)
 //   5. Tool ammessi (multi-select: Read / Write / Edit / Bash / Glob / Grep /
 //      WebSearch / WebFetch / Task / TodoWrite)
-//   6. Tone (single-select: amodeo-formale / neutro-tecnico / divulgativo)
+//   6. Tone (single-select: consulenziale-formale / neutro-tecnico / divulgativo)
 //   7. Esempio domanda gestita bene (input testo, opzionale)
 //
 // Submit -> POST /api/skills/builder/wizard -> toast success + onCreated callback.
@@ -42,7 +42,7 @@ type Ambito =
   | "sicurezza-lavoro"
   | "multi-dominio";
 
-type Tone = "amodeo-formale" | "neutro-tecnico" | "divulgativo";
+type Tone = "consulenziale-formale" | "neutro-tecnico" | "divulgativo";
 
 const AGENT_TYPES: { value: AgentType; label: string; desc: string }[] = [
   { value: "auditor", label: "Auditor", desc: "Conduce audit, formula NC/SM/OSS." },
@@ -76,8 +76,8 @@ const TOOLS = [
 
 const TONES: { value: Tone; label: string; desc: string }[] = [
   {
-    value: "amodeo-formale",
-    label: "Amodeo formale",
+    value: "consulenziale-formale",
+    label: "consulenziale formale",
     desc: "Lessico tecnico, virgolette dritte, 'al punto', humanizer.",
   },
   {
@@ -161,7 +161,7 @@ export function SkillBuilderWizard({
         agent_type: state.agent_type ?? "altro",
         ambiti: state.ambiti,
         tools_whitelist: state.tools,
-        tone: state.tone ?? "amodeo-formale",
+        tone: state.tone ?? "consulenziale-formale",
         example_question: state.example_question.trim() || null,
         scope: "user" as const,
       };

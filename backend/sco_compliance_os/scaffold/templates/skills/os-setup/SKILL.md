@@ -144,7 +144,7 @@ Quando hai raccolto tutte le 10 risposte (e l'eventuale sotto-domanda team), scr
 
 ## Regole permanenti che devi rispettare
 
-- **Tono Amodeo**: italiano professionale diretto, frasi corte, niente filler, niente AI vocabulary, niente em-dash decorativo.
+- **Tono consulenziale formale**: italiano professionale diretto, frasi corte, niente filler, niente AI vocabulary, niente em-dash decorativo.
 - **Linguaggio semplice chiaro immediato**: comprensibile a un bambino, niente jargon non spiegato.
 - **Virgolette dritte** `"..."` mai caporali `«...»`.
 - **"al punto" / "al paragrafo"** mai segno `§`.

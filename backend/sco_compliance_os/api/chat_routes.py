@@ -16,6 +16,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from pathlib import Path
+
 from sco_compliance_os.config import Settings, get_settings
 from sco_compliance_os.core.agent_sdk_runner import _DEFAULT_SYSTEM_PROMPT
 from sco_compliance_os.core.logging_setup import get_logger
@@ -32,6 +34,64 @@ from sco_compliance_os.services.llm.router import (
     record_failure,
     route,
 )
+from sco_compliance_os.services.skills.loader import discover_skills
+
+
+def _get_skill_catalog_for_prompt(vault_root: Path | None = None) -> str:
+    """Ritorna la lista competenze disponibili formattata come bullet list.
+
+    Pattern: il catalogo (User + Project + Legacy bundled, dedupe by name) viene
+    iniettato in coda al system prompt come riferimento per il pattern di
+    proposta competenze obbligatorio a ogni nuovo task sostantivo. NON distingue
+    fra skill di sistema e skill utente (single experience dal punto di vista
+    dell'operatore).
+
+    Cap: 50 competenze max per evitare overflow context window. Se la discovery
+    ritorna più di 50 elementi, vengono troncate con marker esplicito.
+
+    Args:
+        vault_root: path vault attivo per scope Project (se None, scope Project
+            viene saltato e si usano solo User + Legacy).
+
+    Returns:
+        Markdown formattato come "## Catalogo competenze disponibili" + bullet
+        list, oppure stringa vuota se discovery fallisce o non trova competenze.
+    """
+    try:
+        skills = discover_skills(vault_root)
+    except Exception as exc:
+        logger.warning("chat_stream.skill_catalog_discover_failed", error=str(exc))
+        return ""
+
+    if not skills:
+        return ""
+
+    cap = 50
+    if len(skills) > cap:
+        truncated_marker = (
+            f"\n- [... {len(skills) - cap} competenze aggiuntive omesse per cap context ...]"
+        )
+        skills = skills[:cap]
+    else:
+        truncated_marker = ""
+
+    lines = ["## Catalogo competenze disponibili"]
+    lines.append(
+        "Usa queste competenze come opzioni nel widget di proposta a ogni nuovo task sostantivo. "
+        "Proponi le 3-4 più pertinenti, max 6 options totali (incluse 'Nessuna' + 'altro')."
+    )
+    lines.append("")
+    for skill in skills:
+        description = skill.description.strip() or "(nessuna descrizione disponibile)"
+        # Compatta description a 1 riga (rimuove a-capo interni).
+        description_oneline = " ".join(description.split())
+        # Cap descrizione a 200 char per evitare prompt bloat.
+        if len(description_oneline) > 200:
+            description_oneline = description_oneline[:200].rstrip() + "..."
+        lines.append(f"- {skill.name}: {description_oneline}")
+    if truncated_marker:
+        lines.append(truncated_marker)
+    return "\n".join(lines)
 
 logger = get_logger(__name__)
 
@@ -201,7 +261,8 @@ async def chat_stream(
 
         v0.7.0 multi-LLM router: invece di hard-codare Anthropic via build_runner,
         risolvi tier+provider via route() con tenant_config. Backward-compat:
-        tenant_config vuoto -> default chain -> Anthropic Sonnet 4.6 (agentic-v1).
+        tenant_config vuoto -> default chain -> Anthropic Opus 4.7 (agentic-v1,
+        bumped v0.12.0 25/05/2026 da Sonnet 4.6 per allineamento al SaaS default).
         Override model_slug nella request: forza Anthropic con quel modello.
         """
         assistant_text_buf: list[str] = []
@@ -209,11 +270,23 @@ async def chat_stream(
         tool_calls_buf: list[dict[str, Any]] = []
         active_provider_name = "unknown"
 
-        # Combina profile + memory + default system prompt Antonio Amodeo
-        effective_system_prompt = _DEFAULT_SYSTEM_PROMPT
+        # Combina profile + memory + default system prompt SCO Compliance OS +
+        # catalogo competenze disponibili (per il pattern di proposta a ogni nuovo
+        # task sostantivo). Il catalogo è appended in coda al DEFAULT prompt,
+        # MAI prepended (il DEFAULT contiene le istruzioni di metodo, il catalogo
+        # è il dato di riferimento operativo).
+        # Pattern Conv. 47 single source of truth: catalogo discovered runtime,
+        # MAI hardcoded nel system prompt template.
+        skill_catalog_markdown = _get_skill_catalog_for_prompt(vault_root=None)
+        if skill_catalog_markdown:
+            base_system_prompt = f"{_DEFAULT_SYSTEM_PROMPT}\n\n{skill_catalog_markdown}"
+        else:
+            base_system_prompt = _DEFAULT_SYSTEM_PROMPT
+
+        effective_system_prompt = base_system_prompt
         if profile_markdown:
             effective_system_prompt = (
-                f"{profile_markdown}\n\n{_DEFAULT_SYSTEM_PROMPT}"
+                f"{profile_markdown}\n\n{base_system_prompt}"
             )
 
         # Risolvi tenant config + tier

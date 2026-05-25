@@ -15,6 +15,7 @@ import type {
   VaultItem,
   WikiCategory,
   WikiFileDetail,
+  WikiGraphResponse,
   WikiIngestConfirmRequest,
   WikiIngestConfirmResponse,
   WikiIngestProposal,
@@ -402,6 +403,31 @@ export const apiClient = {
     const qs = search.toString();
     const base = `/api/wiki/${encodeURIComponent(category)}/${encodeURIComponent(slug)}`;
     return request<WikiFileDetail>(qs ? `${base}?${qs}` : base);
+  },
+
+  /** Grafo vault force-directed: nodi (entity + clienti) + edges (relationships + applica). */
+  async getWikiGraph(
+    params: {
+      vault_path?: string;
+      include_clienti?: boolean;
+      include_orphans?: boolean;
+      entity_type?: string;
+      ambito_canonico?: string;
+    } = {},
+  ): Promise<WikiGraphResponse> {
+    const search = new URLSearchParams();
+    if (params.vault_path) search.set("vault_path", params.vault_path);
+    if (params.include_clienti !== undefined)
+      search.set("include_clienti", String(params.include_clienti));
+    if (params.include_orphans !== undefined)
+      search.set("include_orphans", String(params.include_orphans));
+    if (params.entity_type) search.set("entity_type", params.entity_type);
+    if (params.ambito_canonico)
+      search.set("ambito_canonico", params.ambito_canonico);
+    const qs = search.toString();
+    return request<WikiGraphResponse>(
+      qs ? `/api/wiki/graph?${qs}` : "/api/wiki/graph",
+    );
   },
 
   // ---- Memory Tree bucket-seal Fase 4 (DEV-MEMORY-TREE v0.6.0) ----

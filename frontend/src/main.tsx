@@ -11,6 +11,7 @@ import { IntegrationsScreen } from "./screens/IntegrationsScreen";
 import { VaultScreen } from "./screens/VaultScreen";
 import { MemoryScreen } from "./screens/MemoryScreen";
 import { SkillsScreen } from "./screens/SkillsScreen";
+import { GraphScreen } from "./screens/GraphScreen";
 import { WikiView } from "./components/WikiView";
 
 import "./index.css";
@@ -31,6 +32,8 @@ const router = createBrowserRouter([
       { path: "skills", element: <SkillsScreen /> },
       // Wave 2 OpenHuman replica — Memory Tree gerarchico L0/L1/L2 navigabile
       { path: "wiki", element: <WikiView /> },
+      // v0.12.0 GAMMA design: grafo force-directed 2D del vault
+      { path: "grafo", element: <GraphScreen /> },
     ],
   },
 ]);

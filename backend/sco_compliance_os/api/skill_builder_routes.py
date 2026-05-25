@@ -1,4 +1,4 @@
-"""Router /api/skills/builder — costruzione skill personalizzate via wizard chat
+﻿"""Router /api/skills/builder — costruzione skill personalizzate via wizard chat
 oppure modalita' advanced (system prompt + frontmatter editor).
 
 Goal v0.8.1 Antonio: "chiunque puo' costruire un sottoagente specializzato — o
@@ -55,7 +55,7 @@ AmbitoLiteral = Literal[
     "sicurezza-lavoro",
     "multi-dominio",
 ]
-ToneLiteral = Literal["amodeo-formale", "neutro-tecnico", "divulgativo"]
+ToneLiteral = Literal["consulenziale-formale", "neutro-tecnico", "divulgativo"]
 
 # Vocabolario chiuso tools (Conv. 34 spot check vocabolario coerente skill loader)
 ALLOWED_TOOLS: set[str] = {
@@ -101,7 +101,7 @@ class WizardSkillRequest(BaseModel):
         default_factory=list,
         description="Tool ammessi dalla skill (sottoinsieme di ALLOWED_TOOLS).",
     )
-    tone: ToneLiteral = Field(default="amodeo-formale")
+    tone: ToneLiteral = Field(default="consulenziale-formale")
     example_question: str | None = Field(
         default=None,
         max_length=500,
@@ -192,7 +192,7 @@ _TEMPLATES: list[SkillTemplate] = [
         agent_type="auditor",
         suggested_ambito="qualita",
         suggested_tools=["Read", "Grep", "Glob", "WebSearch"],
-        suggested_tone="amodeo-formale",
+        suggested_tone="consulenziale-formale",
         system_prompt_template=(
             "Sei un Lead Auditor ISO senior. Conduci audit ISO 27001 / 9001 / 14001 "
             "secondo ISO 19011. Formuli rilievi NC/SM/OSS puntuali, con riferimento "
@@ -211,12 +211,12 @@ _TEMPLATES: list[SkillTemplate] = [
         agent_type="consulente",
         suggested_ambito="cybersecurity",
         suggested_tools=["Read", "Write", "Grep", "WebSearch", "WebFetch"],
-        suggested_tone="amodeo-formale",
+        suggested_tone="consulenziale-formale",
         system_prompt_template=(
             "Sei consulente compliance senior specializzato in NIS 2, GDPR, AI Act, "
             "ISO 42001. Conduci gap analysis, redigi policy e procedure, prepari "
             "piani di adeguamento. Stile diretto, semplice, chiaro, immediato "
-            "(regola Amodeo 14/05). Riferimenti normativi puntuali con 'al punto', "
+            "(regola del consulente normativo 14/05). Riferimenti normativi puntuali con 'al punto', "
             "'al paragrafo', mai segno paragrafo. Distingui sempre fatto da ipotesi."
         ),
     ),
@@ -247,12 +247,12 @@ _TEMPLATES: list[SkillTemplate] = [
         agent_type="scrittore",
         suggested_ambito="qualita",
         suggested_tools=["Read", "Write", "Edit"],
-        suggested_tone="amodeo-formale",
+        suggested_tone="consulenziale-formale",
         system_prompt_template=(
             "Sei redattore tecnico in italiano professionale. Applichi le regole "
-            "tipografiche permanenti (humanizer, virgolette dritte, 'al punto', "
+            "tipografiche permanenti (umanizzatore, virgolette dritte, 'al punto', "
             "font uniforme, placeholder ____________________). Per documenti "
-            "normativi attivi la variante /disaiizzatore-normativo. Niente em-dash "
+            "normativi attivi la variante /disaiizzatore-testi-tecnici-normativi. Niente em-dash "
             "decorativo, niente rule of three."
         ),
     ),
@@ -353,8 +353,8 @@ def _build_skill_md(spec: WizardSkillRequest, resolved_slug: str) -> str:
 def _default_body_from_tone(spec: WizardSkillRequest) -> str:
     """System prompt default derivato da tone + agent_type."""
     tone_map = {
-        "amodeo-formale": (
-            "Tono Amodeo formale: lessico tecnico esatto, frasi corte, "
+        "consulenziale-formale": (
+            "Tono consulenziale formale: lessico tecnico esatto, frasi corte, "
             "regole tipografiche permanenti (humanizer + virgolette dritte + "
             "'al punto' + font uniforme + placeholder italiano professionale). "
             "Distingui sempre fatto da ipotesi."
@@ -365,7 +365,7 @@ def _default_body_from_tone(spec: WizardSkillRequest) -> str:
         ),
         "divulgativo": (
             "Tono divulgativo: linguaggio semplice, chiaro, immediato "
-            "(regola Amodeo 14/05). Comprensibile a un bambino senza essere "
+            "(regola del consulente normativo 14/05). Comprensibile a un bambino senza essere "
             "infantile. Esempi concreti."
         ),
     }

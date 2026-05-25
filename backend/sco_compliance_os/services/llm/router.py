@@ -67,6 +67,12 @@ class ProviderSpec:
 # Default tier -> chain mapping v0.7.0.
 # Ogni tier ha una catena ordinata di provider; il primo è il primario,
 # i successivi sono fallback in ordine di preferenza.
+#
+# v0.12.0 (25/05/2026): bump default chat (tier agentic-v1) da Sonnet 4.6 a
+# Opus 4.7 per allineamento al SaaS default (schema.ts:209). Pinned=True
+# mantenuto: tool use nativo Anthropic non è 1:1 portabile su altri provider.
+# Overridabile per tenant via tenant_config.llm_providers["agentic-v1"]
+# (single source of truth backend, Conv. 47 enforcement).
 DEFAULT_TIER_CHAINS: dict[Tier, list[ProviderSpec]] = {
     "reasoning-v1": [
         ProviderSpec("anthropic", "claude-opus-4-7"),
@@ -79,10 +85,10 @@ DEFAULT_TIER_CHAINS: dict[Tier, list[ProviderSpec]] = {
         ProviderSpec("gemini", "gemini-1.5-flash"),
     ],
     "agentic-v1": [
-        ProviderSpec("anthropic", "claude-sonnet-4-6", pinned=True),
+        ProviderSpec("anthropic", "claude-opus-4-7", pinned=True),
     ],
     "coding-v1": [
-        ProviderSpec("anthropic", "claude-sonnet-4-6"),
+        ProviderSpec("anthropic", "claude-opus-4-7"),
         ProviderSpec("openai", "gpt-5-codex"),
     ],
     "summarization-v1": [
@@ -543,7 +549,7 @@ async def discover_providers(tenant_config: dict[str, Any] | None = None) -> lis
             # Per build usiamo il default tier appropriato per ogni provider
             # (model "any" purché sia istanziabile).
             placeholder_model = {
-                "anthropic": "claude-sonnet-4-6",
+                "anthropic": "claude-opus-4-7",
                 "openai": "gpt-4o-mini",
                 "gemini": "gemini-1.5-flash",
                 "ollama": "llama3.2:3b",
@@ -594,7 +600,7 @@ async def health_all_providers(
     for provider_name in ("anthropic", "openai", "gemini", "ollama"):
         try:
             placeholder_model = {
-                "anthropic": "claude-sonnet-4-6",
+                "anthropic": "claude-opus-4-7",
                 "openai": "gpt-4o-mini",
                 "gemini": "gemini-1.5-flash",
                 "ollama": "llama3.2:3b",

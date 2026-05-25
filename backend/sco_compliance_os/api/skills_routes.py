@@ -100,15 +100,27 @@ def _resolve_vault_root(vault_path: str | None) -> Path | None:
 @router.get("/list", response_model=list[SkillSummary])
 async def list_skills(
     vault_path: str | None = None,
+    include_legacy: bool = False,
 ) -> list[SkillSummary]:
     """Lista skill discoverable.
 
     Args:
         vault_path: opzionale, path vault attivo per includere scope Project.
-            Se omesso, ritorna solo skill User + Legacy.
+            Se omesso, ritorna solo skill User + Legacy (se include_legacy=True).
+        include_legacy: se True include anche le skill legacy bundled (default
+            False per nascondere le skill di sistema dalla UI utente, che vede
+            solo le skill che ha creato lui). L'agent runner usa direttamente
+            ``discover_skills()`` per accesso completo, indipendentemente da
+            questo flag che impatta solo la lista UI.
+
+    Pattern Conv. 48 single source of truth: la legacy resta sempre disponibile
+    via ``discover_skills()`` lato runner, mentre la UI di default mostra solo
+    user-scope per non confondere l'utente con 22 skill di sistema preinstallate.
     """
     vault_root = _resolve_vault_root(vault_path)
     skills = discover_skills(vault_root)
+    if not include_legacy:
+        skills = [s for s in skills if s.scope != "legacy"]
     return [_skill_to_summary(s) for s in skills]
 
 

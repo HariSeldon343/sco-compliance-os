@@ -189,9 +189,11 @@ export function SkillsScreen() {
 
   // ----- Mode "list" -----
 
+  // v0.12.0: legacy skill (22 bundled) sono nascoste dalla UI per default.
+  // L'agent runner mantiene accesso completo via discover_skills() lato backend.
+  // L'utente vede solo le skill che ha creato lui (user) + quelle in .claude/skills/ del vault (project).
   const userSkills = skills.filter((s) => s.scope === "user");
   const projectSkills = skills.filter((s) => s.scope === "project");
-  const legacySkills = skills.filter((s) => s.scope === "legacy");
 
   return (
     <div className="flex h-full flex-col">
@@ -241,7 +243,9 @@ export function SkillsScreen() {
             </div>
           ) : skills.length === 0 ? (
             <div className="rounded-lg border border-dashed border-sco-border p-12 text-center text-sm text-sco-muted-foreground">
-              Nessuna skill installata. Crea il tuo primo agente.
+              Nessuna skill personalizzata ancora.
+              <br />
+              Crea la tua prima skill con il Wizard sopra.
             </div>
           ) : (
             <div className="space-y-6">
@@ -259,15 +263,6 @@ export function SkillsScreen() {
                   title="Vault"
                   scope="project"
                   skills={projectSkills}
-                  selected={selected}
-                  onSelect={setSelected}
-                />
-              )}
-              {legacySkills.length > 0 && (
-                <SkillGroup
-                  title="Predefinite"
-                  scope="legacy"
-                  skills={legacySkills}
                   selected={selected}
                   onSelect={setSelected}
                 />

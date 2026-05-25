@@ -204,6 +204,48 @@ export interface WikiStatsResponse {
   total: number;
 }
 
+// ===== Wiki Graph (v0.12.0 force-directed 2D vault visualization) =====
+// Allineato 1:1 al Pydantic backend `WikiGraphResponse` / `WikiGraphNode`
+// / `WikiGraphEdge` / `WikiGraphStats` in wiki_routes.py.
+
+/** Nodo grafo: entity wiki, cliente business, scadenza, o placeholder orphan. */
+export interface WikiGraphNode {
+  id: string;
+  label: string;
+  category: string; // entity | cliente | scadenza
+  entity_type: string;
+  entity_subtype: string;
+  ambito_canonico: string;
+  status: string; // active | draft | stub | deprecated | archived | missing
+  path: string;
+}
+
+/** Arco grafo: relationship entity-entity o applica_entity cliente-entity. */
+export interface WikiGraphEdge {
+  source: string;
+  target: string;
+  type: string; // relationship_type (recepisce, attua, ...) | ruolo edge applica
+  category: string; // relationship | applica
+  note: string;
+}
+
+/** Aggregati di copertura del grafo per filtri UI. */
+export interface WikiGraphStats {
+  nodes_total: number;
+  edges_total: number;
+  by_entity_type: Record<string, number>;
+  by_ambito_canonico: Record<string, number>;
+  by_relationship_type: Record<string, number>;
+}
+
+/** Response per GET /api/wiki/graph */
+export interface WikiGraphResponse {
+  nodes: WikiGraphNode[];
+  edges: WikiGraphEdge[];
+  stats: WikiGraphStats;
+  vault_path: string;
+}
+
 /** Dettaglio singolo file wiki con body completo + frontmatter (response GET /api/wiki/{category}/{slug}) */
 export interface WikiFileDetail {
   slug: string;

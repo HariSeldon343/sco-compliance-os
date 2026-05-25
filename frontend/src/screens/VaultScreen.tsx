@@ -160,7 +160,7 @@ export function VaultScreen() {
             </div>
 
             {activeVault && (
-              <div className="rounded-lg border border-sco-border bg-white p-5 dark:bg-slate-900">
+              <div className="rounded-lg border border-sco-border bg-sco-surface-elevated p-5 text-sco-text">
                 <h2 className="text-lg font-semibold text-sco-navy dark:text-sco-text-dark">
                   {activeVault.name}
                 </h2>
@@ -170,11 +170,11 @@ export function VaultScreen() {
                 <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                   <div>
                     <div className="text-sco-muted-foreground">File .md</div>
-                    <div className="font-medium">{activeVault.mdFilesCount}</div>
+                    <div className="font-medium text-sco-text">{activeVault.mdFilesCount}</div>
                   </div>
                   <div>
                     <div className="text-sco-muted-foreground">CLAUDE.md</div>
-                    <div className="font-medium">
+                    <div className="font-medium text-sco-text">
                       {activeVault.hasClaudeMd ? (
                         <Check size={16} className="text-sage-500" />
                       ) : (
@@ -184,7 +184,7 @@ export function VaultScreen() {
                   </div>
                   <div>
                     <div className="text-sco-muted-foreground">wiki/</div>
-                    <div className="font-medium">
+                    <div className="font-medium text-sco-text">
                       {activeVault.hasWikiDir ? (
                         <Check size={16} className="text-sage-500" />
                       ) : (
@@ -194,7 +194,7 @@ export function VaultScreen() {
                   </div>
                   <div>
                     <div className="text-sco-muted-foreground">raw/</div>
-                    <div className="font-medium">
+                    <div className="font-medium text-sco-text">
                       {activeVault.hasRawDir ? (
                         <Check size={16} className="text-sage-500" />
                       ) : (

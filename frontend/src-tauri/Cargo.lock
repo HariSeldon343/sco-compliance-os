@@ -3347,7 +3347,7 @@ dependencies = [
 
 [[package]]
 name = "sco-compliance-os-app"
-version = "0.8.2"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "dirs 5.0.1",

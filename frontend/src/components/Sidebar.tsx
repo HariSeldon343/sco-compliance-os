@@ -14,6 +14,7 @@ import {
   Pin,
   Sparkles,
   FolderTree,
+  Network,
 } from "lucide-react";
 
 import { useChatStore } from "@/store/chat-store";
@@ -24,7 +25,7 @@ import { cn } from "@/lib/cn";
 // fonte autoritativa = backend_version da GET /health (vedi useBackendVersion hook).
 // v0.10.0: import diretto da package.json via Vite define __APP_VERSION__.
 const APP_VERSION_FALLBACK =
-  (typeof __APP_VERSION__ !== "undefined" && __APP_VERSION__) || "0.11.0";
+  (typeof __APP_VERSION__ !== "undefined" && __APP_VERSION__) || "0.12.0";
 
 interface NavItem {
   to: string;
@@ -36,6 +37,8 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Chat", icon: MessageSquare },
   // Wave 2 OpenHuman replica — Wiki Memory Tree gerarchico L0/L1/L2
   { to: "/wiki", label: "Wiki", icon: FolderTree },
+  // v0.12.0 GAMMA design: visualizza vault come rete force-directed 2D
+  { to: "/grafo", label: "Grafo", icon: Network },
   // v0.8.1 DEV-SUBAGENT-BUILDER: gestione skill + wizard creazione
   { to: "/skills", label: "Skills", icon: Sparkles },
   { to: "/integrations", label: "Integrazioni", icon: Plug },

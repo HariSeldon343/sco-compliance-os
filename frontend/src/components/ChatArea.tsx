@@ -1,5 +1,5 @@
 // SCO Compliance OS — area chat principale: WelcomeHero centrato + bubbles polished + widget AskUserQuestion
-import { useMemo } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
@@ -68,6 +68,11 @@ const SUGGESTIONS = [
   },
 ];
 
+// Soglia (px) entro cui l'utente e' considerato "ancora al bottom" della chat.
+// Sotto questa distanza dal fondo, lo stick-to-bottom resta attivo; oltre,
+// si disattiva per rispettare l'intent di scroll dell'utente.
+const STICK_BOTTOM_THRESHOLD_PX = 100;
+
 export function ChatArea() {
   const activeId = useChatStore((s) => s.activeConversationId);
   const messagesByConv = useChatStore((s) => s.messagesByConv);
@@ -78,6 +83,82 @@ export function ChatArea() {
     () => (activeId ? (messagesByConv[activeId] ?? []) : []),
     [activeId, messagesByConv],
   );
+
+  // ===== Auto-scroll stick-to-bottom (v0.12.0) =====
+  // Pattern Slack/Discord/Claude Code: scroll auto al fondo a ogni nuovo
+  // messaggio O a ogni delta di streaming, MA solo se l'utente non ha
+  // intenzionalmente scrollato verso l'alto per leggere messaggi precedenti.
+  //
+  // Tre ref/state in gioco:
+  //   - scrollContainerRef: il <div className="h-full overflow-y-auto"> che
+  //     ospita la lista messaggi e gestisce lo scroll.
+  //   - bottomSentinelRef: un <div> vuoto in coda alla lista, target di
+  //     scrollIntoView per portare il fondo in vista in modo smooth.
+  //   - isStickyBottom: true finche l'utente sta guardando il fondo; passa a
+  //     false appena si allontana di piu di STICK_BOTTOM_THRESHOLD_PX dal
+  //     bottom; torna a true quando ritorna entro la soglia.
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const bottomSentinelRef = useRef<HTMLDivElement | null>(null);
+  const [isStickyBottom, setIsStickyBottom] = useState(true);
+
+  // Signature dei messaggi che cattura sia la lunghezza della lista
+  // (nuovo messaggio aggiunto) sia la lunghezza del content dell'ultimo
+  // messaggio (delta streaming inter-message). useEffect su questa stringa
+  // re-triggera lo scroll a ogni token del backend.
+  const messagesSignature = useMemo(() => {
+    if (messages.length === 0) return "0";
+    const last = messages[messages.length - 1];
+    return `${messages.length}:${last.id}:${last.content.length}`;
+  }, [messages]);
+
+  // Handler scroll: stima la distanza dal bottom e aggiorna isStickyBottom.
+  // Coperto: scroll mouse wheel, scroll touch, scroll tastiera, resize finestra
+  // (resize cambia clientHeight e re-triggera questo handler in modo indiretto
+  // via il resize listener piu sotto).
+  const handleScroll = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const atBottom = distanceFromBottom <= STICK_BOTTOM_THRESHOLD_PX;
+    setIsStickyBottom((prev) => (prev === atBottom ? prev : atBottom));
+  }, []);
+
+  // Scroll al bottom a ogni nuovo messaggio o delta streaming, ma solo se
+  // l'utente non ha rotto lo stick scrollando in alto.
+  useEffect(() => {
+    if (!isStickyBottom) return;
+    const sentinel = bottomSentinelRef.current;
+    if (!sentinel) return;
+    sentinel.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messagesSignature, isStickyBottom]);
+
+  // Mount iniziale della view "lista messaggi" (es. apertura conversation
+  // dalla sidebar con history caricata): scroll istantaneo al fondo SENZA
+  // animazione, cosi l'utente vede subito l'ultimo messaggio. useLayoutEffect
+  // perche deve avvenire prima del paint per evitare il flash a meta scroll.
+  // Dipendenza activeId: si re-triggera a ogni cambio conversation.
+  useLayoutEffect(() => {
+    if (!activeId) return;
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+    setIsStickyBottom(true);
+  }, [activeId]);
+
+  // Resize finestra: ricalcola lo stato sticky. Se la finestra si rimpicciolisce
+  // mentre eravamo al fondo, vogliamo restare al fondo (lo scroll auto del
+  // useEffect sopra non si triggera senza messagesSignature, quindi forziamo
+  // qui un re-scroll quando ancora sticky).
+  useEffect(() => {
+    const onResize = () => {
+      handleScroll();
+      if (isStickyBottom) {
+        bottomSentinelRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+      }
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [handleScroll, isStickyBottom]);
 
   // ===== Welcome hero (state vuoto) =====
   if (!activeId || messages.length === 0) {
@@ -148,7 +229,11 @@ export function ChatArea() {
 
   // ===== Lista messaggi (state attivo) =====
   return (
-    <div className="h-full overflow-y-auto">
+    <div
+      ref={scrollContainerRef}
+      onScroll={handleScroll}
+      className="h-full overflow-y-auto"
+    >
       <div className="mx-auto flex w-full max-w-chat flex-col gap-5 px-6 py-8">
         {messages.map((m) => (
           <MessageBubble key={m.id} message={m} />
@@ -158,6 +243,10 @@ export function ChatArea() {
             <ThinkingIndicator />
           </div>
         )}
+        {/* Sentinel auto-scroll: target di scrollIntoView per stick-to-bottom.
+            Resta sempre l'ultimo nodo DOM della lista cosi il fondo della
+            chat e' garantito raggiungibile anche con ThinkingIndicator visibile. */}
+        <div ref={bottomSentinelRef} aria-hidden="true" />
       </div>
     </div>
   );

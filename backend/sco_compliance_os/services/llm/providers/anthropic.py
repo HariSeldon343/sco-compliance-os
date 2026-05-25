@@ -34,9 +34,9 @@ logger = get_logger(__name__)
 class AnthropicProvider(LLMProvider):
     """Provider Anthropic via AsyncAnthropic SDK con SaaS proxy override.
 
-    Modelli supportati v0.7.0:
-    - claude-opus-4-7 (reasoning-v1)
-    - claude-sonnet-4-6 (agentic-v1 + coding-v1)
+    Modelli supportati v0.7.0 (default mapping v0.12.0 25/05/2026):
+    - claude-opus-4-7 (reasoning-v1 + agentic-v1 + coding-v1, default chat)
+    - claude-sonnet-4-6 (opzione legacy / fallback secondario)
     - claude-haiku-4-5-20251001 (fast-v1 + summarization-v1)
     """
 

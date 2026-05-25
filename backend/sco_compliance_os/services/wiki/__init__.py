@@ -11,6 +11,7 @@ Riusa il parser tipizzato esistente sco_compliance_os.services.vault.parser
 (Conv. 47 enforcement: single source of truth dello schema frontmatter).
 """
 
+from sco_compliance_os.services.wiki.graph_builder import build_vault_graph
 from sco_compliance_os.services.wiki.parser import (
     WIKI_CATEGORIES,
     WikiCategoryError,
@@ -25,6 +26,7 @@ __all__ = [
     "WIKI_CATEGORIES",
     "WikiCategoryError",
     "WikiNotFoundError",
+    "build_vault_graph",
     "get_wiki_file",
     "list_wiki_files",
     "parse_wiki_file",

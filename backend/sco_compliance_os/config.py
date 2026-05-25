@@ -29,8 +29,19 @@ class Settings(BaseSettings):
         description="API key per Anthropic Claude.",
     )
     model_default: str = Field(
-        default="claude-sonnet-4-6",
-        description="Modello predefinito per chat e agent reasoning.",
+        default="claude-opus-4-7",
+        description=(
+            "Modello predefinito per chat e agent reasoning. "
+            "v0.12.0 (25/05/2026): bumped da claude-sonnet-4-6 a claude-opus-4-7 "
+            "per allineare desktop app al SaaS default (schema.ts:209). "
+            "Overridabile per tenant via SaaS /api/v1/tenant/me/llm-config "
+            "(tenants.model_slug + tenant_memberships.model_slug_override). "
+            "Per 1M context window: il sistema host dichiara model id nominale "
+            "'claude-opus-4-7[1m]' ma l'Anthropic Python SDK accetta solo lo "
+            "slug base 'claude-opus-4-7'. Il 1M ctx richiede header beta "
+            "'anthropic-beta: context-1m-2025-08-07' (non ancora wirato qui — "
+            "carry-over v0.12.1)."
+        ),
     )
     model_fast: str = Field(
         default="claude-haiku-4-5-20251001",

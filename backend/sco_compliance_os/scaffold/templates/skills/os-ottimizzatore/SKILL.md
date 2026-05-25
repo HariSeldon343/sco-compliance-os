@@ -113,7 +113,7 @@ Lista in 9 bullet i framework di audit di base coperti dal sistema. Per ciascuno
 
 ## Regole permanenti che devi rispettare
 
-- Tono Amodeo: italiano professionale diretto, frasi corte, niente filler, niente AI vocabulary.
+- Tono consulenziale formale: italiano professionale diretto, frasi corte, niente filler, niente AI vocabulary.
 - Linguaggio semplice chiaro immediato: comprensibile a un bambino, niente jargon non spiegato.
 - Virgolette dritte `"..."` mai caporali `«...»`.
 - "al punto" / "al paragrafo" mai segno `§`.

@@ -44,6 +44,7 @@ from sco_compliance_os.services.wiki import (
     WIKI_CATEGORIES,
     WikiCategoryError,
     WikiNotFoundError,
+    build_vault_graph,
     get_wiki_file,
     list_wiki_files,
     wiki_stats,
@@ -95,6 +96,51 @@ class WikiStatsResponse(BaseModel):
     wiki_dir_exists: bool
     counts: dict[str, int]
     total: int
+
+
+# ----- Schemi Graph (vault force-directed) -----
+
+
+class WikiGraphNode(BaseModel):
+    """Nodo grafo: entity wiki, cliente business, scadenza, o placeholder."""
+
+    id: str
+    label: str
+    category: str  # entity | cliente | scadenza
+    entity_type: str
+    entity_subtype: str
+    ambito_canonico: str
+    status: str  # active | draft | stub | deprecated | archived | missing
+    path: str
+
+
+class WikiGraphEdge(BaseModel):
+    """Arco grafo: relationship entity-entity o applica_entity cliente-entity."""
+
+    source: str
+    target: str
+    type: str  # relationship_type (recepisce, attua, ...) | ruolo edge applica
+    category: str  # relationship | applica
+    note: str
+
+
+class WikiGraphStats(BaseModel):
+    """Aggregati di copertura del grafo (per filtri UI)."""
+
+    nodes_total: int
+    edges_total: int
+    by_entity_type: dict[str, int]
+    by_ambito_canonico: dict[str, int]
+    by_relationship_type: dict[str, int]
+
+
+class WikiGraphResponse(BaseModel):
+    """Response per /api/wiki/graph."""
+
+    nodes: list[WikiGraphNode]
+    edges: list[WikiGraphEdge]
+    stats: WikiGraphStats
+    vault_path: str
 
 
 # ----- Helper risoluzione vault attivo -----
@@ -225,6 +271,80 @@ async def get_stats(
     stats = wiki_stats(vault_root)
     logger.info("wiki.stats", vault=str(vault_root), total=stats["total"])
     return WikiStatsResponse(**stats)
+
+
+# ----- Endpoint grafo (force-directed entity + clienti) -----
+
+
+@router.get("/graph", response_model=WikiGraphResponse)
+async def get_graph(
+    vault_path: str | None = Query(
+        default=None, description="Override vault root path (assoluto)"
+    ),
+    include_clienti: bool = Query(
+        default=True,
+        description="Includi nodi cliente da Business/*/clienti/*/_index.md",
+    ),
+    include_orphans: bool = Query(
+        default=True,
+        description="Crea placeholder per wikilink target inesistenti (status: missing)",
+    ),
+    entity_type: str | None = Query(
+        default=None,
+        description=(
+            "Filtra entity per entity_type (atto-normativo, standard-tecnico, "
+            "linea-guida, autorita, metodologia, autore-prassi, "
+            "soggetto-obbligato, scadenza)"
+        ),
+    ),
+    ambito_canonico: str | None = Query(
+        default=None,
+        description="Filtra entity per ambito_canonico (17 valori, vedi CLAUDE.md INGEST)",
+    ),
+    settings: Settings = Depends(get_settings),
+) -> WikiGraphResponse:
+    """Costruisce grafo vault SCO per visualizzazione force-directed 2D.
+
+    Nodi: entity wiki + clienti business (+ placeholder orphan opzionale).
+    Edges: relationships entity-entity (Dim. 4) + applica_entity cliente-entity (Dim. 5).
+
+    Conv. 47 single source of truth: il grafo è derivato dal frontmatter
+    YAML dei file vault, parsed dal parse_vault_file esistente. Nessun
+    side effect, nessuna mutazione del vault.
+    """
+    vault_root = _resolve_active_vault(settings, vault_path)
+    try:
+        graph = build_vault_graph(
+            vault_root,
+            include_clienti=include_clienti,
+            include_orphans=include_orphans,
+            entity_type_filter=entity_type,
+            ambito_canonico_filter=ambito_canonico,
+        )
+    except Exception as exc:
+        logger.error(
+            "wiki.graph.build_failed",
+            vault=str(vault_root),
+            error=str(exc),
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Errore costruzione grafo: {exc}",
+        ) from exc
+
+    logger.info(
+        "wiki.graph",
+        vault=str(vault_root),
+        nodes=graph["stats"]["nodes_total"],
+        edges=graph["stats"]["edges_total"],
+        filters={
+            "entity_type": entity_type,
+            "ambito_canonico": ambito_canonico,
+            "include_clienti": include_clienti,
+            "include_orphans": include_orphans,
+        },
+    )
+    return WikiGraphResponse(**graph)
 
 
 # ----- Endpoint lista per categoria (named) -----

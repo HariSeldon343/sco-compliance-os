@@ -1,4 +1,4 @@
-// SCO Compliance OS — Advanced editor per costruire skill complete
+﻿// SCO Compliance OS — Advanced editor per costruire skill complete
 //
 // Goal v0.8.1: "stessa potenza con cui un esperto di Claude costruisce le proprie
 // skill". Form completo con system prompt textarea + tools whitelist + scope +
@@ -35,7 +35,7 @@ type Ambito =
   | "sicurezza-lavoro"
   | "multi-dominio";
 
-type Tone = "amodeo-formale" | "neutro-tecnico" | "divulgativo";
+type Tone = "consulenziale-formale" | "neutro-tecnico" | "divulgativo";
 
 const AGENT_TYPES: AgentType[] = [
   "auditor",
@@ -54,7 +54,7 @@ const AMBITI: Ambito[] = [
   "multi-dominio",
 ];
 
-const TONES: Tone[] = ["amodeo-formale", "neutro-tecnico", "divulgativo"];
+const TONES: Tone[] = ["consulenziale-formale", "neutro-tecnico", "divulgativo"];
 
 const ALL_TOOLS = [
   "Read",
@@ -121,7 +121,7 @@ export function SkillBuilderAdvanced({
     agent_type: initialSpec?.agent_type ?? "altro",
     ambiti: initialSpec?.ambiti ?? [],
     tools_whitelist: initialSpec?.tools_whitelist ?? [],
-    tone: initialSpec?.tone ?? "amodeo-formale",
+    tone: initialSpec?.tone ?? "consulenziale-formale",
     system_prompt: initialSpec?.system_prompt ?? "",
     example_question: initialSpec?.example_question ?? "",
     scope: initialSpec?.scope ?? "user",
