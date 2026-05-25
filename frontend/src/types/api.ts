@@ -207,12 +207,26 @@ export interface WikiStatsResponse {
 // ===== Wiki Graph (v0.12.0 force-directed 2D vault visualization) =====
 // Allineato 1:1 al Pydantic backend `WikiGraphResponse` / `WikiGraphNode`
 // / `WikiGraphEdge` / `WikiGraphStats` in wiki_routes.py.
+//
+// v0.12.1 Phase 2: aggiunte categorie 'note' + 'missing' per nodi, 'wikilink'
+// per edges (body parsing wikilink) — densità tipo Obsidian Graph View.
 
-/** Nodo grafo: entity wiki, cliente business, scadenza, o placeholder orphan. */
+/** Categoria di nodo nel grafo vault. */
+export type WikiGraphNodeCategory =
+  | "entity"
+  | "cliente"
+  | "scadenza"
+  | "note"
+  | "missing";
+
+/** Categoria di edge nel grafo vault. */
+export type WikiGraphEdgeCategory = "relationship" | "applica" | "wikilink";
+
+/** Nodo grafo: entity wiki, cliente business, scadenza, nota generica, o placeholder. */
 export interface WikiGraphNode {
   id: string;
   label: string;
-  category: string; // entity | cliente | scadenza
+  category: string; // WikiGraphNodeCategory (string per tolleranza forward-compat)
   entity_type: string;
   entity_subtype: string;
   ambito_canonico: string;
@@ -220,12 +234,12 @@ export interface WikiGraphNode {
   path: string;
 }
 
-/** Arco grafo: relationship entity-entity o applica_entity cliente-entity. */
+/** Arco grafo: relationship entity-entity, applica_entity cliente-entity, o wikilink body. */
 export interface WikiGraphEdge {
   source: string;
   target: string;
-  type: string; // relationship_type (recepisce, attua, ...) | ruolo edge applica
-  category: string; // relationship | applica
+  type: string; // relationship_type | ruolo edge applica | 'menzione' (wikilink)
+  category: string; // WikiGraphEdgeCategory (string per tolleranza forward-compat)
   note: string;
 }
 
@@ -236,6 +250,9 @@ export interface WikiGraphStats {
   by_entity_type: Record<string, number>;
   by_ambito_canonico: Record<string, number>;
   by_relationship_type: Record<string, number>;
+  // v0.12.1 Phase 2: aggregati per categoria nodo/edge.
+  by_category?: Record<string, number>;
+  by_edge_category?: Record<string, number>;
 }
 
 /** Response per GET /api/wiki/graph */

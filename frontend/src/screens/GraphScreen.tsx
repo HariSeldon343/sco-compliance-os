@@ -1,6 +1,6 @@
 // SCO Compliance OS — schermata Grafo: visualizzazione force-directed 2D del vault
 // Pattern Conv. 47 + Conv. 48 enforcement: single source of truth backend, niente stub hardcoded.
-// Pattern Karpathy: visualizza gap conoscitivo (orphan placeholder con status="missing").
+// Pattern Karpathy: visualizza gap conoscitivo (orphan placeholder con category="missing").
 //
 // Linguaggio semplice (regola 14/05/2026 vault): comprensibile a bambino sveglio.
 //
@@ -17,7 +17,13 @@
 //   soggetto-obbligato -> #14b8a6 (turchese)
 //   scadenza         -> #1f2937 (nero)
 //   cliente          -> #f59e0b (arancio)
-//   placeholder/missing -> #d1d5db (grigio chiaro)
+//   note (md generic) -> #9ca3af (grigio chiaro) v0.12.1
+//   missing (orphan)  -> #374151 (grigio scuro)  v0.12.1
+//
+// Colori per categoria edge:
+//   relationship  -> #94a3b8 (slate, edge entity-entity strutturate)
+//   applica       -> #f59e0b (ambra, edge cliente->entity)
+//   wikilink      -> #cbd5e1 (slate chiarissimo, edge body wikilink)
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ForceGraph2D from "react-force-graph-2d";
@@ -53,17 +59,31 @@ const COLOR_BY_ENTITY_TYPE: Record<string, string> = {
 };
 
 const COLOR_CLIENTE = "#f59e0b"; // arancio
-const COLOR_PLACEHOLDER = "#d1d5db"; // grigio chiaro per missing/orphan
-const COLOR_DEFAULT = "#94a3b8"; // slate
+const COLOR_NOTE = "#9ca3af"; // grigio chiaro (v0.12.1: nodi 'note' generici)
+const COLOR_MISSING = "#374151"; // grigio scuro (v0.12.1: nodi 'missing' orphan)
+const COLOR_DEFAULT = "#94a3b8"; // slate fallback
+
+// v0.12.1: palette edge per categoria (relationship/applica/wikilink).
+const COLOR_EDGE_RELATIONSHIP = "#94a3b8"; // slate (strutturale)
+const COLOR_EDGE_APPLICA = "#f59e0b80"; // arancio semi-transparent
+const COLOR_EDGE_WIKILINK = "#cbd5e180"; // slate molto chiaro semi-transparent
 
 function nodeColor(node: WikiGraphNode): string {
-  if (node.status === "missing") return COLOR_PLACEHOLDER;
+  // v0.12.1: priorità category > status > entity_type.
+  if (node.category === "missing" || node.status === "missing") return COLOR_MISSING;
+  if (node.category === "note") return COLOR_NOTE;
   if (node.category === "cliente") return COLOR_CLIENTE;
   if (node.category === "scadenza") return COLOR_BY_ENTITY_TYPE.scadenza;
   if (node.entity_type && COLOR_BY_ENTITY_TYPE[node.entity_type]) {
     return COLOR_BY_ENTITY_TYPE[node.entity_type];
   }
   return COLOR_DEFAULT;
+}
+
+function edgeColor(edge: WikiGraphEdge): string {
+  if (edge.category === "applica") return COLOR_EDGE_APPLICA;
+  if (edge.category === "wikilink") return COLOR_EDGE_WIKILINK;
+  return COLOR_EDGE_RELATIONSHIP;
 }
 
 // ----- Conversione shape backend -> shape react-force-graph -----
@@ -139,6 +159,9 @@ export function GraphScreen() {
   const [ambito, setAmbito] = useState<string>("");
   const [includeClienti, setIncludeClienti] = useState(true);
   const [includeOrphans, setIncludeOrphans] = useState(true);
+  // v0.12.1 Phase 2: body wikilink parsing per densità Obsidian.
+  const [includeBodyWikilinks, setIncludeBodyWikilinks] = useState(true);
+  const [includeNotes, setIncludeNotes] = useState(true);
 
   // Container size (force-graph richiede width/height numerici espliciti).
   const containerRef = useRef<HTMLDivElement>(null);
@@ -153,6 +176,8 @@ export function GraphScreen() {
         ambito_canonico: ambito || undefined,
         include_clienti: includeClienti,
         include_orphans: includeOrphans,
+        include_body_wikilinks: includeBodyWikilinks,
+        include_notes: includeNotes,
       });
       setResp(data);
       setState("ok");
@@ -161,7 +186,14 @@ export function GraphScreen() {
       setError(msg);
       setState("error");
     }
-  }, [entityType, ambito, includeClienti, includeOrphans]);
+  }, [
+    entityType,
+    ambito,
+    includeClienti,
+    includeOrphans,
+    includeBodyWikilinks,
+    includeNotes,
+  ]);
 
   useEffect(() => {
     void load();
@@ -308,6 +340,34 @@ export function GraphScreen() {
             />
             <span>Mostra collegamenti senza nodo (grigi)</span>
           </label>
+
+          {/* v0.12.1 Phase 2: body wikilink parsing per densità Obsidian. */}
+          <label
+            className="flex cursor-pointer items-center gap-1.5"
+            title="Parsa wikilink [[...]] nel testo dei file md (esclusi blocchi di codice)"
+          >
+            <input
+              type="checkbox"
+              checked={includeBodyWikilinks}
+              onChange={(e) => setIncludeBodyWikilinks(e.target.checked)}
+              className="rounded border-sco-border"
+            />
+            <span>Link da testo</span>
+          </label>
+
+          <label
+            className="flex cursor-pointer items-center gap-1.5"
+            title="Mostra anche file .md generici (note, giornalieri, framework) come nodi"
+          >
+            <input
+              type="checkbox"
+              checked={includeNotes}
+              onChange={(e) => setIncludeNotes(e.target.checked)}
+              disabled={!includeBodyWikilinks}
+              className="rounded border-sco-border disabled:opacity-40"
+            />
+            <span>Note generiche</span>
+          </label>
         </div>
 
         {/* Stats badge row */}
@@ -371,26 +431,55 @@ export function GraphScreen() {
               backgroundColor="transparent"
               nodeId="id"
               nodeLabel={(n: any) =>
-                `${n.label}${n.status === "missing" ? " (manca scheda)" : ""}`
+                `${n.label}${
+                  (n as WikiGraphNode).category === "missing"
+                    ? " (manca scheda)"
+                    : (n as WikiGraphNode).category === "note"
+                      ? " (nota)"
+                      : ""
+                }`
               }
               nodeColor={(n: any) => nodeColor(n as WikiGraphNode)}
-              nodeRelSize={6}
-              nodeVal={(n: any) =>
-                (n as WikiGraphNode).category === "cliente" ? 3 : 2
+              // v0.12.1: dimensione nodi differenziata per categoria.
+              // Nodi 'note' più piccoli (3) per non sovrastare entity strutturate (5).
+              nodeRelSize={(() => {
+                const n = resp.stats.nodes_total;
+                if (n > 500) return 3;
+                if (n > 200) return 4;
+                return 5;
+              })()}
+              nodeVal={(n: any) => {
+                const node = n as WikiGraphNode;
+                if (node.category === "cliente") return 3;
+                if (node.category === "scadenza") return 2.5;
+                if (node.category === "missing") return 1;
+                if (node.category === "note") return 1.2;
+                return 2;
+              }}
+              // v0.12.1: colore edge per categoria (relationship/applica/wikilink).
+              linkColor={(l: any) => edgeColor(l as WikiGraphEdge)}
+              linkWidth={(l: any) =>
+                (l as WikiGraphEdge).category === "wikilink" ? 0.5 : 1
               }
-              linkColor={() => "#94a3b8"}
-              linkWidth={1}
               linkLabel={(l: any) =>
                 `${l.type}${l.note ? ` — ${l.note.slice(0, 80)}` : ""}`
               }
-              linkDirectionalArrowLength={4}
+              // Arrow solo su edge strutturali (relationship + applica), non
+              // su wikilink (rumore visivo con centinaia di link).
+              linkDirectionalArrowLength={(l: any) =>
+                (l as WikiGraphEdge).category === "wikilink" ? 0 : 4
+              }
               linkDirectionalArrowRelPos={0.95}
               linkDirectionalArrowColor={() => "#64748b"}
               onNodeClick={(n: any) => {
                 setSelectedNode(n as WikiGraphNode);
               }}
-              cooldownTicks={100}
-              warmupTicks={50}
+              // v0.12.1: performance tuning adattivo per vault grandi (>500 nodi
+              // -> cooldown ridotto, decay rapido, niente warmup eccessivo).
+              cooldownTicks={resp.stats.nodes_total > 500 ? 60 : 100}
+              warmupTicks={resp.stats.nodes_total > 500 ? 20 : 50}
+              d3AlphaDecay={resp.stats.nodes_total > 500 ? 0.03 : 0.0228}
+              d3VelocityDecay={0.4}
             />
           )}
         </div>

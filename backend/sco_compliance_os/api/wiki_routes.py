@@ -102,11 +102,15 @@ class WikiStatsResponse(BaseModel):
 
 
 class WikiGraphNode(BaseModel):
-    """Nodo grafo: entity wiki, cliente business, scadenza, o placeholder."""
+    """Nodo grafo: entity wiki, cliente business, scadenza, note generica, o placeholder.
+
+    v0.12.1 Phase 2: aggiunte categorie 'note' (file .md generico con wikilink)
+    e 'missing' (placeholder per target wikilink inesistente).
+    """
 
     id: str
     label: str
-    category: str  # entity | cliente | scadenza
+    category: str  # entity | cliente | scadenza | note | missing
     entity_type: str
     entity_subtype: str
     ambito_canonico: str
@@ -115,23 +119,33 @@ class WikiGraphNode(BaseModel):
 
 
 class WikiGraphEdge(BaseModel):
-    """Arco grafo: relationship entity-entity o applica_entity cliente-entity."""
+    """Arco grafo: relationship entity-entity, applica_entity cliente-entity, o wikilink body.
+
+    v0.12.1 Phase 2: aggiunta categoria 'wikilink' per menzioni wikilink nel
+    body markdown di qualunque file (densità Obsidian Graph View).
+    """
 
     source: str
     target: str
-    type: str  # relationship_type (recepisce, attua, ...) | ruolo edge applica
-    category: str  # relationship | applica
+    type: str  # relationship_type | ruolo edge applica | 'menzione' (wikilink body)
+    category: str  # relationship | applica | wikilink
     note: str
 
 
 class WikiGraphStats(BaseModel):
-    """Aggregati di copertura del grafo (per filtri UI)."""
+    """Aggregati di copertura del grafo (per filtri UI).
+
+    v0.12.1 Phase 2: aggiunti by_category (per categoria nodo) e
+    by_edge_category (per categoria edge).
+    """
 
     nodes_total: int
     edges_total: int
     by_entity_type: dict[str, int]
     by_ambito_canonico: dict[str, int]
     by_relationship_type: dict[str, int]
+    by_category: dict[str, int] = Field(default_factory=dict)
+    by_edge_category: dict[str, int] = Field(default_factory=dict)
 
 
 class WikiGraphResponse(BaseModel):
@@ -289,6 +303,23 @@ async def get_graph(
         default=True,
         description="Crea placeholder per wikilink target inesistenti (status: missing)",
     ),
+    include_body_wikilinks: bool = Query(
+        default=True,
+        description=(
+            "v0.12.1 Phase 2: parsa wikilink [[...]] nel body markdown di tutti "
+            "i file .md del vault (escluse cartelle .git/, node_modules/, "
+            "_archivio*/, .obsidian/, .claude/). Esclude wikilink dentro code "
+            "block. Default True per densità tipo Obsidian Graph View."
+        ),
+    ),
+    include_notes: bool = Query(
+        default=True,
+        description=(
+            "v0.12.1 Phase 2: emetti nodi categoria 'note' per file .md generici "
+            "(non entity/cliente/scadenza) che hanno wikilink nel body. "
+            "Richiede include_body_wikilinks=True. Default True."
+        ),
+    ),
     entity_type: str | None = Query(
         default=None,
         description=(
@@ -305,12 +336,17 @@ async def get_graph(
 ) -> WikiGraphResponse:
     """Costruisce grafo vault SCO per visualizzazione force-directed 2D.
 
-    Nodi: entity wiki + clienti business (+ placeholder orphan opzionale).
-    Edges: relationships entity-entity (Dim. 4) + applica_entity cliente-entity (Dim. 5).
+    v0.12.0: nodi entity wiki + clienti business + scadenze, edges relationships
+    (Dim. 4) + applica_entity (Dim. 5).
 
-    Conv. 47 single source of truth: il grafo è derivato dal frontmatter
-    YAML dei file vault, parsed dal parse_vault_file esistente. Nessun
-    side effect, nessuna mutazione del vault.
+    v0.12.1 Phase 2: aggiunti wikilink body parsing per densità Obsidian. Walk
+    completo vault per regex `[[...]]` con esclusione code block + frontmatter.
+    Nodi 'note' emessi per file .md generici con wikilink, edges categoria
+    'wikilink' con type='menzione'.
+
+    Conv. 47 single source of truth: il grafo è derivato dai file vault, parsed
+    dal parse_vault_file esistente. Nessun side effect, nessuna mutazione del
+    vault.
     """
     vault_root = _resolve_active_vault(settings, vault_path)
     try:
@@ -318,6 +354,8 @@ async def get_graph(
             vault_root,
             include_clienti=include_clienti,
             include_orphans=include_orphans,
+            include_body_wikilinks=include_body_wikilinks,
+            include_notes=include_notes,
             entity_type_filter=entity_type,
             ambito_canonico_filter=ambito_canonico,
         )
@@ -342,6 +380,8 @@ async def get_graph(
             "ambito_canonico": ambito_canonico,
             "include_clienti": include_clienti,
             "include_orphans": include_orphans,
+            "include_body_wikilinks": include_body_wikilinks,
+            "include_notes": include_notes,
         },
     )
     return WikiGraphResponse(**graph)

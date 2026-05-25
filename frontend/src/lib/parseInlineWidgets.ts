@@ -229,13 +229,17 @@ function normalizeAskPayload(raw: unknown): InlineAskPayload | null {
   for (const opt of obj.options) {
     if (typeof opt !== "object" || opt === null) continue;
     const optObj = opt as Record<string, unknown>;
+    const label = typeof optObj.label === "string" ? optObj.label : null;
+    // v0.12.1 fix Bug H smoke v0.12.0: il system prompt skill proposal EPSILON
+    // istruisce l'LLM a emettere {"label":"slug","description":"..."} senza
+    // campo "value" esplicito. Conv. 47 SSOT: fallback resiliente label -> value
+    // per non bloccare il render del widget. Se anche "label" manca, skip.
     const value =
       typeof optObj.value === "string"
         ? optObj.value
         : typeof optObj.id === "string"
           ? optObj.id
-          : null;
-    const label = typeof optObj.label === "string" ? optObj.label : null;
+          : label; // fallback: label come value (slug-friendly per skill proposal)
     if (!value || !label) continue;
     const description =
       typeof optObj.description === "string" ? optObj.description : undefined;

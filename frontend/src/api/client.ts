@@ -405,12 +405,16 @@ export const apiClient = {
     return request<WikiFileDetail>(qs ? `${base}?${qs}` : base);
   },
 
-  /** Grafo vault force-directed: nodi (entity + clienti) + edges (relationships + applica). */
+  /** Grafo vault force-directed: nodi (entity + clienti + notes) + edges
+   *  (relationships + applica + wikilink body). v0.12.1 Phase 2: aggiunti
+   *  flag include_body_wikilinks + include_notes per densità Obsidian. */
   async getWikiGraph(
     params: {
       vault_path?: string;
       include_clienti?: boolean;
       include_orphans?: boolean;
+      include_body_wikilinks?: boolean;
+      include_notes?: boolean;
       entity_type?: string;
       ambito_canonico?: string;
     } = {},
@@ -421,12 +425,19 @@ export const apiClient = {
       search.set("include_clienti", String(params.include_clienti));
     if (params.include_orphans !== undefined)
       search.set("include_orphans", String(params.include_orphans));
+    if (params.include_body_wikilinks !== undefined)
+      search.set("include_body_wikilinks", String(params.include_body_wikilinks));
+    if (params.include_notes !== undefined)
+      search.set("include_notes", String(params.include_notes));
     if (params.entity_type) search.set("entity_type", params.entity_type);
     if (params.ambito_canonico)
       search.set("ambito_canonico", params.ambito_canonico);
     const qs = search.toString();
+    // Timeout esteso 60s per vault grandi con many wikilink (centinaia di file).
     return request<WikiGraphResponse>(
       qs ? `/api/wiki/graph?${qs}` : "/api/wiki/graph",
+      {},
+      60_000,
     );
   },
 

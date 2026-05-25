@@ -9,7 +9,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "sco-compliance-os-backend"
-version = "0.12.0"
+version = "0.12.1"
 description = "Backend FastAPI per l'app desktop SCO Compliance OS, AI assistant brandata per compliance e consulenza normativa."
 readme = "../README.md"
 requires-python = ">=3.12,<4.0"
