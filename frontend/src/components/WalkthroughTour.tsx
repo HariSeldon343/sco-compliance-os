@@ -49,35 +49,35 @@ const TOUR_STEPS: Step[] = [
     target: '[data-tour="sidebar-wiki"]',
     title: "Wiki",
     content:
-      "La tua base di conoscenza memoria-gerarchica L0/L1/L2. Qui vivono le fonti normative ingerite (NIS 2, ISO 27001, AI Act, GDPR), gli articoli citati e le sintesi cross-framework.",
+      "La tua base di conoscenza organizzata in scaffali. Qui salvi le fonti che leggi una volta e riusi sempre (norme, leggi, standard, articoli, manuali) e le sintesi che colleghi fra loro. L'agente le legge per risponderti con citazioni reali, non a memoria.",
     placement: "right",
   },
   {
     target: '[data-tour="sidebar-grafo"]',
     title: "Grafo",
     content:
-      "Visualizza il tuo vault come rete force-directed 2D. Nodi cliente, entity normative, edge fra clienti e standard certificandi. Utile per trovare correlazioni che la lista appiattisce.",
+      "Vedi le tue informazioni come una rete. Ogni pallino è una nota, una norma, un cliente. Le linee sono i collegamenti che hai creato. Serve a scoprire ponti fra cose che sembrano lontane.",
     placement: "right",
   },
   {
     target: '[data-tour="sidebar-skills"]',
-    title: "Skills",
+    title: "Competenze",
     content:
-      "Il catalogo delle competenze dell'agente: NIS 2, ISO 27001, audit sanitario, RSPP, antincendio, GDPR. Puoi attivarle al volo per task specifici o creare skill custom via wizard.",
+      "L'agente ha già un set di competenze di base pronte all'uso. Esempi: assessment cybersicurezza, audit qualità, gestione rischi, redazione perizia tecnica, riorganizzazione documentale. Quando apri un nuovo lavoro l'agente ti propone quali attivare. Puoi anche crearne di nuove con un wizard guidato, su misura del tuo modo di lavorare.",
     placement: "right",
   },
   {
     target: '[data-tour="sidebar-vault"]',
     title: "Vault",
     content:
-      "Gestisci i tuoi vault Obsidian-style: cartelle Contesto, Business clienti, Giornaliero, Skill, Libreria. Tutto markdown plain-text, niente DB proprietari.",
+      "La cartella sul tuo computer dove vive tutto: documenti, note, clienti, materiali. Sono file di testo normali (markdown), aperti e portabili: niente prigione di dati, niente database proprietari.",
     placement: "right",
   },
   {
     target: '[data-tour="sidebar-memory"]',
     title: "Memoria",
     content:
-      "Cosa l'agente ricorda di te: profilo, preferenze, fatti stabili. Persistenza markdown + JSON index, NO vector DB. Single source of truth lato backend (Conv. 47).",
+      "Qui l'agente ricorda chi sei e come lavori: nome, ruolo, settori, preferenze, fatti che hai dichiarato come stabili. È il suo \"subconscio\": cresce nel tempo da solo, leggendo le tue chat e i tuoi documenti. Più la usi, più diventa preciso. Tutto resta sul tuo computer.",
     placement: "right",
   },
   {

@@ -287,6 +287,26 @@ async def chat_stream(
         else:
             base_system_prompt = _DEFAULT_SYSTEM_PROMPT
 
+        # v0.13.3 Antonio feedback fix: ONBOARDING_STATUS placeholder substitution
+        # Pattern Conv. 47 SSOT backend: count user_profile fields popolati,
+        # sostituisce nel system prompt cosi LLM applica VINCOLO ONBOARDING
+        # (refuse task sostantivi se profilo incompleto, redirect a Q1-Q10).
+        # Threshold 10/10 perche os-setup richiede tutte 10 risposte per
+        # calibrazione completa. Soglia ammorbidita a 5/10 se utente vuole
+        # bypassare ("salta onboarding") + agente segnala profilo vuoto.
+        onboarding_status_str = "complete"
+        try:
+            profile_count = len(profile_prefs) if profile_prefs else 0
+            if profile_count < 10:
+                onboarding_status_str = f"incomplete ({profile_count}/10)"
+        except Exception:
+            # Best-effort: se DB unreachable, assume incomplete per safety
+            onboarding_status_str = "incomplete (sconosciuto)"
+
+        base_system_prompt = base_system_prompt.replace(
+            "{ONBOARDING_STATUS}", onboarding_status_str
+        )
+
         effective_system_prompt = base_system_prompt
         if profile_markdown:
             effective_system_prompt = (
