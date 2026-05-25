@@ -69,18 +69,29 @@ async def test_vault_register_creates_setup_conversation(
 
 
 @pytest.mark.asyncio
-async def test_vault_register_dedup_no_second_trigger(
+async def test_vault_register_re_add_creates_new_conversation(
     client: AsyncClient, temp_vault: Path
 ) -> None:
-    """Re-add stesso path → NO seconda conversation 'Configurazione iniziale'.
+    """Re-add stesso path → SI seconda conversation 'Configurazione iniziale'.
 
-    Pattern Conv. 47: dedup naturale, NO re-emit evento auto-trigger.
-    Bug v0.5.x: ogni re-add creava conversation duplicata → loop os-setup.
+    Pattern Conv. 47 v0.9.0+: ogni re-add esplicito dell'utente RIESEGUE
+    le skill os-setup (idempotenti), generando nuova conversation visibile
+    in sidebar. Razionale UX: l'utente vede chiaramente che il vault e' stato
+    riconosciuto e le skill ri-eseguite, evita confusione "perche' non
+    succede nulla?".
+
+    Storico:
+    - v0.5.x: ogni re-add creava conversation duplicata → loop os-setup (bug).
+    - v0.6.x: dedup naturale fix loop (NO re-emit).
+    - v0.9.0+: re-emit DELIBERATO. Il re-add e' azione esplicita utente
+      (cliccato vault > add second time), non auto-trigger silenzioso, quindi
+      generare seconda conversation comunica chiarezza UX. Riferimento codice:
+      ``services/skills/auto_trigger.py:172-174`` commento esplicito.
     """
     # First add
     await client.post(
         "/api/vault/add",
-        json={"path": str(temp_vault), "name": "dedup-test"},
+        json={"path": str(temp_vault), "name": "re-add-test"},
     )
     await asyncio.sleep(2.0)
 
@@ -92,7 +103,7 @@ async def test_vault_register_dedup_no_second_trigger(
     # Second add stesso path
     await client.post(
         "/api/vault/add",
-        json={"path": str(temp_vault), "name": "dedup-test-2"},
+        json={"path": str(temp_vault), "name": "re-add-test-2"},
     )
     await asyncio.sleep(2.0)
 
@@ -101,9 +112,9 @@ async def test_vault_register_dedup_no_second_trigger(
         [c for c in convs_after_second.json() if "Configurazione iniziale" in c.get("title", "")]
     )
 
-    # Dedup deve aver bloccato seconda trigger
-    assert count_after_second == count_after_first, (
-        f"Dedup fallito: count {count_after_first} → {count_after_second}"
+    # v0.9.0+ design: re-add CREA seconda conversation (idempotenza UX-visible)
+    assert count_after_second == count_after_first + 1, (
+        f"Re-add doveva creare nuova conversation: count {count_after_first} → {count_after_second}"
     )
 
 
