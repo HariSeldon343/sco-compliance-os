@@ -3,13 +3,25 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
+import { readFileSync } from "node:fs";
 
 // Porta default Tauri (https://v2.tauri.app/start/frontend/vite/)
 const DEV_PORT = 1420;
 
+// v0.10.0: leggi version da package.json + inietta come __APP_VERSION__ globale.
+// Pattern Conv. 47 single source of truth: la version vive in 1 solo posto
+// (package.json) e si propaga al frontend via Vite define.
+const pkg = JSON.parse(
+  readFileSync(path.resolve(__dirname, "./package.json"), "utf-8"),
+);
+
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
 
   // Prevent vite from obscuring rust errors quando lanciato via `tauri dev`
   clearScreen: false,

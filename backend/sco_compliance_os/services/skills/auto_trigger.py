@@ -192,6 +192,23 @@ async def handle_vault_registered(payload: dict[str, Any]) -> None:
         is_new_vault=is_new,
     )
 
+    # v0.9.0 multi-turn skill flow: marca la conversation come skill-driven
+    # cosi' il chat handler /api/chat/stream propaga il SKILL.md body al system
+    # prompt nei turni successivi all'auto-trigger. Pattern Conv. 48 SSOT backend.
+    try:
+        await store.set_active_skill(conv_id, "os-setup", step=0)
+        logger.info(
+            "auto_trigger.active_skill_set",
+            conv_id=conv_id,
+            skill_name="os-setup",
+        )
+    except Exception as exc:
+        logger.warning(
+            "auto_trigger.set_active_skill_failed",
+            conv_id=conv_id,
+            error=str(exc),
+        )
+
     # 2. Scan vault structure per context runtime.
     structure_snapshot = await _scan_vault_structure(vault_root)
 
@@ -242,17 +259,41 @@ async def handle_vault_registered(payload: dict[str, Any]) -> None:
         # Pattern Conv. 44 lesson 1 CircuitBreaker: fallimento deep scan
         # non blocca il resto del flow os-setup. L'utente vede comunque
         # le domande, semplicemente senza pre-report.
+        # v0.9.0: log exception type + 1ª riga traceback per diagnostica reale
+        # invece di catch generic mascherante. Continua con DeepScanReport stub
+        # parziale ricostruito (stat base disponibili anche senza scan profondo).
+        import traceback as _tb
+
+        tb_first_line = ""
+        try:
+            tb_lines = _tb.format_exception(type(exc), exc, exc.__traceback__)
+            # prendi la prima riga del frame piu' vicino al crash
+            for ln in reversed(tb_lines):
+                if 'File "' in ln:
+                    tb_first_line = ln.strip()
+                    break
+        except Exception:
+            pass
+
         logger.exception(
             "auto_trigger.deep_scan_failed",
             vault_id=vault_id,
             conv_id=conv_id,
+            exc_type=type(exc).__name__,
             error=str(exc),
+            tb_first_line=tb_first_line,
         )
+
+        # Ricostruisci stat base da snapshot esistente (best-effort fallback).
+        base_total = int(structure_snapshot.get("md_files_count", 0) or 0)
         deep_scan_markdown = (
             f"## Scansione profonda del vault \"{vault_name}\"\n\n"
-            f"La scansione profonda non e' riuscita "
-            f"(motivo tecnico, log loggato). "
-            f"Procedo direttamente con le 10 domande di profilazione.\n\n---\n"
+            f"La scansione profonda ha incontrato un problema tecnico: "
+            f"`{type(exc).__name__}: {str(exc)[:160]}`.\n\n"
+            f"Statistiche base dalla scansione preliminare: "
+            f"{base_total} file markdown rilevati.\n\n"
+            f"Procedo con le 10 domande di profilazione "
+            f"(la scansione profonda non e' bloccante).\n\n---\n"
         )
 
     # Appendi il report deep scan come messaggio assistant ALLA conversation
@@ -312,66 +353,89 @@ async def handle_vault_registered(payload: dict[str, Any]) -> None:
         will_run_ottimizzatore=not is_sco_structure,
     )
 
-    # 3. Esegui os-setup con persistenza assistant text alla chiusura.
-    setup_chunks: list[str] = []
+    # v0.10.0 FIX DEFINITIVO: emit Q1 DETERMINISTICA invece di affidarsi al LLM.
+    #
+    # Bug v0.9.0: execute_skill('os-setup') chiamava il LLM via SaaS proxy,
+    # ma o (a) il LLM non emetteva il widget formattato, o (b) lo stream
+    # falliva silente, o (c) il LLM emetteva TUTTE le 10 domande in un colpo
+    # (trim al primo widget mancava perche' il modello non emette il pattern
+    # esatto `<ASK_USER_QUESTION>{json}</ASK_USER_QUESTION>` ma varianti).
+    #
+    # Soluzione v0.10.0: niente LLM al primo turno. Append direttamente un
+    # messaggio assistant con presentazione + Q1 hard-coded (Conv. 48 SSOT
+    # backend: il widget e' formattato esattamente come lo aspetta il parser
+    # inline frontend `parseInlineWidgets.ts`). Q2-Q10 vengono generate dal
+    # LLM nei turni successivi via `chat_routes.py`, che ora carica history
+    # piena + prepende skill_body al system prompt finche' active_skill set.
+    #
+    # Pattern Conv. 35 RESEARCH-BEFORE-ACT applied: il primo turno e' un dato
+    # certo (non un'ipotesi LLM). Anti-pattern del "vediamo cosa risponde il
+    # modello" disciplinarmente eliminato.
 
-    async def _setup_event_capture(event: AgentEvent) -> None:
-        if event.kind == "text_delta":
-            setup_chunks.append(event.data.get("text", ""))
-
-    logger.info(
-        "auto_trigger.skill_executing",
-        skill_name="os-setup",
-        vault_id=vault_id,
-        conv_id=conv_id,
+    # Conta dei framework rilevati dal deep_scan per pre-popolare la lista
+    # framework della domanda 6/10 (calcolato dopo per altri turni LLM-driven).
+    _framework_top = deep_scan_report_dict.get("framework_occurrences", [])
+    _detected_frameworks_names = [
+        fw[0] if isinstance(fw, (list, tuple)) and fw else str(fw)
+        for fw in _framework_top[:6]
+    ]
+    _detected_summary = (
+        f"Nel vault ho gia rilevato: {', '.join(_detected_frameworks_names)}."
+        if _detected_frameworks_names
+        else ""
     )
-    setup_result = await execute_skill(
-        "os-setup",
-        vault_root=vault_root,
-        context=base_context,
-        on_event=_setup_event_capture,
+
+    # Q1 deterministica: presentazione + widget "Come ti chiami?"
+    q1_widget_json = (
+        '{"question":"Come ti chiami? Indica nome e cognome.",'
+        '"options":[{"value":"free_text",'
+        '"label":"Scrivi nel campo qui sotto",'
+        '"description":"Esempio: Mario Rossi"}]}'
     )
-    logger.info(
-        "auto_trigger.skill_executed",
-        name="os-setup",
-        vault_id=vault_id,
-        conv_id=conv_id,
-        success=setup_result.success,
-        events_count=setup_result.events_count,
-        text_length=len(setup_result.assistant_text or ""),
+    setup_text = (
+        f"Hai visto il report del vault. "
+        f"{_detected_summary}\n\n"
+        f"Per personalizzare l'agente ti faccio 10 domande veloci. "
+        f"Una alla volta.\n\n"
+        f"### 1/10 — Chi sei\n\n"
+        f"<ASK_USER_QUESTION>{q1_widget_json}</ASK_USER_QUESTION>"
     )
 
-    setup_text = setup_result.assistant_text or "".join(setup_chunks)
-    if setup_text:
-        try:
-            await store.append_message(
-                conversation_id=conv_id,
-                role="assistant",
-                content=setup_text,
-                tool_calls=[
-                    {
-                        "kind": "skill_invocation",
-                        "skill_name": setup_result.skill_name,
-                        "success": setup_result.success,
-                        "events_count": setup_result.events_count,
-                    }
-                ],
-            )
-        except Exception as exc:
-            logger.exception(
-                "skills.auto_trigger.os_setup_persist_failed",
-                conv_id=conv_id,
-                error=str(exc),
-            )
-
-    if not setup_result.success:
-        logger.warning(
-            "skills.auto_trigger.os_setup_failed",
-            conv_id=conv_id,
-            error=setup_result.error_message,
+    try:
+        await store.append_message(
+            conversation_id=conv_id,
+            role="assistant",
+            content=setup_text,
+            tool_calls=[
+                {
+                    "kind": "skill_invocation",
+                    "skill_name": "os-setup",
+                    "success": True,
+                    "deterministic_q1": True,
+                    "step": "1/10",
+                }
+            ],
         )
-        # Non interrompiamo: anche se os-setup fallisce, vogliamo eseguire
-        # os-ottimizzatore (audit struttura e' indipendente dal profilo).
+        logger.info(
+            "auto_trigger.q1_emitted_deterministic",
+            conv_id=conv_id,
+            vault_id=vault_id,
+            content_len=len(setup_text),
+            detected_frameworks_count=len(_detected_frameworks_names),
+        )
+    except Exception as exc:
+        logger.exception(
+            "skills.auto_trigger.q1_persist_failed",
+            conv_id=conv_id,
+            error=str(exc),
+        )
+
+    # NB v0.10.0: l'execute_skill('os-setup') NON viene piu' chiamato qui al
+    # primo turno. La skill resta attiva (conversation.active_skill='os-setup')
+    # e il chat_routes propaghera' il body SKILL.md al system prompt nei turni
+    # successivi, dove il LLM gestira' Q2..Q10 + chiusura "Profilo registrato:".
+    # Conv. 47 SSOT: una sola sorgente per la transizione di stato (chat handler).
+    setup_result = type("SetupResultStub", (), {"success": True, "skill_name": "os-setup"})()
 
     # 4. Emit evento post-setup (per future skill che vogliano subscribe).
     bus = EventBus.instance()

@@ -22,7 +22,9 @@ import { cn } from "@/lib/cn";
 
 // Fallback version se backend /health non risponde. Conv. 47 enforcement:
 // fonte autoritativa = backend_version da GET /health (vedi useBackendVersion hook).
-const APP_VERSION_FALLBACK = "0.8.2";
+// v0.10.0: import diretto da package.json via Vite define __APP_VERSION__.
+const APP_VERSION_FALLBACK =
+  (typeof __APP_VERSION__ !== "undefined" && __APP_VERSION__) || "0.11.0";
 
 interface NavItem {
   to: string;

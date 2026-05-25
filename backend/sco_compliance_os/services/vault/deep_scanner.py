@@ -35,16 +35,22 @@ render leggibile dal chat agent.
 
 from __future__ import annotations
 
-import logging
 import re
 import time
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from sco_compliance_os.core.logging_setup import get_logger
+
 from .parser import parse_vault_file
 
-logger = logging.getLogger(__name__)
+# v0.10.0 fix: era stdlib logging.getLogger ma le chiamate logger.info(...,
+# kwarg=val) seguono lo stile structlog. Mismatch API causava TypeError
+# "Logger._log() got an unexpected keyword argument 'vault_path'" al fine scan.
+# Pattern Conv. 44 lesson 1: niente catch generic mascherante; pattern Conv. 45
+# lesson 2: stessa API ovunque per evitare confusione.
+logger = get_logger(__name__)
 
 
 # ----- Costanti di scan -----

@@ -31,6 +31,10 @@ export interface InlineAskPayload {
   question: string;
   /** Opzioni cliccabili. */
   options: InlineAskOption[];
+  /** v0.11.0: se true, l'utente puo' selezionare piu' opzioni + invia con bottone. */
+  multi_select?: boolean;
+  /** v0.11.0: se true, accetta input free-text oltre alle opzioni (campo "Altro"). */
+  allow_free_text?: boolean;
 }
 
 /** Payload tool call inline. */
@@ -240,5 +244,18 @@ function normalizeAskPayload(raw: unknown): InlineAskPayload | null {
 
   if (options.length === 0) return null;
 
-  return { question, options };
+  // v0.11.0: propaga multi_select + allow_free_text dal payload backend.
+  const multi_select = obj.multi_select === true;
+  // Auto-detect "Altro" → abilita free text input automatico se opzione con
+  // value="altro" presente, OR se backend dichiara allow_free_text esplicito.
+  const has_altro_option = options.some(
+    (o) =>
+      o.value.toLowerCase() === "altro" ||
+      o.value.toLowerCase() === "free_text" ||
+      o.value.toLowerCase() === "other",
+  );
+  const allow_free_text =
+    obj.allow_free_text === true || has_altro_option;
+
+  return { question, options, multi_select, allow_free_text };
 }

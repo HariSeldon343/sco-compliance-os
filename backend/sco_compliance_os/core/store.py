@@ -57,7 +57,13 @@ def _utc_now() -> datetime:
 
 
 class Conversation(Base):
-    """Conversation = thread di messaggi tra utente e agente."""
+    """Conversation = thread di messaggi tra utente e agente.
+
+    Pattern Conv. 48 SINGLE SOURCE OF TRUTH per stato widget post-streaming.
+    Pattern v0.9.0: ``active_skill`` + ``active_skill_step`` propagati dal
+    subscriber ``handle_vault_registered`` al chat handler per mantenere il
+    SKILL.md body nel system prompt finche' la skill non e' completata.
+    """
 
     __tablename__ = "conversations"
 
@@ -65,6 +71,12 @@ class Conversation(Base):
     title: Mapped[str] = mapped_column(String(200), default="Nuova conversazione")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now, onupdate=_utc_now)
+
+    # v0.9.0 multi-turn skill: nome skill attiva nella conversation (es. "os-setup").
+    # Quando None la conversation usa il system prompt default.
+    active_skill: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Counter step skill (es. 3/10 per os-setup). Best-effort, non strict.
+    active_skill_step: Mapped[int | None] = mapped_column(nullable=True)
 
     messages: Mapped[list[Message]] = relationship(
         back_populates="conversation",
@@ -118,6 +130,9 @@ class Store:
             # Migrazioni idempotenti — pattern già adottato in sco-agent-local
             await self._safe_add_column(conn, "messages", "ask_user_question_json", "TEXT")
             await self._safe_add_column(conn, "messages", "tool_calls_json", "TEXT")
+            # v0.9.0 multi-turn skill: active_skill + counter step
+            await self._safe_add_column(conn, "conversations", "active_skill", "VARCHAR(64)")
+            await self._safe_add_column(conn, "conversations", "active_skill_step", "INTEGER")
         logger.info("store.schema.initialized", url=self._url)
 
     @staticmethod
@@ -195,6 +210,27 @@ class Store:
             )
             result = await sess.execute(stmt)
             return list(result.scalars().all())
+
+    async def set_active_skill(
+        self,
+        conversation_id: str,
+        skill_name: str | None,
+        step: int | None = None,
+    ) -> None:
+        """Set/clear active_skill + step. v0.9.0 multi-turn skill flow.
+
+        Pattern: il subscriber handle_vault_registered chiama set_active_skill(
+        conv_id, "os-setup", 0) appena dopo create_conversation. Quando l'utente
+        risponde alla 10ª domanda (matching "Profilo salvato" nel testo
+        assistant), il chat handler chiama set_active_skill(conv_id, None).
+        """
+        async with self.session() as sess:
+            conv = await sess.get(Conversation, conversation_id)
+            if conv is None:
+                return
+            conv.active_skill = skill_name
+            conv.active_skill_step = step
+            await sess.commit()
 
     async def close(self) -> None:
         await self._engine.dispose()

@@ -18,7 +18,11 @@ import { useChatStore, useChatModeStore, type ChatMode } from "@/store/chat-stor
 import { cn } from "@/lib/cn";
 import { MicButton } from "@/components/voice/MicButton";
 
-const MAX_CHARS = 8000;
+// v0.11.0: rimosso hard cap 8000 char. Anthropic API supporta fino a ~200k
+// token input + il prompt caching nel proxy SaaS ammortizza messaggi lunghi.
+// Mantengo MAX_CHARS solo come WARN soft (display contatore in rosso oltre).
+const MAX_CHARS = Number.POSITIVE_INFINITY;
+const SOFT_WARN_CHARS = 32000;
 
 interface ModeConfig {
   value: ChatMode;
@@ -133,7 +137,7 @@ export function ChatInput() {
         {/* Composer container arrotondato 2xl con focus ring blu */}
         <div
           className={cn(
-            "flex flex-col overflow-hidden rounded-2xl border bg-sco-surface-elevated shadow-sm transition-all duration-150 focus-within:border-sco-blue focus-within:shadow-md focus-within:ring-2 focus-within:ring-sco-blue/20",
+            "flex flex-col overflow-visible rounded-2xl border bg-sco-surface-elevated shadow-sm transition-all duration-150 focus-within:border-sco-blue focus-within:shadow-md focus-within:ring-2 focus-within:ring-sco-blue/20",
             overLimit ? "border-red-500" : "border-sco-border",
           )}
         >
@@ -287,13 +291,18 @@ export function ChatInput() {
               <span
                 className={cn(
                   "text-[11px] tabular-nums",
-                  overLimit
-                    ? "font-semibold text-red-500"
+                  charCount > SOFT_WARN_CHARS
+                    ? "font-semibold text-amber-500"
                     : "text-sco-muted-foreground",
                 )}
                 aria-live="polite"
+                title={
+                  charCount > SOFT_WARN_CHARS
+                    ? `Messaggio molto lungo (${charCount} caratteri) — l'agente potrebbe richiedere piu' tempo`
+                    : ""
+                }
               >
-                {charCount}/{MAX_CHARS}
+                {charCount > 0 ? `${charCount.toLocaleString("it-IT")} caratteri` : ""}
               </span>
               {/* Microfono push-to-talk (visibile solo se sttEnabled in Settings).
                   Hotkey globale Ctrl+Shift+Space gestito internamente. */}

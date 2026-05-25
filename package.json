@@ -1,6 +1,6 @@
 {
   "name": "sco-compliance-os",
-  "version": "0.7.3",
+  "version": "0.11.0",
   "private": true,
   "description": "SCO Compliance OS — Compliance OS for AI. Proprietario SCO Solution Consulting srls.",
   "author": "SCO Solution Consulting srls",
@@ -17,7 +17,8 @@
     "dev:all": "powershell -ExecutionPolicy Bypass -File scripts/dev.ps1",
     "build": "pnpm --filter frontend build",
     "build:backend": "powershell -ExecutionPolicy Bypass -File scripts/build-backend.ps1",
-    "build:msi": "pnpm build:backend && pnpm --filter frontend tauri build --bundles msi",
+    "build:msi": "pnpm build:backend && pnpm --filter frontend tauri build --bundles msi && powershell -ExecutionPolicy Bypass -File scripts/copy-msi-to-kdrive.ps1",
+    "build:msi:no-copy": "pnpm build:backend && pnpm --filter frontend tauri build --bundles msi",
     "build:dmg": "pnpm build:backend && pnpm --filter frontend tauri build --bundles dmg",
     "build:appimage": "pnpm build:backend && pnpm --filter frontend tauri build --bundles appimage",
     "test": "pnpm --recursive --if-present test",

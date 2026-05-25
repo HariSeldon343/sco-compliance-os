@@ -109,7 +109,7 @@ Esempio template payload (adattalo ai dati del deep scan):
 ### 9/10 — Stile preferito documenti
 
 ```
-<ASK_USER_QUESTION>{"question":"Quale stile preferisci per i documenti generati dall'agente?","options":[{"value":"amodeo-formale","label":"Tono Amodeo formale","description":"Italiano consulenziale, frasi corte, riferimenti normativi puntuali, virgolette dritte"},{"value":"neutro-tecnico","label":"Neutro tecnico","description":"Linguaggio tecnico standard, terminologia ISO/normativa"},{"value":"divulgativo","label":"Divulgativo","description":"Spiegazioni accessibili anche a non addetti ai lavori"}]}</ASK_USER_QUESTION>
+<ASK_USER_QUESTION>{"question":"Quale stile preferisci per i documenti generati dall'agente?","options":[{"value":"consulenziale-formale","label":"Tono consulenziale formale","description":"Italiano professionale, frasi corte, riferimenti normativi puntuali, virgolette dritte"},{"value":"neutro-tecnico","label":"Neutro tecnico","description":"Linguaggio tecnico standard, terminologia ISO/normativa"},{"value":"divulgativo","label":"Divulgativo","description":"Spiegazioni accessibili anche a non addetti ai lavori"}]}</ASK_USER_QUESTION>
 ```
 
 ### 10/10 — Mascot animato e voce

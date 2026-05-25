@@ -258,10 +258,68 @@ async def chat_stream(
             yield f"data: {json.dumps({'kind': 'error', 'data': {'message': str(exc)}})}\n\n"
             return
 
+        # v0.9.0 multi-turn skill fix:
+        # 1. Carico la history completa della conversation per passarla al LLM
+        #    (prima si passava solo il messaggio corrente, rendendo impossibile
+        #    qualsiasi flow conversazionale tipo le 10 domande di os-setup).
+        # 2. Se la conversation ha ``active_skill`` set, prepende il body SKILL.md
+        #    al system prompt cosi' il modello mantiene il flow turn-by-turn.
+        # 3. Detect completamento skill (matching "Profilo registrato:" in
+        #    text_delta accumulato) per clear active_skill a fine flow.
+        skill_body_prepend = ""
+        if conv.active_skill:
+            try:
+                from sco_compliance_os.services.skills.loader import get_skill
+
+                skill_meta = get_skill(conv.active_skill, vault_root=None)
+                if skill_meta is not None:
+                    skill_body_prepend = (
+                        f"# Skill attiva: {skill_meta.name}\n\n"
+                        f"{skill_meta.load_body()}\n\n"
+                        "---\n\n"
+                    )
+                    logger.info(
+                        "chat_stream.skill_body_prepended",
+                        skill_name=conv.active_skill,
+                        skill_step=conv.active_skill_step,
+                        body_len=len(skill_body_prepend),
+                    )
+            except Exception as exc:
+                logger.warning(
+                    "chat_stream.skill_body_load_failed",
+                    skill_name=conv.active_skill,
+                    error=str(exc),
+                )
+
+        if skill_body_prepend:
+            effective_system_prompt = f"{skill_body_prepend}{effective_system_prompt}"
+
         try:
-            messages_list: list[dict[str, Any]] = [
-                {"role": "user", "content": payload.message}
-            ]
+            # Carico history piena della conversation dal DB e la passo al LLM
+            # come messages array. Pattern Conv. 48 + multi-turn skill flow.
+            history_msgs = await store.list_messages(payload.conversation_id)
+            messages_list: list[dict[str, Any]] = []
+            for hm in history_msgs:
+                # Skippa eventuali messaggi tool/system, mantieni solo user+assistant.
+                if hm.role not in ("user", "assistant"):
+                    continue
+                # Se il content e' vuoto (placeholder), salta.
+                if not hm.content or not hm.content.strip():
+                    continue
+                messages_list.append({"role": hm.role, "content": hm.content})
+
+            # Assicurati che l'ultimo messaggio sia quello user appena persistito.
+            # In caso di append_message duplicato (rare), filtra.
+            if not messages_list or messages_list[-1].get("role") != "user":
+                messages_list.append({"role": "user", "content": payload.message})
+
+            logger.info(
+                "chat_stream.history_loaded",
+                conversation_id=payload.conversation_id,
+                history_count=len(messages_list),
+                active_skill=conv.active_skill,
+            )
+
             async for ev in provider.stream(
                 messages=messages_list,
                 model=resolved_model,
@@ -294,13 +352,49 @@ async def chat_stream(
             yield f"data: {json.dumps({'kind': 'error', 'data': {'message': str(exc)}})}\n\n"
         finally:
             # Persisti messaggio assistant con stato widget Conv. 48
+            final_text = "".join(assistant_text_buf)
             assistant_msg = await store.append_message(
                 conversation_id=payload.conversation_id,
                 role="assistant",
-                content="".join(assistant_text_buf),
+                content=final_text,
                 ask_user_question=ask_user_question_payload,
                 tool_calls=tool_calls_buf or None,
             )
+
+            # v0.9.0 multi-turn skill: detect skill completion + auto-advance step.
+            # Pattern: se la skill os-setup emette riepilogo finale "Profilo
+            # registrato:" o "Profilo salvato", clear active_skill. Altrimenti
+            # increment step counter.
+            if conv.active_skill:
+                try:
+                    completion_markers = (
+                        "Profilo registrato:",
+                        "Profilo salvato. Procedo",
+                        "Onboarding saltato",
+                    )
+                    is_completed = any(m in final_text for m in completion_markers)
+                    if is_completed:
+                        await store.set_active_skill(
+                            payload.conversation_id, None, None
+                        )
+                        logger.info(
+                            "chat_stream.skill_completed",
+                            conversation_id=payload.conversation_id,
+                            skill_name=conv.active_skill,
+                            final_step=conv.active_skill_step,
+                        )
+                    else:
+                        next_step = (conv.active_skill_step or 0) + 1
+                        await store.set_active_skill(
+                            payload.conversation_id,
+                            conv.active_skill,
+                            next_step,
+                        )
+                except Exception as exc:
+                    logger.warning(
+                        "chat_stream.skill_step_update_failed",
+                        error=str(exc),
+                    )
 
             # v0.8.1 hook proposta ingest wiki: analizza il contenuto + tool_calls
             # web_search per detectare allegati / URL / search results candidati

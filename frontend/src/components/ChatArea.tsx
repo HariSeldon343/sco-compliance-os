@@ -83,14 +83,14 @@ export function ChatArea() {
   if (!activeId || messages.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center overflow-y-auto px-6 py-12">
-        <div className="flex w-full max-w-3xl flex-col items-center text-center">
-          {/* Logo accento decorativo (sfumatura discreta) */}
-          <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-sco-navy via-sco-blue to-sco-amber shadow-lg">
+        <div className="flex w-full max-w-3xl flex-col items-center text-center animate-fade-up">
+          {/* Logo accento decorativo (sfumatura discreta) con glow pulse */}
+          <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-sco-navy via-sco-blue to-sco-amber shadow-lg animate-glow-pulse">
             <span className="text-2xl font-bold text-white">S</span>
           </div>
 
           {/* Titolo grande stile Claude Desktop */}
-          <h1 className="text-3xl font-semibold tracking-tight text-sco-text dark:text-sco-text-dark md:text-4xl">
+          <h1 className="font-display text-3xl font-semibold tracking-tight text-sco-text dark:text-sco-text-dark md:text-4xl">
             Cosa lavoriamo oggi?
           </h1>
           <p className="mt-3 max-w-xl text-sm leading-relaxed text-sco-muted-foreground md:text-base">
@@ -108,7 +108,7 @@ export function ChatArea() {
                   key={s.title}
                   type="button"
                   onClick={() => sendMessage(s.prompt)}
-                  className="group relative flex items-start gap-3 overflow-hidden rounded-xl border border-sco-border bg-sco-surface-elevated p-4 text-left transition-all duration-150 hover:border-sco-blue/60 hover:shadow-md"
+                  className="group relative flex items-start gap-3 overflow-hidden rounded-xl border border-sco-border bg-sco-surface-elevated p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-sco-blue/60 hover:shadow-medium"
                 >
                   <div
                     className={cn(
@@ -204,16 +204,16 @@ function MessageBubble({ message }: MessageBubbleProps) {
   return (
     <div
       className={cn(
-        "flex",
+        "flex animate-fade-up",
         isUser ? "justify-end" : "justify-start",
       )}
     >
       <div
         className={cn(
-          "rounded-2xl px-4 py-3 text-sm shadow-sm",
+          "rounded-2xl px-4 py-3 text-sm shadow-sm transition-shadow duration-200",
           isUser
-            ? "max-w-[80%] bg-sco-navy text-white"
-            : "max-w-[85%] border border-sco-border bg-sco-surface-elevated text-sco-text dark:text-sco-text-dark",
+            ? "max-w-[80%] bg-sco-navy text-white hover:shadow-md"
+            : "max-w-[85%] border border-sco-border bg-sco-surface-elevated text-sco-text hover:shadow-md dark:text-sco-text-dark",
         )}
       >
         {/* Markdown body: user = plain text whitespace-pre, agent = segmenti misti */}
