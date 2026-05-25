@@ -41,6 +41,7 @@ const config: Config = {
         "prose-wide": "75ch",
       },
       // Keyframes fallback (sono già in @theme inline; qui per compat IDE/JIT)
+      // v0.13.0 PSI: aggiunti shine + ripple + skeleton + sparkle + char-reveal
       keyframes: {
         "pulse-soft": {
           "0%, 100%": { opacity: "0.4" },
@@ -82,6 +83,45 @@ const config: Config = {
           from: { transform: "translateX(0)" },
           to: { transform: "translateX(-50%)" },
         },
+        // v0.13.0 PSI new keyframes
+        "shine-sweep": {
+          // Sweep gradient overlay sinistra→destra per hover effect su button/card
+          "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(100%)" },
+        },
+        "ripple-tap": {
+          // Ripple expansion + fade per tap/click microinteraction
+          "0%": { transform: "scale(0)", opacity: "0.5" },
+          "100%": { transform: "scale(2.5)", opacity: "0" },
+        },
+        "skeleton-pulse": {
+          // Skeleton loader pulse (alternativa a shimmer per loading states)
+          "0%, 100%": { opacity: "0.4" },
+          "50%": { opacity: "0.7" },
+        },
+        sparkle: {
+          // Sparkle rotation + scale + fade per success/celebration effects
+          "0%, 100%": { opacity: "0", transform: "scale(0.3) rotate(0deg)" },
+          "20%": { opacity: "0.9", transform: "scale(1.2) rotate(45deg)" },
+          "60%": { opacity: "0.7", transform: "scale(1) rotate(180deg)" },
+          "80%": { opacity: "0.4", transform: "scale(0.8) rotate(270deg)" },
+        },
+        "char-reveal": {
+          // Char-by-char reveal letter del title hero (alternativa Framer Motion)
+          from: { opacity: "0", transform: "translateY(12px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "scale-bounce": {
+          // Scale bounce overshoot per success toast / celebrating microinteraction
+          "0%": { transform: "scale(0.6)", opacity: "0" },
+          "55%": { transform: "scale(1.08)", opacity: "1" },
+          "100%": { transform: "scale(1)", opacity: "1" },
+        },
+        "dot-wave": {
+          // Wave per ThinkingIndicator dots (alternativa Framer Motion)
+          "0%, 60%, 100%": { transform: "translateY(0)", opacity: "0.45" },
+          "30%": { transform: "translateY(-4px)", opacity: "1" },
+        },
       },
       animation: {
         "pulse-soft": "pulse-soft 1.4s ease-in-out infinite",
@@ -94,6 +134,15 @@ const config: Config = {
         "glow-pulse": "glow-pulse 2.8s cubic-bezier(0.4, 0, 0.6, 1) infinite",
         float: "float 4.2s ease-in-out infinite",
         ticker: "ticker 24s linear infinite",
+        // v0.13.0 PSI new animation utilities
+        "shine-sweep": "shine-sweep 700ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "ripple-tap": "ripple-tap 600ms ease-out",
+        "skeleton-pulse": "skeleton-pulse 1.6s ease-in-out infinite",
+        sparkle: "sparkle 1.6s ease-in-out infinite",
+        "char-reveal": "char-reveal 400ms cubic-bezier(0.16, 1, 0.3, 1) both",
+        "scale-bounce":
+          "scale-bounce 480ms cubic-bezier(0.34, 1.56, 0.64, 1) both",
+        "dot-wave": "dot-wave 1.4s ease-in-out infinite",
       },
     },
   },

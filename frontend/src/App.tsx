@@ -9,11 +9,16 @@
 // - useDefaultCommands() registra comandi navigation + theme + chat
 // - Layout switch sidebar/bottom-tab via useLayoutStore
 //
+// v0.13.0 PSI:
+// - Page transitions: AnimatePresence wrapper su <Outlet /> con fade+slide-up
+// - key = location.pathname per re-mount animato a ogni navigation
+//
 // Sequenza onboarding (gestita da AuthGate, vedi components/AuthGate.tsx):
 //   License → EULA → Privacy → Demo → Vault picker REALE → Tutorial → Chat (ready)
 
 import { useEffect } from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
 
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
@@ -30,6 +35,7 @@ export default function App() {
   const theme = useThemeStore((s) => s.theme);
   const applyTheme = useThemeStore((s) => s.applyTheme);
   const layoutMode = useLayoutStore((s) => s.mode);
+  const location = useLocation();
 
   // Sync classe `dark` su <html> all'avvio + ai cambi di tema
   useEffect(() => {
@@ -68,7 +74,25 @@ export default function App() {
           <Header />
 
           <main className="flex-1 overflow-hidden">
-            <Outlet />
+            {/* Page transitions v0.13.0 PSI: AnimatePresence con mode="wait"
+                attende che la route uscente completi exit prima di entrare
+                la nuova. key = pathname garantisce re-mount per ciascuna
+                route. Subtle fade+slide-up 240ms ease-out-expo. */}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={location.pathname}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{
+                  duration: 0.24,
+                  ease: [0.16, 1, 0.3, 1],
+                }}
+                className="h-full"
+              >
+                <Outlet />
+              </motion.div>
+            </AnimatePresence>
           </main>
         </div>
 

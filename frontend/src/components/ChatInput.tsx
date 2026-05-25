@@ -1,7 +1,9 @@
 // SCO Compliance OS — input bottom polished: textarea arrotondata + attachments + mode dropdown
 // Mode dropdown ora persistito nello store chatMode (Conv. 47 single source of truth).
 // Le descrizioni sono in linguaggio semplice (regola 14/05).
+// v0.13.0 PSI: send button con shine ripple effect + Framer Motion whileTap microinteraction.
 import { useRef, useState, type KeyboardEvent, type ChangeEvent } from "react";
+import { motion } from "framer-motion";
 import {
   Send,
   Paperclip,
@@ -310,12 +312,15 @@ export function ChatInput() {
                 onTranscript={handleTranscript}
                 disabled={isStreaming}
               />
-              <button
+              <motion.button
                 type="button"
                 onClick={handleSend}
                 disabled={!canSend}
+                whileHover={canSend ? { scale: 1.05 } : undefined}
+                whileTap={canSend ? { scale: 0.92 } : undefined}
+                transition={{ duration: 0.12, ease: "easeOut" }}
                 className={cn(
-                  "flex h-8 w-8 items-center justify-center rounded-lg transition-all duration-150",
+                  "relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg transition-colors duration-150",
                   canSend
                     ? "bg-sco-blue text-white shadow-sm hover:bg-sco-navy hover:shadow"
                     : "cursor-not-allowed bg-sco-muted text-sco-muted-foreground",
@@ -323,8 +328,15 @@ export function ChatInput() {
                 title="Invia (Invio)"
                 aria-label="Invia messaggio"
               >
-                <Send size={14} />
-              </button>
+                {/* Shine ripple overlay sweep on hover when canSend */}
+                {canSend && (
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-500 ease-out hover:translate-x-full"
+                  />
+                )}
+                <Send size={14} className="relative" />
+              </motion.button>
             </div>
           </div>
         </div>

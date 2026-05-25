@@ -1,4 +1,4 @@
-﻿---
+---
 name: clonatore-stile-docx
 description: 'Clona lo stile editoriale completo di un documento Word di riferimento (font, paragrafi, stili nominati, sezioni, margini, header/footer con immagini) per produrre un nuovo .docx con contenuto diverso ma identica veste grafica. Usa SEMPRE quando l''utente fornisce un file .docx come "riferimento di stile" e chiede di produrre un nuovo documento che ne mantenga layout, formattazione, intestazioni e piè di pagina. Triggera anche per "clona stile docx", "stessa formattazione di questo documento", "usa questo come modello di stile", "mantieni layout e header", "/clona-stile", "/clona-docx", "stessa veste grafica del documento allegato". La skill applica una strategia di "template + body replacement": preserva al 100% header, footer, immagini, sezioni e stili del riferimento, sostituendo solo il contenuto del corpo. Pone tre domande Q&A essenziali prima di generare l''output: (1) font, (2) aggiornamento header/footer, (3) segnaposto da sostituire. Compatibile con stile consulente normativo per la redazione del contenuto.'
 ---

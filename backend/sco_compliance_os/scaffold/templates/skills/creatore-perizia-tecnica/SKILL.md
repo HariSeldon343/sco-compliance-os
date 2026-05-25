@@ -1,4 +1,4 @@
-﻿---
+---
 name: creatore-perizia-tecnica
 description: "Crea perizie tecniche e relazioni di consulenza tecnica in piena forma peritale (frontespizio, indice con numeri di pagina, premessa e quesito, documentazione esaminata, accertamenti, conclusioni con risposta al quesito, riferimenti normativi), nello stile di il consulente normativo. Multi-dominio: cybersecurity, digital forensics, compliance e GDPR, sanita, antincendio, qualita, sicurezza sul lavoro. Supporta la modalita white-label, ossia documento a firma del cliente o committente senza alcun riferimento a SCO, consulente normativo o Fortibyte nel testo e nei metadati. Usa SEMPRE quando l'utente chiede di redigere una perizia, una relazione peritale, una relazione di consulenza tecnica (di parte o simil-CTU), una nota tecnico-difensiva strutturata, oppure di mettere un contenuto in forma di perizia. Triggera anche per: scrivi una perizia, perizia tecnica, relazione peritale, relazione di consulenza tecnica, perizia di parte, consulenza tecnica di parte, CTP, perizia forense, metti in forma di perizia, creatore perizia, /perizia."
 ---

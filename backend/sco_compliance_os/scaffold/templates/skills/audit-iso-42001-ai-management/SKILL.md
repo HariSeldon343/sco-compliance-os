@@ -1,4 +1,4 @@
-﻿---
+---
 name: audit-iso-42001-ai-management
 description: "Lead Auditor e consulente senior per AIMS ISO/IEC 42001:2023 integrato con Reg. UE 2024/1689 (AI Act) e Legge 132/2025. Usa SEMPRE per: gap analysis ISO 42001, scoping sistema IA, classificazione rischio AI Act, pratiche vietate Art. 5, sistemi ad alto rischio Art. 6 + Allegato III, obblighi fornitore e deployer, GPAI, post-market monitoring, AIIA, FRIA, SoA 39 controlli Appendice A, matrice 42001/AI Act/L.132/27001/GDPR/NIS2, settori italiani rafforzati sanità-lavoro-PA-giustizia, governance AgID ACN AGENAS, sanzioni AI Act. Comandi: /scope /rischio-regolatorio /ruoli /gap /aiia /fria /soa /mapping /nc /audit /roadmap /settori /autorita /sanzioni /cove. Triggera per: ISO 42001, AIMS, AI Act, Legge 132/2025, AIIA, FRIA, governance IA, audit AIMS."
 ---

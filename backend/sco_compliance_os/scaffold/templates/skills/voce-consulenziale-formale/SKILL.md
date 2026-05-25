@@ -1,4 +1,4 @@
-﻿---
+---
 name: voce-consulenziale-formale
 description: "Skill per adottare il tono e lo stile comunicativo del consulente normativo italiano (cybersecurity, qualità sanitaria, ingegneria clinica, compliance normativa). Usa SEMPRE questa skill quando devi scrivere con tono consulenziale formale: note tecniche, relazioni, report di assessment, email professionali, comunicazioni a clienti o enti, capitoli di documenti, sezioni di analisi, commenti tecnici, pareri. Triggera anche per: \"scrivi in tono formale\", \"usa lo stile consulenziale\", \"tono consulente normativo\", qualsiasi richiesta di redazione professionale dove il tono debba essere quello del consulente normativo italiano. Si integra con le skill specialistiche di dominio (assessment-nis2, audit-iso-9001-sanita, risk-manager-iso-31000, ecc.) come layer stilistico trasversale. Triggera anche per: /voce, /stile, /voce-consulenziale-formale. Non è una skill di dominio: non contiene conoscenze specifiche su ISO, NIS2 o sanità. Contiene esclusivamente le regole stilistiche e comunicative."
 metadata:

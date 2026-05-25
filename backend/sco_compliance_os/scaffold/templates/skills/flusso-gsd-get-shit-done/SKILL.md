@@ -1,4 +1,4 @@
-﻿---
+---
 name: flusso-gsd-get-shit-done
 description: "Flusso di lavoro GSD (Get Shit Done) adattato al vault di il consulente normativo: esecuzione disciplinata a fasi di OGNI cantiere non banale - inquadramento e roadmap, plan di fase, esecuzione, verifica con gate, chiusura milestone e retrospettiva. Usa SEMPRE come cornice operativa per task multi-step: perizie, gap analysis, pacchetti documentali, audit, progetti, sviluppo app, qualsiasi lavoro con piu passi. Triggera per: /gsd, gsd, get shit done, flusso di lavoro, imposta il cantiere, roadmap, fasi, plan-execute-verify, retrospettiva, milestone. Si integra con tutte le regole permanenti del vault (GOAL, VERIFY-OR-REDO, ASK-USER, multi-agent on-demand, QI190, tracciatura Conv. 41, smoke Conv. 46)."
 ---

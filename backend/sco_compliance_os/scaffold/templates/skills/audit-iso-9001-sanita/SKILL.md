@@ -1,4 +1,4 @@
-﻿---
+---
 name: audit-iso-9001-sanita
 description: "Lead Auditor e consulente ISO 9001:2015 per il settore sanitario italiano. Usa SEMPRE per: audit ISO 9001 sanità, SGQ sanitario, accreditamento istituzionale, procedure/protocolli/istruzioni operative, manuali qualità, carte servizi, PDTA, checklist audit, risk management clinico, gap analysis, NC/SM, KPI sanitari, riesame direzione, ricerca linee guida SNLG, /rve /pdv /nc /sm /checklist /procedura /protocollo /istruzione /politica /mappa-processi /indicatori /riesame /risk /gap /audit-clinico /linee-guida /cove. Triggera per: DPR 14/1/1997, DM 70/2015, L.24/2017 Gelli-Bianco, PNE, ECM, UNI EN 15224, accreditamento regionale, clinical governance, incident reporting, eventi sentinella, cartella clinica, blocco operatorio, sterilizzazione, ICA, SNLG, società scientifiche ISS. Copre qualità, audit, documentazione e linee guida per ospedali, case di cura, RSA, poliambulatori, laboratori e strutture sanitarie italiane."
 ---

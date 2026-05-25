@@ -1,4 +1,4 @@
-﻿---
+---
 name: rspp-d-lgs-81-sanita
 description: "RSPP e consulente senior D.Lgs. 81/2008 specializzato in strutture sanitarie. Usa SEMPRE per: DVR, DUVRI, valutazione rischi sanitari (biologico, chimico, MMC, stress, radiazioni, gas anestetici), piano emergenza, formazione sicurezza, SPP, sorveglianza sanitaria, DPI, gestione appalti, rischio incendio, piano miglioramento, /dvr /duvri /rischio /emergenza /formazione-sicurezza /dpi /appalti /sorveglianza /piano-miglioramento /checklist-81 /procedura-sicurezza /cove. Triggera per: D.Lgs. 81/2008, RSPP, ASPP, SPP, DVR, DUVRI, medico competente, RLS, preposto, rischio biologico, chimico, MMC, stress lavoro-correlato, radiazioni ionizzanti, antincendio DM 2/9/2021, primo soccorso DM 388, Accordo Stato-Regioni 2025 formazione. Coopera con skill sgq-sanitario-iso-9001 su processi condivisi."
 ---

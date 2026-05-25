@@ -1,4 +1,4 @@
-﻿---
+---
 name: sgi-sanitario-sicurezza-iso-45001
 description: "Consulente senior integrato Qualità ISO 9001:2015 + Sicurezza D.Lgs. 81/2008 per strutture sanitarie italiane. Usa SEMPRE per: SGQ sanitario, DVR, DUVRI, valutazione rischi specifici (biologico, chimico, MMC, stress, radiazioni, incendio, aggressioni), procedure/protocolli/istruzioni/manuali/PDTA/piani emergenza, mappatura processi, KPI, riesame direzione, riunione periodica art.35, risk assessment clinico e lavoristico, gap analysis accreditamento, formazione sicurezza Accordo SR 2025, sorveglianza sanitaria, DPI, gestione appalti, SNLG. Comandi: /procedura /protocollo /istruzione /politica /manuale /mappa-processi /indicatori /riesame /risk /gap /pdta /dvr /duvri /rischio /emergenza /formazione-sicurezza /dpi /appalti /sorveglianza /checklist-81 /procedura-sicurezza /riunione-periodica /cove. Triggera per: ISO 9001 sanità, accreditamento, Gelli-Bianco, risk management clinico, SNLG, D.Lgs. 81/2008, RSPP, DVR, rischio biologico/chimico/MMC/stress, radiazioni ionizzanti, antincendio, DPI sanitari."
 metadata:

@@ -40,22 +40,23 @@ export function MascotOverlay({ size = 160 }: MascotOverlayProps) {
 
   // Auto-update mascot state da chat events.
   // Regola di transizione:
-  //   - isStreaming true  → thinking (override solo se non listening/speaking)
+  //   - isStreaming true  → thinking (override solo se non listening/speaking/celebrating)
   //   - isStreaming false → idle (override solo se attualmente thinking)
-  // Listening e speaking restano "sticky" e devono essere reset esplicitamente
-  // dal loro publisher (futuro: mic stop, TTS playback end).
+  // Listening, speaking, celebrating restano "sticky" e devono essere reset
+  // esplicitamente dal loro publisher (mic stop, TTS playback end, celebrate
+  // timeout auto-reset via store.celebrate(durationMs)).
   useEffect(() => {
     if (!enabled) return;
     if (isStreaming) {
-      // Non sovrascrivere listening (l'utente sta parlando al mic) o speaking
-      // (il sistema sta riproducendo TTS in parallelo a un nuovo streaming —
-      // edge case raro ma ammesso). In pratica solo idle → thinking.
+      // Non sovrascrivere listening (l'utente sta parlando al mic), speaking
+      // (TTS playback in corso) o celebrating (success event in corso).
+      // In pratica solo idle → thinking.
       if (state === "idle") {
         setState("thinking");
       }
     } else {
       // Quando lo streaming finisce, torna idle se eri in thinking.
-      // Non toccare listening/speaking (devono essere reset dal publisher).
+      // Non toccare listening/speaking/celebrating (sticky, reset esplicito).
       if (state === "thinking") {
         setState("idle");
       }
@@ -74,16 +75,18 @@ export function MascotOverlay({ size = 160 }: MascotOverlayProps) {
       aria-hidden="true"
     >
       <div className="relative">
-        {/* Glow ring sottile dietro al mascot, leggermente più intenso su listening */}
+        {/* Glow ring sottile dietro al mascot, varianza per stato */}
         <div
           className={
             state === "listening"
               ? "absolute inset-0 -z-10 rounded-full bg-red-500/20 blur-2xl animate-pulse-soft"
               : state === "speaking"
                 ? "absolute inset-0 -z-10 rounded-full bg-sco-amber/20 blur-2xl animate-pulse-soft"
-                : state === "thinking"
-                  ? "absolute inset-0 -z-10 rounded-full bg-sco-blue/15 blur-2xl"
-                  : "absolute inset-0 -z-10 rounded-full bg-sco-blue/10 blur-2xl"
+                : state === "celebrating"
+                  ? "absolute inset-0 -z-10 rounded-full bg-sco-amber/30 blur-3xl animate-pulse-soft"
+                  : state === "thinking"
+                    ? "absolute inset-0 -z-10 rounded-full bg-sco-blue/15 blur-2xl"
+                    : "absolute inset-0 -z-10 rounded-full bg-sco-blue/10 blur-2xl"
           }
         />
         <MascotCharacter state={state} variant={variant} size={size} />

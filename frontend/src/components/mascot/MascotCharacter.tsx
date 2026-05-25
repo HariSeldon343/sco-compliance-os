@@ -8,11 +8,12 @@
 //   - 1 antenna SCO blu/amber con sfera apicale (rotate slow su 'thinking',
 //     pulse dot rosso al posto della sfera apicale su 'listening')
 //
-// 4 stati visuali:
-//   - idle      → float subtle ±5px su asse Y + blink occhi ogni ~4s
-//   - listening → antenna con dot rosso pulsante + occhi più aperti
-//   - thinking  → antenna in rotazione lenta 360° + bocca closed line
-//   - speaking → viseme cycle 5 shapes ogni 200ms (libero, lipsync TTS futuro)
+// 5 stati visuali:
+//   - idle        → float subtle ±5px su asse Y + blink occhi ogni ~4s
+//   - listening   → antenna con dot rosso pulsante + occhi più aperti
+//   - thinking    → antenna in rotazione lenta 360° + bocca closed line
+//   - speaking    → viseme cycle 5 shapes ogni 200ms (libero, lipsync TTS futuro)
+//   - celebrating → jump up + sparkles attorno al body + bocca smile (v0.13.0 PSI)
 //
 // Animation CSS-only via Tailwind keyframes già esistenti (animate-float,
 // animate-pulse-soft, animate-glow-pulse) + 4 keyframes locali inline (style jsx-like)
@@ -126,15 +127,33 @@ const mascotStyles = `
     0%, 100% { transform: translateY(0); }
     50% { transform: translateY(-5px); }
   }
+  /* Celebrating jump: salto -30px + atterraggio (anticipo + overshoot) v0.13.0 PSI */
+  @keyframes mascot-celebrate-jump {
+    0% { transform: translateY(0) scaleY(1); }
+    15% { transform: translateY(4px) scaleY(0.92); }
+    40% { transform: translateY(-30px) scaleY(1.06); }
+    65% { transform: translateY(-10px) scaleY(0.98); }
+    85% { transform: translateY(2px) scaleY(0.96); }
+    100% { transform: translateY(0) scaleY(1); }
+  }
+  /* Celebrating sparkle: scintille pulsanti attorno al body */
+  @keyframes mascot-sparkle {
+    0%, 100% { opacity: 0; transform: scale(0.3) rotate(0deg); }
+    20% { opacity: 0.9; transform: scale(1.2) rotate(45deg); }
+    60% { opacity: 0.7; transform: scale(1) rotate(180deg); }
+    80% { opacity: 0.4; transform: scale(0.8) rotate(270deg); }
+  }
 
   .mascot-svg { transform-origin: center; transform-box: fill-box; }
   .mascot-svg.mascot-idle { animation: mascot-idle-float 3.6s ease-in-out infinite; }
+  .mascot-svg.mascot-celebrate { animation: mascot-celebrate-jump 1.4s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
   .mascot-eye-group { transform-origin: center; transform-box: fill-box; }
   .mascot-eye-group.mascot-blink { animation: mascot-blink 4s ease-in-out infinite; }
   .mascot-antenna-stem-group { transform-origin: 100px 65px; }
   .mascot-antenna-stem-group.mascot-spin { animation: mascot-antenna-rotate 4s linear infinite; }
   .mascot-listening-dot { transform-origin: center; transform-box: fill-box; animation: mascot-listening-pulse 1.2s ease-in-out infinite; }
   .mascot-mouth-group { transform-origin: center; transform-box: fill-box; animation: mascot-viseme-tick 0.2s ease-in-out infinite; }
+  .mascot-sparkle-particle { transform-origin: center; transform-box: fill-box; animation: mascot-sparkle 1.6s ease-in-out infinite; }
 `;
 
 export const MascotCharacter: FC<MascotCharacterProps> = ({
@@ -146,15 +165,21 @@ export const MascotCharacter: FC<MascotCharacterProps> = ({
   const palette = VARIANT_PALETTE[variant];
 
   // Viseme selezionato per stato statico (non in speaking).
-  // closed = default per idle/thinking
-  // smile  = listening (più aperto, occhi più aperti, viseme cordiale)
+  // closed       = default per idle/thinking
+  // smile        = listening (più aperto, occhi più aperti, viseme cordiale)
+  // smile        = celebrating (espressione felice durante salto) v0.13.0 PSI
   // surprise / cycle vivono in speaking via keyframe steps (vedi sotto)
   const staticViseme: Viseme =
-    state === "listening" ? "smile" : state === "thinking" ? "closed" : "closed";
+    state === "listening" || state === "celebrating"
+      ? "smile"
+      : state === "thinking"
+        ? "closed"
+        : "closed";
 
-  // Occhi: dimensione baseline 8 (raggio bianco). Listening allarga a 9.5.
-  const eyeRadius = state === "listening" ? 9.5 : 8;
-  const pupilRadius = state === "listening" ? 4.5 : 3.5;
+  // Occhi: dimensione baseline 8 (raggio bianco). Listening + celebrating allargano a 9.5.
+  const eyeRadius = state === "listening" || state === "celebrating" ? 9.5 : 8;
+  const pupilRadius =
+    state === "listening" || state === "celebrating" ? 4.5 : 3.5;
 
   // Speaking → viseme cycle via animation-name dinamica (5 step ~200ms ciascuno).
   // Implementato come keyframes generate-on-the-fly nello <style> embedded.
@@ -190,7 +215,11 @@ export const MascotCharacter: FC<MascotCharacterProps> = ({
         viewBox="0 0 200 200"
         width={size}
         height={size}
-        className={cn("mascot-svg", state === "idle" && "mascot-idle")}
+        className={cn(
+          "mascot-svg",
+          state === "idle" && "mascot-idle",
+          state === "celebrating" && "mascot-celebrate",
+        )}
       >
         {/* Subtle drop shadow filter (no library) */}
         <defs>
@@ -227,14 +256,18 @@ export const MascotCharacter: FC<MascotCharacterProps> = ({
             strokeLinecap="round"
             fill="none"
           />
-          {/* Ball apicale: cerchio sfera apicale (idle/thinking/speaking) */}
+          {/* Ball apicale: cerchio sfera apicale (idle/thinking/speaking/celebrating) */}
           {state !== "listening" && (
             <circle
               cx="100"
               cy="34"
               r="6"
               fill={palette.antennaBall}
-              className={state === "idle" ? "animate-pulse-soft" : ""}
+              className={
+                state === "idle" || state === "celebrating"
+                  ? "animate-pulse-soft"
+                  : ""
+              }
             />
           )}
           {/* Listening: dot rosso pulsante al posto della sfera */}
@@ -271,11 +304,48 @@ export const MascotCharacter: FC<MascotCharacterProps> = ({
           transform="rotate(-25 78 78)"
         />
 
+        {/* Celebrating sparkles: 4 stelline 4-point ai vertici NE/NW/SE/SW del body,
+            ciascuna con delay diverso per dare effetto pop scattering. v0.13.0 PSI */}
+        {state === "celebrating" && (
+          <g aria-hidden="true">
+            {/* Stella NE (alto-destra) */}
+            <path
+              d="M 162 56 L 165 64 L 173 67 L 165 70 L 162 78 L 159 70 L 151 67 L 159 64 Z"
+              fill={palette.accent}
+              className="mascot-sparkle-particle"
+              style={{ animationDelay: "0ms", transformOrigin: "162px 67px" }}
+            />
+            {/* Stella NW (alto-sinistra) */}
+            <path
+              d="M 38 64 L 41 71 L 48 74 L 41 77 L 38 84 L 35 77 L 28 74 L 35 71 Z"
+              fill="#ffffff"
+              className="mascot-sparkle-particle"
+              style={{ animationDelay: "200ms", transformOrigin: "38px 74px" }}
+            />
+            {/* Stella SE (basso-destra) */}
+            <path
+              d="M 170 142 L 173 149 L 180 152 L 173 155 L 170 162 L 167 155 L 160 152 L 167 149 Z"
+              fill={palette.accent}
+              className="mascot-sparkle-particle"
+              style={{ animationDelay: "400ms", transformOrigin: "170px 152px" }}
+            />
+            {/* Stella SW (basso-sinistra) */}
+            <path
+              d="M 30 150 L 33 157 L 40 160 L 33 163 L 30 170 L 27 163 L 20 160 L 27 157 Z"
+              fill="#ffffff"
+              className="mascot-sparkle-particle"
+              style={{ animationDelay: "600ms", transformOrigin: "30px 160px" }}
+            />
+          </g>
+        )}
+
         {/* Eye sx (gruppo) */}
         <g
           className={cn(
             "mascot-eye-group",
-            state !== "listening" && "mascot-blink",
+            state !== "listening" &&
+              state !== "celebrating" &&
+              "mascot-blink",
           )}
         >
           <circle cx="78" cy="100" r={eyeRadius} fill="#ffffff" />
@@ -288,7 +358,9 @@ export const MascotCharacter: FC<MascotCharacterProps> = ({
         <g
           className={cn(
             "mascot-eye-group",
-            state !== "listening" && "mascot-blink",
+            state !== "listening" &&
+              state !== "celebrating" &&
+              "mascot-blink",
           )}
         >
           <circle cx="122" cy="100" r={eyeRadius} fill="#ffffff" />

@@ -27,6 +27,10 @@ from sco_compliance_os.services.learning.profile_renderer import (
     render_profile_markdown,
 )
 from sco_compliance_os.services.learning.profile_store import list_preferences
+from sco_compliance_os.services.learning.setup_answer_persistor import (
+    is_setup_step_user_answer,
+    persist_setup_answer,
+)
 from sco_compliance_os.services.llm.provider import ProviderError
 from sco_compliance_os.services.llm.router import (
     Tier,
@@ -438,8 +442,41 @@ async def chat_stream(
             # Pattern: se la skill os-setup emette riepilogo finale "Profilo
             # registrato:" o "Profilo salvato", clear active_skill. Altrimenti
             # increment step counter.
+            # v0.13.0 OMEGA: aggiunto persist_setup_answer pre-increment per
+            # popolare user_profile.db con le risposte Q1-Q10 (gap regex
+            # extract_preferences che non matcha single-token answers).
             if conv.active_skill:
                 try:
+                    # Pre-increment: la risposta dell'utente al turno corrente
+                    # appartiene allo step active_skill_step+1 (se era 0 alla
+                    # creazione conv, la risposta a Q1 e' step=1).
+                    # NB: conv.active_skill_step refletta lo stato PRIMA
+                    # dell'increment del finally block.
+                    current_answer_step = (conv.active_skill_step or 0) + 1
+
+                    if is_setup_step_user_answer(
+                        active_skill=conv.active_skill,
+                        active_skill_step=current_answer_step,
+                    ):
+                        persist_result = await persist_setup_answer(
+                            user_message=payload.message,
+                            active_skill_step=current_answer_step,
+                            conversation_id=payload.conversation_id,
+                            message_id=user_msg.id,
+                            tenant_id="local",
+                        )
+                        logger.info(
+                            "chat_stream.setup_answer_persisted",
+                            conversation_id=payload.conversation_id,
+                            step=persist_result.get("step_key"),
+                            persisted=persist_result.get("persisted"),
+                            slug=persist_result.get("preference_slug"),
+                            team_member_updated=persist_result.get(
+                                "team_member_updated"
+                            ),
+                            reason=persist_result.get("reason"),
+                        )
+
                     completion_markers = (
                         "Profilo registrato:",
                         "Profilo salvato. Procedo",
@@ -570,6 +607,59 @@ async def chat_stream(
                 )
             except Exception as exc:
                 logger.warning("chat_stream.post_turn_hook_failed", error=str(exc))
+
+            # v0.13.0 OMEGA: ingest chat turn in memory_tree per recall futuro.
+            # Pattern Conv. 47 single source of truth: ogni turn (user_msg +
+            # assistant_response combined) viene chunked + admission-graded e
+            # persisted in `mem_tree_chunks`. Il flusso BM25 di
+            # tree_summaries.query_relevant_summaries gia' integrato nel system
+            # prompt (linee 215-247 sopra) potra' poi recuperare il contesto
+            # sealed L1/L2 in nuove chat sequenti.
+            # Best-effort: errori NON bloccanti per lo stream SSE.
+            try:
+                from sco_compliance_os.services.memory.tree_ingester import (
+                    IngestInput,
+                    ingest_inputs,
+                )
+
+                turn_combined = (
+                    f"[USER]\n{payload.message}\n\n"
+                    f"[ASSISTANT]\n{''.join(assistant_text_buf)}"
+                )
+                # Trim long content per evitare bloat memoria (cap 8000 char).
+                if len(turn_combined) > 8000:
+                    turn_combined = turn_combined[:8000] + "\n[TRUNCATED]"
+
+                # Fire-and-forget: non await il task (lo schedula come bg).
+                import asyncio as _asyncio
+
+                _asyncio.create_task(
+                    ingest_inputs(
+                        [
+                            IngestInput(
+                                source_kind="chat",
+                                source_id=payload.conversation_id,
+                                content=turn_combined,
+                                owner="local",
+                                tags=[
+                                    "chat-turn",
+                                    f"conv:{payload.conversation_id}",
+                                ],
+                            )
+                        ],
+                    ),
+                    name=f"chat-ingest-{payload.conversation_id}",
+                )
+                logger.info(
+                    "chat_stream.memory_ingest_scheduled",
+                    conversation_id=payload.conversation_id,
+                    content_chars=len(turn_combined),
+                )
+            except Exception as exc:
+                logger.warning(
+                    "chat_stream.memory_ingest_failed",
+                    error=str(exc),
+                )
 
     return StreamingResponse(
         event_generator(),

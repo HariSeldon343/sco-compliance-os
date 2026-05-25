@@ -1,4 +1,4 @@
-﻿---
+---
 name: audit-iso-27001-sgsi
 description: "Lead Auditor e consulente per cybersicurezza, audit ISO 27001+27017+27018, conformità NIS2/GDPR/Legge 90-2024/Legge 132-2025/AI Act, e redazione documentazione SGSI. Usa SEMPRE per: audit ISO 27001, SGSI, sicurezza informazioni, cybersicurezza, NIS2, gap analysis, SoA, RVE, PDV, PAC, PDA, Annex A, cloud security, policy/procedure/piani/manuali/registri/istruzioni operative di sicurezza, risk assessment, CSQA, checklist audit, NC ISO, /rve /pdv /nc /sm /checklist /assessment /gap /policy /procedura /risk /soa, BCP/DRP, piano audit interni, riesame direzione, compliance ACN/FNCS/AgID, o qualsiasi documento di sistema/audit/consulenza sulla sicurezza delle informazioni. Triggera anche per: redazione documentale di sistema (manuali, registri, istruzioni operative), mappatura controlli 27001/27017/27018, formulazione rilievi NC/SM/Osservazioni, supporto riunioni apertura/chiusura audit, Legge 132/2025 IA, Reg. UE 2024/1689 AI Act, determinazioni ACN, FNCS 2025, procedure CSQA IOP008/IOP036/LG_SG."
 metadata:

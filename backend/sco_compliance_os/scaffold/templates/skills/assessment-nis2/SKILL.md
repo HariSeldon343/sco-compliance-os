@@ -1,4 +1,4 @@
-﻿---
+---
 name: assessment-nis2
 description: "Lead Auditor e consulente NIS2, ISO 27001:2022, Legge 90/2024, UNI/PdR 174:2024, NIST CSF 2.0, ISO 22301, GDPR. Usa SEMPRE per: assessment NIS2, gap analysis Art.21, audit ISO 27001, piano trattamento rischi, risk assessment ISO 27005, BIA, BCP/DRP, gestione incidenti CSIRT, notifica ACN, SoA, Annex A, checklist audit, NC/SM, policy/procedure/piani sicurezza, registro rischi, supply chain security, MFA, crittografia, vulnerability management, programma audit, riesame direzione, roadmap adeguamento NIS2, Legge 90/2024 referente cybersicurezza, matrice correlazione NIS2-27001-NIST, infrastrutture critiche sanità/energia/PA/trasporti, /assessment /gap /audit /risk /checklist /nc /sm /policy /procedura /piano /soa /bcp /incidente /riesame /cove. Triggera per: D.Lgs. 138/2024, Reg. 2024/2690, ENISA, AgID, PSNC, CSIRT Italia, Art.20-21-23 NIS2, soggetti essenziali/importanti."
 ---

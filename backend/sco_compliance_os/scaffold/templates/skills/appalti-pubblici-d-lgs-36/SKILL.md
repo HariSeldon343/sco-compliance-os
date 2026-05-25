@@ -1,4 +1,4 @@
-﻿---
+---
 name: appalti-pubblici-d-lgs-36
 description: >
   Consulente senior appalti pubblici D.Lgs. 36/2023 e D.Lgs. 209/2024. Usa SEMPRE per: bandi, disciplinari, capitolati, schemi contratto, CME, determine, verbali commissione, supporto RUP, OEPV, anomalia offerte, revisione atti gara, gap analysis, subappalto, avvalimento, RTI, clausole sociali, CAM, garanzie, stand-still, esecuzione contrattuale, penali, contenzioso TAR, ANAC bandi tipo. Comandi: /bando /disciplinare /capitolato /schema-contratto /determina /verbale /cme /rup /commissione /revisione-gara /gap-appalti /offerta /anomalia /subappalto /penali /contenzioso /checklist-gara. Triggera per: Codice appalti, gara pubblica, procedura aperta/negoziata, affidamento diretto, sotto/sopra soglia, commissione giudicatrice, stazione appaltante, operatore economico, DGUE, soccorso istruttorio, consorzio, tuttogare, MePA, CONSIP, in house providing.

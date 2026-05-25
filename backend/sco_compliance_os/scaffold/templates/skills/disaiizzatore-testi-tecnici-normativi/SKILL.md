@@ -1,4 +1,4 @@
-﻿---
+---
 name: disaiizzatore-testi-tecnici-normativi
 version: 1.0.0
 description: >

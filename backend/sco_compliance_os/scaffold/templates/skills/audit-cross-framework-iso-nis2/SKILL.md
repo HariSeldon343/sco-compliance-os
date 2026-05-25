@@ -1,4 +1,4 @@
-﻿---
+---
 name: audit-cross-framework-iso-nis2
 description: "Orchestratore senior per quesiti cross-framework che intersecano ISO/IEC 27001:2022, ISO/IEC 20000-1:2018 e NIS2 (D.Lgs. 138/2024, Legge 90/2024). Usa SEMPRE per: audit congiunti SGSI+SMS di terza parte, gap analysis a tre framework, SoA estesa con mapping a processi 20000-1 e obblighi NIS2, procedure incidenti unificate (20000-1 §8.6.1 + 27001 A.5.24-28 + NIS2 Art. 23), continuità integrata (BIA, BCP, ISO 22301), riesame direzione consolidato, supplier management ICT integrato, matrici di correlazione, risk assessment unico ISO 27005 + servizio + NIS2. Comandi: /audit-congiunto /gap-tre-framework /soa-esteso-sms /incidente-unificato /continuita-integrata /matrice-tre-framework /riesame-integrato /risk-integrato /supplier-integrato /policy-integrata /procedura-integrata /route. Triggera per: doppia certificazione 27001+20000-1, soggetti NIS2 essenziali/importanti, infrastrutture critiche ICT, MSP, cloud, fornitori PA. Orchestra audit-iso-27001-sgsi e audit-iso-20000-1-sms senza duplicarne i comandi."
 ---

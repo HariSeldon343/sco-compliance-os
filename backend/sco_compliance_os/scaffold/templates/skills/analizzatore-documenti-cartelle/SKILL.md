@@ -1,4 +1,4 @@
-﻿---
+---
 name: analizzatore-documenti-cartelle
 description: >
   Agente autonomo di analisi documentale ricorsiva. Scandaglia ogni file in una cartella master

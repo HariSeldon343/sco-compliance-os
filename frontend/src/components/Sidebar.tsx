@@ -25,7 +25,7 @@ import { cn } from "@/lib/cn";
 // fonte autoritativa = backend_version da GET /health (vedi useBackendVersion hook).
 // v0.10.0: import diretto da package.json via Vite define __APP_VERSION__.
 const APP_VERSION_FALLBACK =
-  (typeof __APP_VERSION__ !== "undefined" && __APP_VERSION__) || "0.12.1";
+  (typeof __APP_VERSION__ !== "undefined" && __APP_VERSION__) || "0.13.0";
 
 interface NavItem {
   to: string;

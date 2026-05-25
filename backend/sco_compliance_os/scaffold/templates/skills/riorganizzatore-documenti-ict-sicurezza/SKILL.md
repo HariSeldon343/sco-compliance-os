@@ -1,4 +1,4 @@
-﻿---
+---
 name: riorganizzatore-documenti-ict-sicurezza
 description: "Analyze, classify and reorganize ICT security documentation folders according to a standardized 137-document taxonomy covering 20 process areas and 10 document types, mapped to NIS2, ISO 27001, FNCS 2025, ACN, AgID, and GDPR requirements. Use this skill when the user wants to: (1) scan a folder of security documents and classify them, (2) reorganize documents into a structured compliance framework, (3) generate gap analysis or compliance coverage reports, (4) map existing documentation to NIS2/ISO/ACN/FNCS requirements, (5) identify missing or incomplete security documents. Triggers: mentions of 'document reorganization', 'security documentation', 'gap analysis', 'compliance mapping', 'NIS2 compliance', 'indice documentale', 'riorganizzazione documentale', 'sicurezza ICT', or any request to sort/classify/organize security-related files in a folder."
 ---

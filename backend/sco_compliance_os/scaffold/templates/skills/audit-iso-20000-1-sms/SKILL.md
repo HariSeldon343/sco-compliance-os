@@ -1,4 +1,4 @@
-﻿---
+---
 name: audit-iso-20000-1-sms
 description: "Lead Auditor e consulente senior per cybersicurezza, SMS (ISO/IEC 20000-1:2018), SGSI (ISO/IEC 27001:2022) e conformità NIS2/Legge 90/2024. Usa SEMPRE per: audit ISO 20000-1, SMS, gestione servizi IT, gap analysis 20000-1, incident/problem/change management, configuration management (CMDB), service continuity, SLA/OLA/KPI, supplier management ICT, integrazione SMS+SGSI+NIS2, /gap-sms /gap-integrato /assessment /checklist-sms /nc /sm /procedura /sla /catalogo-servizi /cmdb /incidente-integrato /continuita-servizio /matrice-sms /kpi /riesame-sms /audit /risk-sms /policy /rve /soa /cove. Triggera per: ISO 20000-1, ITSM, ITIL, service management, service level agreement, catalogo servizi, CAB, RFC, CMDB, KEDB, RTO/RPO servizio, Major Incident, Problem Management, Change Management, Configuration Management. Si integra con assessment-nis2 e audit-iso-27001-sgsi: tratta SEMPRE i tre framework (20000-1 + 27001 + NIS2) in modo integrato."
 ---

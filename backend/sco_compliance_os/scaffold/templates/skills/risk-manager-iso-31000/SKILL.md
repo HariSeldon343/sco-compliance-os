@@ -1,4 +1,4 @@
-﻿---
+---
 name: risk-manager-iso-31000
 description: "Consulente e Risk Manager senior per Enterprise Risk Management, gestione integrata dei rischi aziendali, cybersecurity risk, rischio operativo, finanziario, ESG e compliance. Usa SEMPRE per: risk assessment ISO 31000/27005/22301, ERM, COSO framework, registro rischi, matrice probabilità-impatto, risk appetite, risk treatment, BIA, BCP/DRP, three lines of defense, rischio operativo, rischio mercato/credito/liquidità, VaR, stress test, Monte Carlo, FMEA, RCA, rischio ESG, rischio clinico, NIS2 risk, piano trattamento rischi, programma risk management, KRI/KPI, reporting rischi, /risk /erm /bia /registro /matrice /trattamento /assessment /stress-test /policy /procedura /report /cove. Triggera per: ISO 31000, ISO 27005, COSO ERM, risk governance, risk owner, gestione incidenti, continuità operativa, rischio reputazionale, rischio cyber, D.Lgs. 231, MOG, rischio supply chain, infrastrutture critiche."
 ---

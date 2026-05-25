@@ -1,4 +1,4 @@
-﻿---
+---
 name: umanizzatore-testi
 version: 2.5.1
 description: |

@@ -1,4 +1,4 @@
-﻿---
+---
 name: rilevazione-incendi-impianti-iaiei
 description: "Progettista e consulente senior per sistemi IRAI (rivelazione e allarme incendio), protezione attiva antincendio e Codice di Prevenzione Incendi. Usa SEMPRE per: progettazione IRAI UNI 9795:2013, norme EN 54 (centrali, rivelatori fumo/calore/fiamma/lineari/aspirazione, pulsanti, isolatori, EVAC, radio), dimensionamento zone e loop, scelta rivelatori per ambiente, specifica d'impianto G.2.10, DM 20/12/2012, DM 37/2008, Reg. UE 305/2011, Codice PI misure S.6 S.7 S.8, livelli di prestazione, fire risk assessment, UNI 11224 manutenzione, linee interconnessione CEI, sprinkler UNI EN 12845, idranti UNI 10779, SENFC UNI 9494, impianti a disponibilità superiore HAS, alimentazione EN 54-4, documentazione progetto. Triggera per: rivelazione fumi, detector, impianto antincendio, protezione attiva, prevenzione incendi, VVF, SCIA antincendio, IRAI, allarme incendio."
 ---

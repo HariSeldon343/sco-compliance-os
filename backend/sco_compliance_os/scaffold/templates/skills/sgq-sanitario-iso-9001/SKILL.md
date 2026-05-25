@@ -1,4 +1,4 @@
-﻿---
+---
 name: sgq-sanitario-iso-9001
 description: "Consulente senior ISO 9001:2015 per SGQ sanitari italiani. Usa SEMPRE per: progettazione/implementazione SGQ sanitario, redazione procedure/protocolli/istruzioni operative/manuali qualità/politiche/piani qualità/carte servizi, PDTA, mappatura processi sanitari, KPI e indicatori clinici, riesame direzione, risk assessment processi sanitari, gap analysis accreditamento, formazione personale sanitario su qualità, ricerca linee guida SNLG, /procedura /protocollo /istruzione /politica /manuale /mappa-processi /indicatori /riesame /risk /gap /pdta /carta-servizi /formazione /linee-guida /cove. Triggera per: ISO 9001 sanità, SGQ sanitario, accreditamento istituzionale, DPR 14/1/1997, DM 70/2015, L.24/2017 Gelli-Bianco, UNI EN 15224, clinical governance, risk management clinico, SNLG, ECM, PNE, incident reporting, eventi sentinella, customer satisfaction paziente."
 ---

@@ -1,18 +1,14 @@
-// SCO Compliance OS — area chat principale: WelcomeHero centrato + bubbles polished + widget AskUserQuestion
+// SCO Compliance OS — area chat principale: WelcomeScreen animato + bubbles polished + widget AskUserQuestion
+//
+// v0.13.0 PSI: hero empty-state spostato in screens/WelcomeScreen.tsx come componente
+// dedicato animato (Framer Motion char-by-char reveal + stagger card grid + tagline parole).
+// MessageBubble ora ha entrance animation con motion.div + AnimatePresence.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
-import {
-  ShieldCheck,
-  ScanSearch,
-  HeartPulse,
-  AlertTriangle,
-  ArrowUpRight,
-  Wrench,
-  CheckCircle2,
-  XCircle,
-} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Wrench, CheckCircle2, XCircle } from "lucide-react";
 
 import { useChatStore } from "@/store/chat-store";
 import type { MessageItem } from "@/types/api";
@@ -21,52 +17,13 @@ import { ThinkingIndicator } from "@/components/ThinkingIndicator";
 import { AudioPlayer } from "@/components/voice/AudioPlayer";
 import { AskQuestionCard } from "@/components/AskQuestionCard";
 import { WikiIngestProposalCard } from "@/components/WikiIngestProposalCard";
+import { WelcomeScreen } from "@/screens/WelcomeScreen";
 import {
   parseInlineWidgets,
   type ContentSegment,
   type InlineToolCallPayload,
   type InlineToolResultPayload,
 } from "@/lib/parseInlineWidgets";
-
-// 4 suggestion card branded compliance — 2x2 grid stile OpenHuman / Claude Desktop
-const SUGGESTIONS = [
-  {
-    icon: ShieldCheck,
-    title: "Audit ISO 27001",
-    description: "Checklist Annex A per cliente sanitario",
-    prompt:
-      "Prepara una checklist audit ISO 27001:2022 Annex A per cliente sanitario, includendo i controlli A.5–A.18.",
-    accent: "text-sco-blue",
-    iconBg: "bg-sco-blue/10",
-  },
-  {
-    icon: ScanSearch,
-    title: "Gap analysis NIS 2",
-    description: "D.Lgs. 138/2024 art. per art. per fornitore PA",
-    prompt:
-      "Esegui una gap analysis del D.Lgs. 138/2024 per un fornitore ICT verso PA, articolo per articolo.",
-    accent: "text-sco-navy dark:text-sco-text-dark",
-    iconBg: "bg-sco-navy/10 dark:bg-sco-text-dark/10",
-  },
-  {
-    icon: HeartPulse,
-    title: "Procedura sanitaria",
-    description: "ISO 9001:2015 cartelle cliniche IRCCS",
-    prompt:
-      "Redigi una procedura SGQ ISO 9001:2015 per gestione cartelle cliniche in IRCCS, sezione 7 e 8.",
-    accent: "text-sco-amber",
-    iconBg: "bg-sco-amber/10",
-  },
-  {
-    icon: AlertTriangle,
-    title: "Risk assessment cloud",
-    description: "ISO 27005:2022 matrice probabilità × impatto",
-    prompt:
-      "Conduci un risk assessment ISO 27005:2022 su infrastruttura cloud Azure, con matrice probabilità × impatto.",
-    accent: "text-red-500",
-    iconBg: "bg-red-500/10",
-  },
-];
 
 // Soglia (px) entro cui l'utente e' considerato "ancora al bottom" della chat.
 // Sotto questa distanza dal fondo, lo stick-to-bottom resta attivo; oltre,
@@ -77,7 +34,6 @@ export function ChatArea() {
   const activeId = useChatStore((s) => s.activeConversationId);
   const messagesByConv = useChatStore((s) => s.messagesByConv);
   const isStreaming = useChatStore((s) => s.isStreaming);
-  const sendMessage = useChatStore((s) => s.sendMessage);
 
   const messages = useMemo<MessageItem[]>(
     () => (activeId ? (messagesByConv[activeId] ?? []) : []),
@@ -161,70 +117,9 @@ export function ChatArea() {
   }, [handleScroll, isStickyBottom]);
 
   // ===== Welcome hero (state vuoto) =====
+  // v0.13.0 PSI: delegato a WelcomeScreen component animato (Framer Motion).
   if (!activeId || messages.length === 0) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center overflow-y-auto px-6 py-12">
-        <div className="flex w-full max-w-3xl flex-col items-center text-center animate-fade-up">
-          {/* Logo accento decorativo (sfumatura discreta) con glow pulse */}
-          <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-sco-navy via-sco-blue to-sco-amber shadow-lg animate-glow-pulse">
-            <span className="text-2xl font-bold text-white">S</span>
-          </div>
-
-          {/* Titolo grande stile Claude Desktop */}
-          <h1 className="font-display text-3xl font-semibold tracking-tight text-sco-text dark:text-sco-text-dark md:text-4xl">
-            Cosa lavoriamo oggi?
-          </h1>
-          <p className="mt-3 max-w-xl text-sm leading-relaxed text-sco-muted-foreground md:text-base">
-            Scrivi una domanda nel campo qui sotto, oppure scegli un punto di
-            partenza dalle quattro card. Posso aiutarti con audit, procedure,
-            gap analysis e risk assessment.
-          </p>
-
-          {/* 4 card quick action — 2x2 grid */}
-          <div className="mt-10 grid w-full grid-cols-1 gap-3 md:grid-cols-2">
-            {SUGGESTIONS.map((s) => {
-              const Icon = s.icon;
-              return (
-                <button
-                  key={s.title}
-                  type="button"
-                  onClick={() => sendMessage(s.prompt)}
-                  className="group relative flex items-start gap-3 overflow-hidden rounded-xl border border-sco-border bg-sco-surface-elevated p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-sco-blue/60 hover:shadow-medium"
-                >
-                  <div
-                    className={cn(
-                      "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg",
-                      s.iconBg,
-                    )}
-                  >
-                    <Icon size={20} className={s.accent} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-semibold text-sco-text dark:text-sco-text-dark">
-                        {s.title}
-                      </span>
-                      <ArrowUpRight
-                        size={14}
-                        className="shrink-0 text-sco-muted-foreground/0 transition-all duration-150 group-hover:text-sco-blue group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
-                      />
-                    </div>
-                    <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-sco-muted-foreground">
-                      {s.description}
-                    </p>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Tagline footer */}
-          <p className="mt-12 text-xs italic text-sco-muted-foreground/70">
-            Privato. Tuo. Italiano.
-          </p>
-        </div>
-      </div>
-    );
+    return <WelcomeScreen />;
   }
 
   // ===== Lista messaggi (state attivo) =====
@@ -235,14 +130,30 @@ export function ChatArea() {
       className="h-full overflow-y-auto"
     >
       <div className="mx-auto flex w-full max-w-chat flex-col gap-5 px-6 py-8">
-        {messages.map((m) => (
-          <MessageBubble key={m.id} message={m} />
-        ))}
-        {isStreaming && (
-          <div className="flex justify-start">
-            <ThinkingIndicator />
-          </div>
-        )}
+        {/* AnimatePresence con mode="popLayout" garantisce che ogni nuovo
+            messaggio entri con motion.div initial→animate definito in
+            MessageBubble. popLayout evita layout shift quando un messaggio
+            cresce in lunghezza durante streaming. */}
+        <AnimatePresence mode="popLayout" initial={false}>
+          {messages.map((m) => (
+            <MessageBubble key={m.id} message={m} />
+          ))}
+        </AnimatePresence>
+        {/* ThinkingIndicator con fade entrance/exit */}
+        <AnimatePresence>
+          {isStreaming && (
+            <motion.div
+              key="thinking"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 4 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="flex justify-start"
+            >
+              <ThinkingIndicator />
+            </motion.div>
+          )}
+        </AnimatePresence>
         {/* Sentinel auto-scroll: target di scrollIntoView per stick-to-bottom.
             Resta sempre l'ultimo nodo DOM della lista cosi il fondo della
             chat e' garantito raggiungibile anche con ThinkingIndicator visibile. */}
@@ -291,11 +202,18 @@ function MessageBubble({ message }: MessageBubbleProps) {
   );
 
   return (
-    <div
-      className={cn(
-        "flex animate-fade-up",
-        isUser ? "justify-end" : "justify-start",
-      )}
+    <motion.div
+      initial={{
+        opacity: 0,
+        y: 12,
+        x: isUser ? 16 : -16,
+      }}
+      animate={{ opacity: 1, y: 0, x: 0 }}
+      transition={{
+        duration: 0.32,
+        ease: [0.16, 1, 0.3, 1],
+      }}
+      className={cn("flex", isUser ? "justify-end" : "justify-start")}
     >
       <div
         className={cn(
@@ -463,7 +381,7 @@ function MessageBubble({ message }: MessageBubbleProps) {
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
