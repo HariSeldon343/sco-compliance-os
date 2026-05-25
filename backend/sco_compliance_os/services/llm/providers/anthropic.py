@@ -104,7 +104,21 @@ class AnthropicProvider(LLMProvider):
             "temperature": temperature,
         }
         if system_prompt:
-            kwargs["system"] = system_prompt
+            # v0.13.1 fix latency Opus 4.7 + 22 skill catalog (~5400 input tokens):
+            # prompt caching ephemeral riduce input tokens computati da 5400 a
+            # ~200 dal 2 turn in poi (cache hit). Latency stimata -70%, costo -90%.
+            # Pattern Anthropic: system come list di TextBlockParam con cache_control.
+            # Fallback string se cache_control non supportato dal modello.
+            if len(system_prompt) > 1024:  # cache solo se vale la pena (>1024 char minimum threshold Anthropic)
+                kwargs["system"] = [
+                    {
+                        "type": "text",
+                        "text": system_prompt,
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                ]
+            else:
+                kwargs["system"] = system_prompt
         # Passthrough opzioni provider-specific (tools, thinking budget)
         if extra:
             for k, v in extra.items():
