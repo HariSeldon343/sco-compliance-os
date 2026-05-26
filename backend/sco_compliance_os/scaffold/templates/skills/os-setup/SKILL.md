@@ -69,7 +69,7 @@ Annota nome team + ruolo specifico per persistenza profilo (`team_name`, `team_m
 ### 3/10 — Ruolo principale
 
 ```
-<ASK_USER_QUESTION>{"question":"Qual e' il tuo ruolo principale?","options":[{"value":"consulente","label":"Consulente","description":"Libero professionista o consulenza esterna"},{"value":"auditor","label":"Lead Auditor","description":"Audit di terza parte (OdC, ente accreditato)"},{"value":"direzione","label":"Direzione / Management","description":"Manager, dirigente, CdA, Direzione operativa"},{"value":"dpo","label":"DPO","description":"Data Protection Officer"},{"value":"rspp","label":"RSPP / ASPP","description":"Responsabile o Addetto Servizio Prevenzione Protezione"},{"value":"altro","label":"Altro","description":"Specifica nel campo libero"}]}</ASK_USER_QUESTION>
+<ASK_USER_QUESTION>{"question":"Qual e' il tuo ruolo principale?","options":[{"value":"consulente","label":"Consulente","description":"Libero professionista o consulenza esterna"},{"value":"auditor","label":"Lead Auditor","description":"Audit di terza parte (OdC, ente accreditato)"},{"value":"direzione","label":"Direzione / Management","description":"Manager, dirigente, CdA, Direzione operativa"},{"value":"dpo","label":"DPO","description":"Data Protection Officer"},{"value":"rspp","label":"RSPP / ASPP","description":"Responsabile o Addetto Servizio Prevenzione Protezione"}]}</ASK_USER_QUESTION>
 ```
 
 ### 4/10 — Ambito principale di lavoro
@@ -81,7 +81,7 @@ Annota nome team + ruolo specifico per persistenza profilo (`team_name`, `team_m
 ### 5/10 — Settori prevalenti clienti (multi-select)
 
 ```
-<ASK_USER_QUESTION>{"question":"Quali sono i settori prevalenti dei tuoi clienti? Puoi selezionarne piu' di uno.","multi_select":true,"options":[{"value":"sanita","label":"Sanita","description":"Ospedali, IRCCS, RSA, case di cura, poliambulatori"},{"value":"pa","label":"PA / Enti pubblici","description":"Ministeri, regioni, comuni, INPS, ASL"},{"value":"ict","label":"ICT / Tecnologia","description":"Software house, cloud provider, datacenter"},{"value":"manifattura","label":"Manifattura","description":"Industria, produzione, food, farmaceutico"},{"value":"finanza","label":"Finanza","description":"Banche, assicurazioni, fintech"},{"value":"servizi","label":"Servizi","description":"Logistica, retail, HoReCa, professional services"},{"value":"altro","label":"Altro","description":"Specifica nel campo libero"}]}</ASK_USER_QUESTION>
+<ASK_USER_QUESTION>{"question":"Quali sono i settori prevalenti dei tuoi clienti? Puoi selezionarne piu' di uno.","multi_select":true,"options":[{"value":"sanita","label":"Sanita","description":"Ospedali, IRCCS, RSA, case di cura, poliambulatori"},{"value":"pa","label":"PA / Enti pubblici","description":"Ministeri, regioni, comuni, INPS, ASL"},{"value":"ict","label":"ICT / Tecnologia","description":"Software house, cloud provider, datacenter"},{"value":"manifattura","label":"Manifattura","description":"Industria, produzione, food, farmaceutico"},{"value":"finanza","label":"Finanza","description":"Banche, assicurazioni, fintech"},{"value":"servizi","label":"Servizi","description":"Logistica, retail, HoReCa, professional services"}]}</ASK_USER_QUESTION>
 ```
 
 ### 6/10 — Framework normativi piu' usati (multi-select)
@@ -117,6 +117,34 @@ Esempio template payload (adattalo ai dati del deep scan):
 ```
 <ASK_USER_QUESTION>{"question":"Vuoi attivare il mascot animato e la voce dell'agente?","options":[{"value":"si","label":"Si, entrambi","description":"Mascot Lottie 2D + sintesi vocale risposte"},{"value":"solo-voce","label":"Solo voce","description":"Sintesi vocale senza mascot animato"},{"value":"solo-mascot","label":"Solo mascot","description":"Mascot animato senza voce"},{"value":"no","label":"No","description":"Interfaccia chat standard senza animazioni o audio"}]}</ASK_USER_QUESTION>
 ```
+
+## Gestione scenario pre-Q1 — Choice "Importa vs Parti da zero" (Feature D v0.13.4)
+
+Se il primo messaggio dell'utente in questa conversation contiene una delle 2 frasi-comando emesse dal widget pre-Q1 quando esiste profilo precedente (vedi `auto_trigger.py` Feature D):
+
+### Caso 1 — "importa il profilo precedente, vault pronto all'uso"
+
+L'utente ha scelto di mantenere il profilo precedente. NON fare Q1-Q10. Rispondi con il marker di chiusura:
+
+> Profilo importato dal vault precedente. Vault pronto all'uso.
+>
+> Procedo con l'audit della struttura del vault.
+
+NOTA: il marker "Profilo registrato:" e' detectato dal chat_routes.py per emettere setup.completed event (che innesca l'os-ottimizzatore post-setup). Quindi se vuoi triggerare anche l'os-ottimizzatore automatico post-import, includi anche la riga "Profilo registrato: <profilo>" con i campi importati. Se non vuoi, ometti.
+
+### Caso 2 — "ricomincia onboarding da zero con 10 nuove domande"
+
+L'utente ha scelto di sovrascrivere il profilo precedente. Procedi con Q1-Q10 normalmente. Le nuove risposte aggiornano (UPSERT) le voci esistenti in `user_profile` DB. NOTA: il reset DELETE-prima fisico del profilo precedente NON e' implementato in v0.13.4 (carry-over v0.13.5). L'effetto attuale e' UPSERT progressivo per slug, quindi alcune voci precedenti potrebbero sopravvivere se non hanno equivalente nuovo. Avvisa l'utente in modo trasparente:
+
+> Ottimo, ricominciamo dalla Q1. Le nuove risposte sovrascriveranno quelle precedenti, voce per voce.
+>
+> ### 1/10 — Chi sei
+>
+> [widget Q1 come da template normale]
+
+### Default
+
+Se il primo messaggio NON e' nessuno dei 2 casi sopra (es. l'utente ha cliccato "Altro" + scritto qualcosa diverso, oppure ha digitato direttamente il proprio nome), interpreta il messaggio come risposta Q1 e procedi normalmente al Q2.
 
 ## Cosa fai dopo ogni risposta
 

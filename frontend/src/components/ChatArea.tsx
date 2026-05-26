@@ -230,6 +230,43 @@ function MessageBubble({ message }: MessageBubbleProps) {
           </div>
         ) : (
           <>
+            {/*
+             * v0.13.4 Bug B fix (Antonio feedback 26/05): defensive rendering.
+             * Diagnosi root cause subagent: backend emette content="" quando
+             * Claude rifiuta task per VINCOLO ONBOARDING strict (v0.13.3
+             * agent_sdk_runner:258-269) + zero text_delta + persistenza
+             * silente. Pre-fix il bubble era visibile ma vuoto (rectangle
+             * fantasma con border+padding senza children).
+             *
+             * Defensive check: se NESSUN segment ha contenuto renderable
+             * (text whitespace-only + nessun ask/tool widget) + il messaggio
+             * non ha widget ask_user_question Conv. 48 + nessun tool_call →
+             * mostra placeholder visibile con suggerimento operativo.
+             */}
+            {(() => {
+              const hasRenderableSegments = segments.some(
+                (s) =>
+                  (s.kind === "text" && s.text.trim().length > 0) ||
+                  s.kind !== "text",
+              );
+              const hasStructuredWidget =
+                message.ask_user_question != null ||
+                (message.tool_calls != null && message.tool_calls.length > 0);
+              if (!hasRenderableSegments && !hasStructuredWidget) {
+                return (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm italic text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200">
+                    L&apos;agente non ha generato una risposta. Possibile causa:
+                    vincolo onboarding ancora attivo. Prova a scrivere{" "}
+                    <code className="rounded bg-amber-100 px-1 text-xs dark:bg-amber-900/50">
+                      salta onboarding
+                    </code>{" "}
+                    per procedere senza profilo, oppure completa le 10 domande
+                    di profilazione.
+                  </div>
+                );
+              }
+              return null;
+            })()}
             <div className="space-y-2">
               {segments.map((seg, idx) => {
                 if (seg.kind === "text") {

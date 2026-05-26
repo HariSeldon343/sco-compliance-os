@@ -470,12 +470,18 @@ export const useChatStore = create<ChatState>()(
 
       // Manutenzione fine sessione: trigger skill os-ottimizzatore via POST
       // /api/skills/run (streaming SSE). Conv. 47+48 enforcement.
-      // Backend crea automaticamente una conversation "Skill os-ottimizzatore"
-      // e ritorna l'ID nel response header X-Conversation-Id. Persiste output
-      // assistant a fine stream. Frontend: legge l'ID, auto-naviga.
+      //
+      // v0.13.4 Bug A fix (Antonio feedback 26/05): se l'utente sta gia' in una
+      // conversation attiva, l'os-ottimizzatore deve scrivere NELLA STESSA chat
+      // + emettere ASK_USER_QUESTION finale "Applica ottimizzazione?". Pre-fix:
+      // creava sempre nuova chat "Skill os-ottimizzatore" + auto-navigate. Il
+      // backend (skills_routes.py:142) accetta gia' payload.conversation_id
+      // opzionale (riusa esistente vs crea nuova): basta passarlo qui.
       endSession: async (params) => {
         const vaultPath = params?.vaultPath;
-        let conversationId: string | null = null;
+        // v0.13.4 Conv. 48 SSOT: passa la conv attiva al backend per riuso.
+        const currentConvId = get().activeConversationId;
+        let conversationId: string | null = currentConvId;
         let eventsCount = 0;
         const buffer: string[] = [];
         let errorMessage: string | null = null;
@@ -495,9 +501,15 @@ export const useChatStore = create<ChatState>()(
             body: JSON.stringify({
               name: "os-ottimizzatore",
               vault_path: vaultPath,
+              // v0.13.4 Bug A: passa la conversation attiva al backend.
+              // skills_routes.py riusa la conv esistente invece di crearne nuova.
+              conversation_id: currentConvId,
               context: {
                 trigger: "session_end",
-                interactive: false,
+                // v0.13.4 Bug A: interactive=true istruisce la skill os-ottimizzatore
+                // a emettere ASK_USER_QUESTION widget finale "Applica? Si/No" invece
+                // di chiusura testuale "rispondi 'si'".
+                interactive: true,
               },
             }),
             maxRetries: 3,
@@ -555,19 +567,23 @@ export const useChatStore = create<ChatState>()(
             }
           }
 
-          // Re-fetch lista conversations dal backend per intercettare la nuova
-          // "Skill os-ottimizzatore" + auto-select (riusa fetchConversations
-          // logic v1.0.2: merge + diff knownConversationIds + auto-navigate).
+          // v0.13.4 Bug A fix: refresh lista + (re-)selezione della conv
+          // attiva. Se conversation_id e' stata riusata dal backend (Bug A
+          // fix path), l'utente resta nella STESSA chat e vedra' la sintesi
+          // os-ottimizzatore + AskQuestion widget aggiunti in append. Se il
+          // backend ha creato una nuova conv (path legacy quando endSession
+          // viene chiamata senza activeConversationId), allora si auto-naviga
+          // alla nuova come prima.
           const fetchedList = await get().fetchConversations({ silent: true });
-
-          // Se backend ha restituito X-Conversation-Id, auto-select esplicito
-          // via setActiveConversation (che auto-fetcha i messaggi backend per
-          // mostrare il report skill, Conv. 48 enforcement).
-          // Altrimenti, fetchConversations già auto-seleziona la nuova via diff.
           if (conversationId) {
             const exists = fetchedList.some((c) => c.id === conversationId);
-            if (exists) {
+            if (exists && conversationId !== currentConvId) {
+              // Path legacy: backend ha creato nuova conv (currentConvId era null).
               get().setActiveConversation(conversationId);
+            } else if (exists && conversationId === currentConvId) {
+              // Path v0.13.4 (Bug A fix): backend ha riusato la conv attiva.
+              // Re-fetch dei messaggi per mostrare gli append (sintesi + widget).
+              await get().setActiveConversation(conversationId);
             }
           }
 

@@ -248,18 +248,36 @@ function normalizeAskPayload(raw: unknown): InlineAskPayload | null {
 
   if (options.length === 0) return null;
 
-  // v0.11.0: propaga multi_select + allow_free_text dal payload backend.
+  // v0.11.0: propaga multi_select dal payload backend.
   const multi_select = obj.multi_select === true;
-  // Auto-detect "Altro" → abilita free text input automatico se opzione con
-  // value="altro" presente, OR se backend dichiara allow_free_text esplicito.
-  const has_altro_option = options.some(
-    (o) =>
-      o.value.toLowerCase() === "altro" ||
-      o.value.toLowerCase() === "free_text" ||
-      o.value.toLowerCase() === "other",
-  );
-  const allow_free_text =
-    obj.allow_free_text === true || has_altro_option;
 
-  return { question, options, multi_select, allow_free_text };
+  // Conv. 49 enforcement (26/05/2026): "Altro" e' SEMPRE disponibile come
+  // ultima opzione del widget. Il widget lo aggiunge in automatico,
+  // indipendentemente dal payload dell'agente. Tre passi:
+  //
+  //   1. Filtra (deduplica) eventuali opzioni "altro/free_text/other"
+  //      che l'agente potrebbe aver dichiarato per inerzia/hallucination.
+  //   2. Append opzione "Altro" canonica come ultima posizione.
+  //   3. Set allow_free_text: true sempre (la textbox si attiva al click).
+  //
+  // Backward compat: se in futuro qualche skill specifica vuole disabilitare
+  // "Altro" (es. multiple-choice didattico con risposta unica corretta), puo'
+  // emettere `disable_altro: true` nel payload — non implementato oggi.
+  const FREE_TEXT_VALUE_SET = new Set(["altro", "free_text", "other"]);
+  const dedupedOptions = options.filter(
+    (o) => !FREE_TEXT_VALUE_SET.has(o.value.toLowerCase()),
+  );
+  dedupedOptions.push({
+    value: "altro",
+    label: "Altro",
+    description: "Scrivi una risposta libera",
+  });
+  const allow_free_text = true;
+
+  return {
+    question,
+    options: dedupedOptions,
+    multi_select,
+    allow_free_text,
+  };
 }

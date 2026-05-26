@@ -450,6 +450,42 @@ async def chat_stream(
         finally:
             # Persisti messaggio assistant con stato widget Conv. 48
             final_text = "".join(assistant_text_buf)
+
+            # v0.13.4 Bug B fix (Antonio feedback 26/05): defensive persistence.
+            # Diagnosi root cause subagent: Claude rifiuta task per VINCOLO
+            # ONBOARDING strict (v0.13.3) → zero text_delta emessi → final_text
+            # vuoto → frontend mostra bubble fantasma.
+            # Defensive: se nessun text emesso E nessun widget E nessun
+            # tool_call → log warning diagnostico + inietta fallback message
+            # visibile invece di persistere content="" silente.
+            if (
+                not final_text.strip()
+                and ask_user_question_payload is None
+                and not tool_calls_buf
+            ):
+                logger.warning(
+                    "chat_stream.empty_assistant_response",
+                    conversation_id=payload.conversation_id,
+                    active_skill=conv.active_skill,
+                    onboarding_status=onboarding_status_str
+                    if "onboarding_status_str" in dir()
+                    else None,
+                    history_count=len(messages_list)
+                    if "messages_list" in dir()
+                    else None,
+                    model=resolved_model
+                    if "resolved_model" in dir()
+                    else None,
+                )
+                # Inietta messaggio di refusal trasparente con suggerimento.
+                final_text = (
+                    "Non ho potuto generare una risposta per questa richiesta. "
+                    "Possibile causa: il vincolo onboarding e' ancora attivo. "
+                    "Prova a scrivere 'salta onboarding' per procedere senza "
+                    "completare il profilo, oppure rispondi alle 10 domande "
+                    "di profilazione iniziali."
+                )
+
             assistant_msg = await store.append_message(
                 conversation_id=payload.conversation_id,
                 role="assistant",

@@ -389,21 +389,70 @@ async def handle_vault_registered(payload: dict[str, Any]) -> None:
         else ""
     )
 
-    # Q1 deterministica: presentazione + widget "Come ti chiami?"
-    q1_widget_json = (
-        '{"question":"Come ti chiami? Indica nome e cognome.",'
-        '"options":[{"value":"free_text",'
-        '"label":"Scrivi nel campo qui sotto",'
-        '"description":"Esempio: Mario Rossi"}]}'
-    )
-    setup_text = (
-        f"Hai visto il report del vault. "
-        f"{_detected_summary}\n\n"
-        f"Per personalizzare l'agente ti faccio 10 domande veloci. "
-        f"Una alla volta.\n\n"
-        f"### 1/10 — Chi sei\n\n"
-        f"<ASK_USER_QUESTION>{q1_widget_json}</ASK_USER_QUESTION>"
-    )
+    # v0.13.4 Feature D (Antonio feedback 26/05): se l'utente ha gia' fatto
+    # onboarding su un altro vault (profilo persistito in user_profile DB
+    # tenant_id='local'), proponi scelta "Importa profilo precedente" vs
+    # "Parti da zero con 10 domande nuove" PRIMA della Q1 deterministica.
+    # Pattern Conv. 47 SSOT: il count di profili esistenti vive solo nel DB
+    # SQLite, qui solo letto. Conv. 49 enforcement: NON dichiarare "Altro"
+    # nelle opzioni del widget (il frontend AskQuestionCard lo aggiunge automatico).
+    existing_profile_count = 0
+    try:
+        from sco_compliance_os.services.learning.profile_store import (
+            count_preferences,
+        )
+
+        existing_profile_count = await count_preferences(tenant_id="local")
+    except Exception as exc:
+        logger.warning(
+            "auto_trigger.profile_count_failed",
+            conv_id=conv_id,
+            error=str(exc),
+        )
+
+    if existing_profile_count > 0:
+        # Pre-Q1: emit widget choice import vs reset.
+        # Conv. 48 SSOT widget post-stream: il payload e' persistito ed e' il
+        # next user message a determinare il branch (LLM os-setup detect).
+        import_widget_json = (
+            '{"question":"Hai gia configurato un profilo su un altro vault '
+            f'({existing_profile_count} voci salvate). Come vuoi procedere?",'
+            '"options":['
+            '{"value":"importa il profilo precedente, vault pronto all\'\'uso",'
+            '"label":"Importa profilo precedente",'
+            f'"description":"Mantieni le {existing_profile_count} voci esistenti e parti subito col vault nuovo, salta le 10 domande"'
+            '},'
+            '{"value":"ricomincia onboarding da zero con 10 nuove domande",'
+            '"label":"Parti da zero con 10 nuove domande",'
+            '"description":"Cancella il profilo precedente e ricomincia con Q1-Q10 nuove. Le risposte del nuovo vault sostituiscono quelle vecchie"'
+            '}'
+            ']}'
+        )
+        setup_text = (
+            f"Hai visto il report del vault. "
+            f"{_detected_summary}\n\n"
+            f"Prima di partire con le 10 domande di onboarding ti chiedo: "
+            f"il tuo profilo e' gia configurato.\n\n"
+            f"<ASK_USER_QUESTION>{import_widget_json}</ASK_USER_QUESTION>"
+        )
+        skill_invocation_step = "pre-q1-import-choice"
+    else:
+        # Primo vault registrato: nessun profilo precedente, vai dritto a Q1.
+        q1_widget_json = (
+            '{"question":"Come ti chiami? Indica nome e cognome.",'
+            '"options":[{"value":"free_text",'
+            '"label":"Scrivi nel campo qui sotto",'
+            '"description":"Esempio: Mario Rossi"}]}'
+        )
+        setup_text = (
+            f"Hai visto il report del vault. "
+            f"{_detected_summary}\n\n"
+            f"Per personalizzare l'agente ti faccio 10 domande veloci. "
+            f"Una alla volta.\n\n"
+            f"### 1/10 — Chi sei\n\n"
+            f"<ASK_USER_QUESTION>{q1_widget_json}</ASK_USER_QUESTION>"
+        )
+        skill_invocation_step = "1/10"
 
     try:
         await store.append_message(
@@ -415,8 +464,9 @@ async def handle_vault_registered(payload: dict[str, Any]) -> None:
                     "kind": "skill_invocation",
                     "skill_name": "os-setup",
                     "success": True,
-                    "deterministic_q1": True,
-                    "step": "1/10",
+                    "deterministic_q1": existing_profile_count == 0,
+                    "step": skill_invocation_step,
+                    "existing_profile_count": existing_profile_count,
                 }
             ],
         )
@@ -426,6 +476,8 @@ async def handle_vault_registered(payload: dict[str, Any]) -> None:
             vault_id=vault_id,
             content_len=len(setup_text),
             detected_frameworks_count=len(_detected_frameworks_names),
+            existing_profile_count=existing_profile_count,
+            step=skill_invocation_step,
         )
     except Exception as exc:
         logger.exception(

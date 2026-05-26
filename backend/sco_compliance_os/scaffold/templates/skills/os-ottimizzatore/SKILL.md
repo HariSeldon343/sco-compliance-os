@@ -65,9 +65,9 @@ Significa che il vault ha una struttura SCO **quasi completa**. Output:
 
 - Snapshot tabellare con `presente` / `mancante`
 - Sezione "Cosa manca" (vedi sotto)
-- **Proposta auto-confirm**: scrivi una riga del tipo "Ho rilevato N cartelle mancanti: X, Y. Sono auto-creabili come scheletro vuoto senza dati personali. Vuoi che le completi adesso? Rispondi 'si' per auto-create."
-- NON eseguire l'azione, attendi la risposta utente in chat.
-- Suggerisci all'utente che puo' anche invocare manualmente l'endpoint backend (`POST /api/vault/{id}/complete-structure`) per scaffolding parziale.
+- **Proposta auto-confirm**: scrivi una riga sintetica del tipo "Ho rilevato N cartelle mancanti: X, Y. Sono auto-creabili come scheletro vuoto senza dati personali."
+- Emetti il widget `<ASK_USER_QUESTION>` finale di conferma (vedi sotto "Chiusura branch-dependent — widget ASK").
+- NON eseguire l'azione, attendi la risposta utente.
 
 ### Branch C — Mancanze sostanziali (3+ cartelle mancanti)
 
@@ -75,7 +75,8 @@ Significa che il vault e' una **cartella esistente non SCO** (es. cartella con s
 
 - Snapshot tabellare con tutti gli stati
 - Sezione "Cosa manca" con elenco completo
-- **Proposta interactive**: scrivi una riga del tipo "Ho rilevato che la cartella selezionata non ha la struttura SCO completa: mancano <lista>. Vuoi che la completi in automatico? Posso creare le cartelle auto come scheletro vuoto (Giornaliero/, Libreria/, Skill/, Progetti/, Team/, log/) e chiederti conferma separata per le opt-in (Contesto/, Business/, raw/, wiki/, CLAUDE.md) che contengono dati personali. Rispondi 'auto' per creare tutto, 'solo-auto' per solo auto-create, 'no' per lasciare invariato."
+- **Proposta interactive**: scrivi una riga sintetica del tipo "Ho rilevato che la cartella selezionata non ha la struttura SCO completa: mancano <lista>. Posso creare in automatico le cartelle scheletro (Giornaliero/, Libreria/, Skill/, Progetti/, Team/, log/) e chiederti conferma separata per le opt-in (Contesto/, Business/, raw/, wiki/, CLAUDE.md) che contengono dati personali."
+- Emetti il widget `<ASK_USER_QUESTION>` finale di conferma (vedi sotto "Chiusura branch-dependent — widget ASK").
 - Attendi risposta utente prima di proporre passi operativi.
 
 ## Output che devi produrre
@@ -138,12 +139,40 @@ Lista in 9 bullet i framework di audit di base coperti dal sistema. Per ciascuno
 
 Cap esplicito: 80000 token totali per l'audit + report. Se vault e' molto grande (>10000 file), il report resta sintetico (snapshot + cosa manca + framework, niente walk completo).
 
-## Chiusura branch-dependent
+## Chiusura branch-dependent — widget ASK
 
-Dopo il report, una riga di chiusura coerente con il branch scelto:
+Dopo il report, chiudi con un comportamento differenziato per branch.
 
-- **Branch A** (vault gia completo): "Struttura SCO lasciata invariata: il vault e' gia conforme."
-- **Branch B** (mancanze contenute, < 3): "Struttura SCO quasi completa. Rispondi 'si' per completare le N cartelle mancanti adesso."
-- **Branch C** (mancanze sostanziali, 3+): "Struttura SCO da completare. Rispondi 'auto' per creare tutte le cartelle mancanti, 'solo-auto' per scheletro vuoto senza dati personali, 'no' per lasciare invariato."
+### Branch A (vault gia completo, `is_sco_structure: true`)
 
-In ogni caso, finale generico: "Quando vuoi partire con un cantiere su un cliente o un framework, scrivimi qui."
+Una riga di chiusura testuale, NESSUN widget:
+
+> Struttura SCO lasciata invariata: il vault e' gia conforme.
+
+Poi finale generico: "Quando vuoi partire con un cantiere su un cliente o un framework, scrivimi qui."
+
+### Branch B (mancanze contenute, < 3)
+
+v0.13.4 Bug A fix (Antonio feedback 26/05). Sostituiti i precedenti "rispondi 'si'" testuali con widget `<ASK_USER_QUESTION>` cliccabile. Il widget AskQuestionCard frontend aggiunge automaticamente "Altro" come ultima opzione (Conv. 49 enforcement) — NON dichiararlo qui.
+
+Emetti questo widget come ultima riga dell'output:
+
+```
+<ASK_USER_QUESTION>{"question":"Applico l'ottimizzazione adesso?","options":[{"value":"si","label":"Si, completa le cartelle mancanti","description":"Auto-create scheletro vuoto delle N cartelle mancanti, senza dati personali"},{"value":"no","label":"No, chiudi senza applicare","description":"Lascia il vault invariato, chiude la sessione"}]}</ASK_USER_QUESTION>
+```
+
+### Branch C (mancanze sostanziali, 3+)
+
+Idem widget ma con 3 opzioni operative (Conv. 49 enforcement: NON dichiarare "altro"):
+
+```
+<ASK_USER_QUESTION>{"question":"Come vuoi completare la struttura SCO?","options":[{"value":"auto","label":"Crea tutto in automatico","description":"Crea TUTTE le cartelle mancanti, incluse quelle che contengono dati personali (Contesto/, Business/, raw/, wiki/, CLAUDE.md)"},{"value":"solo-auto","label":"Solo scheletro vuoto","description":"Crea solo le cartelle auto-create (Giornaliero/, Libreria/, Skill/, Progetti/, Team/, log/). Le opt-in restano invariate"},{"value":"no","label":"Lascia invariato","description":"Non modifica niente, chiude la sessione"}]}</ASK_USER_QUESTION>
+```
+
+### Pattern di interpretazione risposta
+
+Quando l'utente clicca un'opzione del widget, ricevi la stringa `value` come prossimo turno utente (es. `"si"`, `"no"`, `"auto"`, `"solo-auto"`). Se l'utente clicca "Altro" + scrive risposta libera, ricevi il testo libero — interpretalo come consenso/dissenso usando il senso della frase.
+
+### Note context-dipendenti
+
+Se nel context runtime ricevi `trigger: "session_end"` + `interactive: true` (chiamata da SessionEndDialog click "Fine sessione"), il widget e' OBBLIGATORIO (Antonio si aspetta conferma esplicita prima dell'applicazione). Se ricevi `interactive: false` o `trigger` diverso (es. auto-trigger post setup-completion), il widget puo' essere omesso a discrezione (in quel caso l'utente non ha cliccato "Fine sessione" ma e' un flow automatico post-onboarding).
