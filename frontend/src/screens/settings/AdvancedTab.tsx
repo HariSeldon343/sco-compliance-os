@@ -16,6 +16,10 @@ import {
   ExternalLink,
   ShieldCheck,
   Compass,
+  RefreshCw,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
 } from "lucide-react";
 
 import { useIntegrationsStore } from "@/store/integrations-store";
@@ -36,6 +40,101 @@ export function AdvancedTab() {
   const [backendVersion, setBackendVersion] = useState<string>(
     backendVersionLicense || APP_VERSION_FALLBACK,
   );
+
+  // v0.13.5 Antonio feedback 27/05: card "Aggiornamenti app" in Settings/Avanzate
+  // con bottone Controlla aggiornamenti che chiama tauri-plugin-updater JS API.
+  // Backend Rust check_for_updates esisteva gia (lib.rs:107) ma non era wire dal
+  // frontend → utente non poteva triggerare auto-update manualmente, install
+  // manuale UNA volta inevitabile per arrivare a v0.13.5. Da v0.13.5 in poi:
+  // bottone UI gestisce tutto end-to-end (check → download → install → restart
+  // auto via installMode basicUi di tauri.conf.json).
+  type UpdateStatus =
+    | "idle"
+    | "checking"
+    | "available"
+    | "no-update"
+    | "downloading"
+    | "installing"
+    | "error";
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>("idle");
+  const [availableUpdate, setAvailableUpdate] = useState<{
+    version: string;
+    notes?: string;
+  } | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState<{
+    downloaded: number;
+    total: number;
+  } | null>(null);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+
+  const handleCheckForUpdates = async () => {
+    setUpdateStatus("checking");
+    setUpdateError(null);
+    setAvailableUpdate(null);
+    try {
+      const { check } = await import("@tauri-apps/plugin-updater");
+      const update = await check();
+      if (update) {
+        setAvailableUpdate({
+          version: update.version,
+          notes: update.body ?? undefined,
+        });
+        setUpdateStatus("available");
+      } else {
+        setUpdateStatus("no-update");
+        const { toast } = await import("sonner");
+        toast.success("Sei alla versione piu` recente.");
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setUpdateError(message);
+      setUpdateStatus("error");
+      const { toast } = await import("sonner");
+      toast.error(`Errore controllo aggiornamenti: ${message}`);
+    }
+  };
+
+  const handleDownloadAndInstall = async () => {
+    if (!availableUpdate) return;
+    setUpdateStatus("downloading");
+    setDownloadProgress(null);
+    setUpdateError(null);
+    try {
+      const { check } = await import("@tauri-apps/plugin-updater");
+      const update = await check();
+      if (!update) {
+        const { toast } = await import("sonner");
+        toast.warning("Update non piu` disponibile, riprova check.");
+        setUpdateStatus("idle");
+        return;
+      }
+      let downloaded = 0;
+      let total = 0;
+      await update.downloadAndInstall((event) => {
+        if (event.event === "Started") {
+          total = event.data.contentLength ?? 0;
+          setDownloadProgress({ downloaded: 0, total });
+        } else if (event.event === "Progress") {
+          downloaded += event.data.chunkLength;
+          setDownloadProgress({ downloaded, total });
+        } else if (event.event === "Finished") {
+          setUpdateStatus("installing");
+        }
+      });
+      // installMode: basicUi in tauri.conf.json -> restart automatico
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setUpdateError(message);
+      setUpdateStatus("error");
+      const { toast } = await import("sonner");
+      toast.error(`Errore installazione aggiornamento: ${message}`);
+    }
+  };
+
+  const isUpdateInFlight =
+    updateStatus === "checking" ||
+    updateStatus === "downloading" ||
+    updateStatus === "installing";
 
   useEffect(() => {
     if (!initialFetchDone) {
@@ -243,6 +342,112 @@ export function AdvancedTab() {
           <span className="flex-1 text-left">Mostra tour guidato</span>
           <span className="text-xs text-sco-muted-foreground">10 step</span>
         </button>
+      </Card>
+
+      {/* v0.13.5 Antonio feedback 27/05: card Aggiornamenti app */}
+      <Card icon={RefreshCw} title="Aggiornamenti app">
+        <p className="mb-3 text-xs text-sco-muted-foreground">
+          Controlla manualmente la disponibilita` di aggiornamenti. Gli
+          aggiornamenti sono firmati Ed25519 e verificati prima dell&apos;install.
+          L&apos;app si riavvia in automatico al termine.
+        </p>
+        <div className="space-y-3">
+          <button
+            type="button"
+            onClick={handleCheckForUpdates}
+            disabled={isUpdateInFlight}
+            className={cn(
+              "inline-flex w-full items-center gap-2 rounded-md border bg-sco-bg px-4 py-2.5 text-sm transition-colors",
+              isUpdateInFlight
+                ? "cursor-not-allowed border-sco-border opacity-60"
+                : "border-sco-border hover:border-sco-blue hover:bg-sco-blue/5",
+            )}
+          >
+            {updateStatus === "checking" ? (
+              <Loader2 size={14} className="animate-spin text-sco-blue" />
+            ) : (
+              <RefreshCw size={14} className="text-sco-blue" />
+            )}
+            <span className="flex-1 text-left">
+              {updateStatus === "checking"
+                ? "Controllo in corso..."
+                : "Controlla aggiornamenti"}
+            </span>
+            <span className="text-xs text-sco-muted-foreground">
+              v{APP_VERSION_FALLBACK}
+            </span>
+          </button>
+
+          {updateStatus === "available" && availableUpdate && (
+            <div className="space-y-2 rounded-lg border border-sco-blue/30 bg-sco-blue/5 p-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-sco-text dark:text-sco-text-dark">
+                <CheckCircle2 size={14} className="text-sco-blue" />
+                Versione v{availableUpdate.version} disponibile
+              </div>
+              {availableUpdate.notes && (
+                <div className="whitespace-pre-wrap rounded border border-sco-border bg-sco-bg p-2 text-xs text-sco-muted-foreground">
+                  {availableUpdate.notes.slice(0, 500)}
+                  {availableUpdate.notes.length > 500 ? "..." : ""}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={handleDownloadAndInstall}
+                disabled={isUpdateInFlight}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-sco-blue px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-sco-navy disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Download size={14} />
+                Scarica e installa v{availableUpdate.version}
+              </button>
+            </div>
+          )}
+
+          {updateStatus === "downloading" && downloadProgress && (
+            <div className="space-y-2 rounded-lg border border-sco-blue/30 bg-sco-blue/5 p-3">
+              <div className="flex items-center gap-2 text-sm">
+                <Loader2 size={14} className="animate-spin text-sco-blue" />
+                <span>Download in corso...</span>
+              </div>
+              <progress
+                max={downloadProgress.total || 100}
+                value={downloadProgress.downloaded || 0}
+                className="h-2 w-full"
+              />
+              <div className="text-xs text-sco-muted-foreground">
+                {(downloadProgress.downloaded / 1024 / 1024).toFixed(1)} /{" "}
+                {(downloadProgress.total / 1024 / 1024).toFixed(1)} MB
+              </div>
+            </div>
+          )}
+
+          {updateStatus === "installing" && (
+            <div className="flex items-center gap-2 rounded-lg border border-sco-amber/30 bg-sco-amber/5 p-3 text-sm">
+              <Loader2 size={14} className="animate-spin text-sco-amber" />
+              <span>
+                Installazione in corso. L&apos;app si riavviera` automaticamente.
+              </span>
+            </div>
+          )}
+
+          {updateStatus === "no-update" && (
+            <div className="flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/5 p-3 text-sm text-green-700 dark:text-green-300">
+              <CheckCircle2 size={14} />
+              <span>Sei alla versione piu` recente.</span>
+            </div>
+          )}
+
+          {updateStatus === "error" && updateError && (
+            <div className="flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-sm text-red-700 dark:text-red-300">
+              <AlertCircle size={14} className="mt-0.5 shrink-0" />
+              <div className="flex-1">
+                <div className="font-medium">Errore aggiornamento</div>
+                <div className="mt-1 break-all font-mono text-xs">
+                  {updateError}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </Card>
 
       {/* Info app */}
