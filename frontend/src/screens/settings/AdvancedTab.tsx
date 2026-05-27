@@ -28,7 +28,12 @@ import { useWalkthroughStore } from "@/store/walkthrough-store";
 import { resetWalkthroughFlag } from "@/components/WalkthroughTour";
 import { cn } from "@/lib/cn";
 
-const APP_VERSION_FALLBACK = "0.8.1";
+// v0.13.6 fix Antonio feedback 27/05: pattern Sidebar.tsx con __APP_VERSION__
+// iniettato da Vite da pkg.version (single source of truth Conv. 47).
+// Pre-fix: hardcoded "0.8.1" mai bumpato → card Aggiornamenti app + Info app
+// mostravano "v0.8.1" anche su app v0.13.5 installata.
+const APP_VERSION_FALLBACK =
+  (typeof __APP_VERSION__ !== "undefined" && __APP_VERSION__) || "0.13.6";
 
 export function AdvancedTab() {
   const integrations = useIntegrationsStore((s) => s.integrations);
