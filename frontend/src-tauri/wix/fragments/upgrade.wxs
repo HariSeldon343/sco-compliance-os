@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <!--
+      Forza disinstallazione completa della versione precedente PRIMA di
+      installare la nuova. Risolve:
+      - bug install fresh: residui file/config/sidecar/DB su vecchia install
+      - bug auto-update: sidecar Python non sostituito da Tauri Updater
+        (l'Updater scarica il .msi e invoca msiexec, che esegue WiX qui sotto)
+
+      Nota WiX 3.14: il shortcut <MajorUpgrade> deve vivere dentro <Product>,
+      non in <Fragment>. Usiamo il pattern equivalente <Upgrade> + <UpgradeVersion>
+      + <InstallExecuteSequence><RemoveExistingProducts/> che invece e' valido
+      come figlio di <Fragment>.
+
+      Upgrade.Id DEVE corrispondere a Product.UpgradeCode definito in
+      tauri.conf.json (bundle.windows.wix.upgradeCode). Quando coincidono
+      WiX collega automaticamente il Fragment al Product.
+    -->
+    <Upgrade Id="A1B2C3D4-E5F6-7890-ABCD-EF0123456789">
+      <!--
+        Trova qualsiasi versione precedente (Minimum=0.0.0) e qualsiasi futura
+        non ancora installata (Maximum=99.99.99). Property WIX_UPGRADE_DETECTED
+        e' settata se trova installazione precedente, e InstallExecuteSequence
+        sotto la usa per programmare la rimozione.
+      -->
+      <UpgradeVersion
+        Minimum="0.0.0"
+        Maximum="99.99.99"
+        IncludeMinimum="yes"
+        IncludeMaximum="no"
+        Property="WIX_UPGRADE_DETECTED"
+        OnlyDetect="no"
+        MigrateFeatures="yes" />
+    </Upgrade>
+
+    <!--
+      RemoveExistingProducts schedulato dopo InstallInitialize:
+      - rimuove COMPLETAMENTE la versione precedente (incluso sidecar Python,
+        config, DB residui nella stessa install directory)
+      - poi installa la nuova versione fresh
+      - operazione atomica: se l'install nuova fallisce, la vecchia viene
+        re-installata in rollback
+    -->
+    <InstallExecuteSequence>
+      <RemoveExistingProducts After="InstallInitialize" />
+    </InstallExecuteSequence>
+  </Fragment>
+</Wix>

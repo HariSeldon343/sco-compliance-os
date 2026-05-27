@@ -136,3 +136,4 @@ user-data/
 *.orig
 *~
 *.rej
+conversation-*.md
