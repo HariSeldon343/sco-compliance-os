@@ -280,3 +280,20 @@ def get_store(db_path: Path) -> Store:
     if _store is None:
         _store = Store(db_path)
     return _store
+
+
+async def dispose_store() -> None:
+    """Chiude il singleton Store e lo resetta a None. Idempotente.
+
+    Usato dal reset-data (Feature 1 v0.15.0): prima di cancellare il file
+    compliance_os.db bisogna rilasciare la connessione SQLite, altrimenti su
+    Windows il file resta lockato. Dopo il reset, la prossima get_store ricrea
+    un'istanza fresca sul db_path corrente.
+    """
+    global _store
+    if _store is None:
+        return
+    try:
+        await _store.close()
+    finally:
+        _store = None

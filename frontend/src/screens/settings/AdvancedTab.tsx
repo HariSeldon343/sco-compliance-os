@@ -26,6 +26,7 @@ import { useIntegrationsStore } from "@/store/integrations-store";
 import { useLicenseStore } from "@/store/license-store";
 import { useWalkthroughStore } from "@/store/walkthrough-store";
 import { resetWalkthroughFlag } from "@/components/WalkthroughTour";
+import { ResetDataDialog } from "@/components/system/ResetDataDialog";
 import { cn } from "@/lib/cn";
 
 // v0.13.6 fix Antonio feedback 27/05: pattern Sidebar.tsx con __APP_VERSION__
@@ -36,6 +37,8 @@ const APP_VERSION_FALLBACK =
   (typeof __APP_VERSION__ !== "undefined" && __APP_VERSION__) || "0.14.0";
 
 export function AdvancedTab() {
+  // Feature 1 v0.15.0: dialog conferma reset completo dati.
+  const [resetOpen, setResetOpen] = useState(false);
   const integrations = useIntegrationsStore((s) => s.integrations);
   const initialFetchDone = useIntegrationsStore((s) => s.initialFetchDone);
   const fetchIntegrations = useIntegrationsStore((s) => s.fetchIntegrations);
@@ -307,22 +310,14 @@ export function AdvancedTab() {
 
           <button
             type="button"
-            onClick={async () => {
-              const { toast } = await import("sonner");
-              toast.warning(
-                "Reset dati: funzionalita` distruttiva, richiede conferma backend (in arrivo v0.9.x).",
-                { duration: 4000 },
-              );
-            }}
+            onClick={() => setResetOpen(true)}
             className="inline-flex w-full items-center gap-2 rounded-md border border-sco-border bg-sco-bg px-4 py-2.5 text-sm transition-colors hover:border-red-500/60 hover:bg-red-500/5"
           >
             <RotateCcw size={14} className="text-red-500" />
             <span className="flex-1 text-left">
               Reset completo dati applicazione
             </span>
-            <span className="text-xs text-sco-muted-foreground">
-              v0.9.x
-            </span>
+            <span className="text-xs text-red-500">cancella tutto</span>
           </button>
         </div>
       </Card>
@@ -478,6 +473,9 @@ export function AdvancedTab() {
           </div>
         </div>
       </Card>
+
+      {/* Feature 1 v0.15.0: dialog conferma reset completo dati */}
+      <ResetDataDialog open={resetOpen} onOpenChange={setResetOpen} />
     </div>
   );
 }

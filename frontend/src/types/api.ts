@@ -46,6 +46,21 @@ export interface MessageItem {
   created_at: string; // ISO 8601
 }
 
+/** Stato dei dati locali (Feature 1 v0.15.0 wipe/mantieni) */
+export interface DataStatus {
+  has_data: boolean;
+  conversations: number;
+  vaults: number;
+  db_size_bytes: number;
+  onboarding_done: boolean;
+}
+
+/** Esito del reset completo dati (Feature 1 v0.15.0) */
+export interface ResetDataResult {
+  ok: boolean;
+  deleted: string[];
+}
+
 /** Allegato file inviato insieme al messaggio chat */
 export interface ChatAttachment {
   path: string;

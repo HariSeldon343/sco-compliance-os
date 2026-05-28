@@ -9,8 +9,10 @@ import { useProjectStore } from "@/store/project-store";
 import type {
   ConversationItem,
   ChatAttachment,
+  DataStatus,
   HotnessItem,
   IntegrationItem,
+  ResetDataResult,
   SkillSummary,
   MessageItem,
   TreeChunkItem,
@@ -99,6 +101,19 @@ export const apiClient = {
   skills: {
     async list(): Promise<SkillSummary[]> {
       return request<SkillSummary[]>("/api/skills/list");
+    },
+  },
+
+  // ---- System (Feature 1 v0.15.0: stato dati + reset completo) ----
+  system: {
+    async dataStatus(): Promise<DataStatus> {
+      return request<DataStatus>("/api/system/data-status");
+    },
+    async resetData(confirm: string): Promise<ResetDataResult> {
+      return request<ResetDataResult>("/api/system/reset-data", {
+        method: "POST",
+        body: JSON.stringify({ confirm }),
+      });
     },
   },
 

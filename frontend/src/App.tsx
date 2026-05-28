@@ -29,6 +29,7 @@ import { CommandPalette } from "@/components/commands/CommandPalette";
 import { useDefaultCommands } from "@/components/commands/useDefaultCommands";
 import { BottomTabBar } from "@/components/nav/BottomTabBar";
 import { WalkthroughTour } from "@/components/WalkthroughTour";
+import { WipeOrKeepDialog } from "@/components/system/WipeOrKeepDialog";
 import { useThemeStore } from "@/store/theme-store";
 import { useLayoutStore } from "@/store/layout-store";
 import { useWalkthroughStore } from "@/store/walkthrough-store";
@@ -112,6 +113,10 @@ export default function App() {
         forceRun={walkthroughForceRun}
         onFinish={resetWalkthroughTrigger}
       />
+
+      {/* Feature 1 v0.15.0: scelta Mantieni/Riparti dopo un aggiornamento.
+          Compare una sola volta quando la versione cambia e ci sono dati. */}
+      <WipeOrKeepDialog />
     </AuthGate>
   );
 }

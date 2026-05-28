@@ -42,6 +42,7 @@ from sco_compliance_os.api import (
     skill_builder_routes,
     skills_routes,
     subconscious_routes,
+    system_routes,
     tokenjuice_routes,
     vault_routes,
     voice_routes,
@@ -558,6 +559,7 @@ def create_app() -> FastAPI:
     app.include_router(onboarding_routes.router)
     app.include_router(license_routes.router)
     app.include_router(subconscious_routes.router)
+    app.include_router(system_routes.router)
     app.include_router(tokenjuice_routes.router)
     app.include_router(autofetch_routes.router)
     app.include_router(profile_routes.router)
