@@ -153,7 +153,7 @@ Poi finale generico: "Quando vuoi partire con un cantiere su un cliente o un fra
 
 ### Branch B (mancanze contenute, < 3)
 
-v0.13.4 Bug A fix (Antonio feedback 26/05). Sostituiti i precedenti "rispondi 'si'" testuali con widget `<ASK_USER_QUESTION>` cliccabile. Il widget AskQuestionCard frontend aggiunge automaticamente "Altro" come ultima opzione (Conv. 49 enforcement) — NON dichiararlo qui.
+v0.13.4 Bug A fix (feedback utente 26/05). Sostituiti i precedenti "rispondi 'si'" testuali con widget `<ASK_USER_QUESTION>` cliccabile. Il widget AskQuestionCard frontend aggiunge automaticamente "Altro" come ultima opzione (Conv. 49 enforcement) — NON dichiararlo qui.
 
 Emetti questo widget come ultima riga dell'output:
 
@@ -175,4 +175,4 @@ Quando l'utente clicca un'opzione del widget, ricevi la stringa `value` come pro
 
 ### Note context-dipendenti
 
-Se nel context runtime ricevi `trigger: "session_end"` + `interactive: true` (chiamata da SessionEndDialog click "Fine sessione"), il widget e' OBBLIGATORIO (Antonio si aspetta conferma esplicita prima dell'applicazione). Se ricevi `interactive: false` o `trigger` diverso (es. auto-trigger post setup-completion), il widget puo' essere omesso a discrezione (in quel caso l'utente non ha cliccato "Fine sessione" ma e' un flow automatico post-onboarding).
+Se nel context runtime ricevi `trigger: "session_end"` + `interactive: true` (chiamata da SessionEndDialog click "Fine sessione"), il widget e' OBBLIGATORIO (l'utente si aspetta conferma esplicita prima dell'applicazione). Se ricevi `interactive: false` o `trigger` diverso (es. auto-trigger post setup-completion), il widget puo' essere omesso a discrezione (in quel caso l'utente non ha cliccato "Fine sessione" ma e' un flow automatico post-onboarding).

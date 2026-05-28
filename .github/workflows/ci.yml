@@ -111,6 +111,11 @@ jobs:
       # Conv. 44 lesson 3 preserved: matrix copre Windows + macOS + Linux.
       - name: Pytest integration (Conv. 46 gate)
         working-directory: backend
+        # shell: bash forzato anche su Windows runner: lo script usa la
+        # continuazione di riga `\` (sintassi bash) che su PowerShell (default
+        # Windows) causa ParserError. bash e' disponibile su tutti i runner
+        # GitHub (incluso windows-latest). Fix CI cross-platform 28/05.
+        shell: bash
         env:
           SCO_SEAL_SCHEDULER_ENABLED: "0"
           SCO_AUTO_FETCH_ENABLED: "0"

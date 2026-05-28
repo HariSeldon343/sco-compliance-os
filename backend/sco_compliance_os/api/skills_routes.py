@@ -100,7 +100,7 @@ def _resolve_vault_root(vault_path: str | None) -> Path | None:
 @router.get("/list", response_model=list[SkillSummary])
 async def list_skills(
     vault_path: str | None = None,
-    include_legacy: bool = False,
+    include_legacy: bool = True,  # Default True: le skill legacy sono il catalogo base finché l'utente non installa skill proprie
 ) -> list[SkillSummary]:
     """Lista skill discoverable.
 
@@ -108,14 +108,14 @@ async def list_skills(
         vault_path: opzionale, path vault attivo per includere scope Project.
             Se omesso, ritorna solo skill User + Legacy (se include_legacy=True).
         include_legacy: se True include anche le skill legacy bundled (default
-            False per nascondere le skill di sistema dalla UI utente, che vede
-            solo le skill che ha creato lui). L'agent runner usa direttamente
+            True: finché l'utente non installa skill proprie, la UI mostra
+            direttamente il catalogo base). L'agent runner usa direttamente
             ``discover_skills()`` per accesso completo, indipendentemente da
             questo flag che impatta solo la lista UI.
 
     Pattern Conv. 48 single source of truth: la legacy resta sempre disponibile
-    via ``discover_skills()`` lato runner, mentre la UI di default mostra solo
-    user-scope per non confondere l'utente con 22 skill di sistema preinstallate.
+    via ``discover_skills()`` lato runner e, di default, anche nella UI per
+    garantire un set di skill di partenza all'utente.
     """
     vault_root = _resolve_vault_root(vault_path)
     skills = discover_skills(vault_root)
@@ -128,7 +128,7 @@ async def list_skills(
 @router.get("/", response_model=list[SkillSummary], include_in_schema=False)
 async def list_skills_alias(
     vault_path: str | None = None,
-    include_legacy: bool = False,
+    include_legacy: bool = True,  # Default True: le skill legacy sono il catalogo base finché l'utente non installa skill proprie
 ) -> list[SkillSummary]:
     """Alias compatibile per GET /api/skills."""
 

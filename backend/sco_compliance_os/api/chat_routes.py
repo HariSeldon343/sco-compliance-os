@@ -22,6 +22,13 @@ from sco_compliance_os.core.agent_sdk_runner import _DEFAULT_SYSTEM_PROMPT
 from sco_compliance_os.core.logging_setup import get_logger
 from sco_compliance_os.core.post_turn_hook import schedule_on_turn_complete
 from sco_compliance_os.core.store import get_store
+from sco_compliance_os.services.chat.prompt_optimizer import optimize_prompt
+from sco_compliance_os.services.chat.skill_proposer import (
+    clear_pending,
+    get_pending,
+    propose_skills,
+    set_pending,
+)
 from sco_compliance_os.services.learning.profile_renderer import (
     render_profile_markdown,
 )
@@ -37,7 +44,7 @@ from sco_compliance_os.services.llm.router import (
     record_failure,
     route,
 )
-from sco_compliance_os.services.skills.loader import discover_skills
+from sco_compliance_os.services.skills.loader import SkillMeta, discover_skills
 
 
 def _get_skill_catalog_for_prompt(vault_root: Path | None = None) -> str:
@@ -320,6 +327,161 @@ async def chat_stream(
         tool_calls_buf: list[dict[str, Any]] = []
         active_provider_name = "unknown"
 
+        proposal_none_label = "Nessuna, procedi senza skill"
+
+        try:
+            pending_options = await get_pending(payload.conversation_id)
+        except Exception as exc:
+            pending_options = None
+            logger.warning(
+                "chat_stream.skill_proposal_pending_fetch_failed",
+                error=str(exc),
+                conversation_id=payload.conversation_id,
+            )
+
+        selected_skill_from_proposal: str | None = None
+
+        if pending_options is not None:
+            normalized_message = payload.message.strip().lower()
+            selected_option: str | None = None
+            for opt in pending_options:
+                opt_lower = opt.lower()
+                if opt_lower == normalized_message:
+                    selected_option = opt
+                    break
+            if selected_option is None:
+                for opt in pending_options:
+                    if opt.lower() in normalized_message:
+                        selected_option = opt
+                        break
+
+            try:
+                await clear_pending(payload.conversation_id)
+            except Exception as exc:
+                logger.warning(
+                    "chat_stream.skill_proposal_pending_clear_failed",
+                    error=str(exc),
+                    conversation_id=payload.conversation_id,
+                )
+
+            if selected_option is None:
+                logger.warning(
+                    "chat_stream.skill_proposal_selection_unmatched",
+                    conversation_id=payload.conversation_id,
+                    user_reply=payload.message,
+                )
+            elif selected_option.lower() == proposal_none_label.lower():
+                logger.info(
+                    "chat_stream.skill_proposal_skipped",
+                    conversation_id=payload.conversation_id,
+                    user_reply=payload.message,
+                )
+            else:
+                selected_skill_from_proposal = selected_option
+                try:
+                    if conv.active_skill != selected_option or (conv.active_skill_step or 0) != 0:
+                        await store.set_active_skill(payload.conversation_id, selected_option, step=0)
+                    conv.active_skill = selected_option
+                    conv.active_skill_step = 0
+                except Exception as exc:
+                    logger.warning(
+                        "chat_stream.skill_proposal_set_active_failed",
+                        conversation_id=payload.conversation_id,
+                        selected_skill=selected_option,
+                        error=str(exc),
+                    )
+                else:
+                    logger.info(
+                        "chat_stream.skill_proposal_confirmed",
+                        conversation_id=payload.conversation_id,
+                        selected_skill=selected_option,
+                    )
+        else:
+            discovered_skills: list[SkillMeta] = []
+            try:
+                discovered_skills = discover_skills(vault_root=None)
+            except Exception as exc:
+                logger.warning(
+                    "chat_stream.skill_proposal_discover_failed",
+                    error=str(exc),
+                )
+
+            if discovered_skills:
+                try:
+                    proposed_skills = propose_skills(payload.message, discovered_skills)
+                except Exception as exc:
+                    logger.warning(
+                        "chat_stream.skill_proposal_match_failed",
+                        error=str(exc),
+                    )
+                else:
+                    if proposed_skills:
+                        options_payload: list[dict[str, str]] = []
+                        for skill in proposed_skills:
+                            description = (skill.description or "").strip()
+                            if len(description) > 160:
+                                description = description[:160].rstrip() + "..."
+                            option_data: dict[str, str] = {
+                                "label": skill.name,
+                                "value": skill.name,
+                            }
+                            if description:
+                                option_data["description"] = description
+                            options_payload.append(option_data)
+
+                        options_payload.append(
+                            {
+                                "label": proposal_none_label,
+                                "value": proposal_none_label,
+                                "description": "Procedi senza attivare competenze aggiuntive.",
+                            }
+                        )
+
+                        try:
+                            await set_pending(
+                                payload.conversation_id,
+                                [opt["value"] for opt in options_payload],
+                            )
+                        except Exception as exc:
+                            logger.warning(
+                                "chat_stream.skill_proposal_pending_set_failed",
+                                error=str(exc),
+                                conversation_id=payload.conversation_id,
+                            )
+                        else:
+                            ask_user_question_payload = {
+                                "question": "Ho individuato alcune competenze pertinenti. Quale vuoi attivare?",
+                                "options": options_payload,
+                                "multi_select": False,
+                                "context": "skill_proposal",
+                            }
+                            try:
+                                await store.append_message(
+                                    conversation_id=payload.conversation_id,
+                                    role="assistant",
+                                    content="",
+                                    ask_user_question=ask_user_question_payload,
+                                    tool_calls=None,
+                                )
+                            except Exception as exc:
+                                logger.warning(
+                                    "chat_stream.skill_proposal_persist_failed",
+                                    conversation_id=payload.conversation_id,
+                                    error=str(exc),
+                                )
+                            event_payload = {
+                                "kind": "ask_user_question",
+                                "data": ask_user_question_payload,
+                                "seq": 0,
+                            }
+                            yield f"data: {json.dumps(event_payload, ensure_ascii=False)}\n\n"
+                            logger.info(
+                                "chat_stream.skill_proposal_emitted",
+                                conversation_id=payload.conversation_id,
+                                options=[opt["value"] for opt in options_payload],
+                            )
+                            return
+
         # Combina profile + memory + default system prompt SCO Compliance OS +
         # catalogo competenze disponibili (per il pattern di proposta a ogni nuovo
         # task sostantivo). Il catalogo è appended in coda al DEFAULT prompt,
@@ -356,6 +518,11 @@ async def chat_stream(
         effective_system_prompt = base_system_prompt
         if profile_markdown:
             effective_system_prompt = f"{profile_markdown}\n\n{base_system_prompt}"
+
+        if selected_skill_from_proposal:
+            effective_system_prompt = (
+                f"{effective_system_prompt}\n\nSkill attiva richiesta dall'utente: {selected_skill_from_proposal}"
+            )
 
         # Risolvi tenant config + tier
         tier_value: Tier = payload.tier if payload.tier else "agentic-v1"  # type: ignore[assignment]
@@ -451,6 +618,19 @@ async def chat_stream(
             # In caso di append_message duplicato (rare), filtra.
             if not messages_list or messages_list[-1].get("role") != "user":
                 messages_list.append({"role": "user", "content": payload.message})
+
+            # Feature 4 componente A: ottimizzazione SILENZIOSA del prompt utente.
+            # Arricchisce SOLO la copia inviata all'LLM (ultimo messaggio user di
+            # messages_list); il DB e la UI conservano il messaggio originale
+            # (gia persistito sopra). L'utente non vede la versione ottimizzata.
+            if messages_list and messages_list[-1].get("role") == "user":
+                _optimized, _was_optimized = optimize_prompt(messages_list[-1]["content"])
+                if _was_optimized:
+                    messages_list[-1]["content"] = _optimized
+                    logger.info(
+                        "chat_stream.prompt_optimized",
+                        conversation_id=payload.conversation_id,
+                    )
 
             logger.info(
                 "chat_stream.history_loaded",
