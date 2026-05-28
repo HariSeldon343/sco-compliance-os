@@ -37,6 +37,7 @@ from typing import Any
 
 import structlog
 
+from .action_executor import ActionExecutor, ExecutionResult
 from .decision_engine import (
     Decision,
     DecisionEngine,
@@ -87,6 +88,8 @@ class _LoopStatus:
     last_tick_rationale: str | None = None
     last_tick_cancelled: bool = False
     last_tick_used_llm: bool = False
+    last_tick_action_executed: bool = False
+    last_tick_action_detail: str | None = None
     consecutive_failures: int = 0
     ticks_today: int = 0
     ticks_today_date: str | None = None  # ISO date (UTC) per reset midnight
@@ -122,11 +125,13 @@ class SubconsciousTickLoop:
         interval_seconds: int = MIN_INTERVAL_SECONDS,
         context_provider: ContextProvider | None = None,
         decision_engine: DecisionEngine | None = None,
+        action_executor: ActionExecutor | None = None,
         activity_log_path: Path | None = None,
     ) -> None:
         self._interval = max(MIN_INTERVAL_SECONDS, int(interval_seconds))
         self._context_provider = context_provider
         self._engine = decision_engine or DecisionEngine()
+        self._executor = action_executor
         self._activity_log = activity_log_path or DEFAULT_ACTIVITY_LOG_PATH
         self._activity_log.parent.mkdir(parents=True, exist_ok=True)
 
@@ -273,21 +278,37 @@ class SubconsciousTickLoop:
                     outcome=outcome,
                 )
 
+            # 2-bis. Esegui l'azione SOLO se sicura (whitelist) + ACT + abilitato.
+            #         ESCALATE resta una proposta (mai eseguita in auto). Vedi
+            #         action_executor.py per il boundary enforcement.
+            exec_result: ExecutionResult | None = None
+            if self._executor is not None:
+                exec_result = await self._executor(outcome)
+
             # 3. Update status + append activity log
             self._status.last_tick_completed_at = _utc_now_iso()
             self._status.last_tick_decision = outcome.decision.value
             self._status.last_tick_rationale = outcome.rationale
             self._status.last_tick_used_llm = outcome.used_llm
+            self._status.last_tick_action_executed = (
+                exec_result.executed if exec_result is not None else False
+            )
+            self._status.last_tick_action_detail = (
+                exec_result.detail if exec_result is not None else None
+            )
             self._status.total_ticks += 1
             self._status.ticks_today += 1
             self._status.consecutive_failures = 0  # success -> reset
 
-            self._append_activity_log(outcome, manual=manual, cancelled=False)
+            self._append_activity_log(
+                outcome, manual=manual, cancelled=False, execution=exec_result
+            )
             logger.info(
                 "subconscious.tick.complete",
                 decision=outcome.decision.value,
                 rationale=outcome.rationale[:120],
                 used_llm=outcome.used_llm,
+                action_executed=self._status.last_tick_action_executed,
                 manual=manual,
             )
             return outcome
@@ -365,6 +386,7 @@ class SubconsciousTickLoop:
         *,
         manual: bool,
         cancelled: bool,
+        execution: ExecutionResult | None = None,
     ) -> None:
         """Append entry JSONL al activity log (1 line per tick)."""
         entry = {
@@ -375,6 +397,8 @@ class SubconsciousTickLoop:
             "used_llm": outcome.used_llm,
             "manual": manual,
             "cancelled": cancelled,
+            "action_executed": execution.executed if execution is not None else False,
+            "action_detail": execution.detail if execution is not None else None,
         }
         try:
             with self._activity_log.open("a", encoding="utf-8") as f:

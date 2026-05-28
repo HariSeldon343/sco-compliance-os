@@ -49,6 +49,8 @@ class SubconsciousStatus(BaseModel):
     last_tick_rationale: str | None
     last_tick_cancelled: bool
     last_tick_used_llm: bool
+    last_tick_action_executed: bool = False
+    last_tick_action_detail: str | None = None
     consecutive_failures: int
     ticks_today: int
     ticks_today_date: str | None
@@ -81,6 +83,8 @@ class ActivityEntry(BaseModel):
     used_llm: bool
     manual: bool
     cancelled: bool
+    action_executed: bool = False
+    action_detail: str | None = None
 
 
 class ActivityResponse(BaseModel):

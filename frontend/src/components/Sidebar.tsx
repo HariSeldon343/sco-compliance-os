@@ -19,6 +19,7 @@ import {
   Trash,
   Loader2,
   FolderGit2,
+  Activity,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -31,7 +32,7 @@ import { cn } from "@/lib/cn";
 // fonte autoritativa = backend_version da GET /health (vedi useBackendVersion hook).
 // v0.10.0: import diretto da package.json via Vite define __APP_VERSION__.
 const APP_VERSION_FALLBACK =
-  (typeof __APP_VERSION__ !== "undefined" && __APP_VERSION__) || "0.14.0";
+  (typeof __APP_VERSION__ !== "undefined" && __APP_VERSION__) || "0.15.0";
 
 interface NavItem {
   to: string;
@@ -50,6 +51,8 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/integrations", label: "Integrazioni", icon: Plug },
   { to: "/vault", label: "Vault", icon: Database },
   { to: "/memory", label: "Memoria", icon: Brain },
+  // Cantiere Subconscio v0.15.0: pannello stato + attivita + on/off
+  { to: "/subconscio", label: "Subconscio", icon: Activity },
   { to: "/settings", label: "Impostazioni", icon: Settings },
 ];
 

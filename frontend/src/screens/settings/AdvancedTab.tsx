@@ -34,7 +34,7 @@ import { cn } from "@/lib/cn";
 // Pre-fix: hardcoded "0.8.1" mai bumpato → card Aggiornamenti app + Info app
 // mostravano "v0.8.1" anche su app v0.13.5 installata.
 const APP_VERSION_FALLBACK =
-  (typeof __APP_VERSION__ !== "undefined" && __APP_VERSION__) || "0.14.0";
+  (typeof __APP_VERSION__ !== "undefined" && __APP_VERSION__) || "0.15.0";
 
 export function AdvancedTab() {
   // Feature 1 v0.15.0: dialog conferma reset completo dati.

@@ -12,6 +12,7 @@ import { VaultScreen } from "./screens/VaultScreen";
 import { MemoryScreen } from "./screens/MemoryScreen";
 import { SkillsScreen } from "./screens/SkillsScreen";
 import { GraphScreen } from "./screens/GraphScreen";
+import { SubconsciousScreen } from "./screens/SubconsciousScreen";
 import { WikiView } from "./components/WikiView";
 
 import "./index.css";
@@ -34,6 +35,8 @@ const router = createBrowserRouter([
       { path: "wiki", element: <WikiView /> },
       // v0.12.0 GAMMA design: grafo force-directed 2D del vault
       { path: "grafo", element: <GraphScreen /> },
+      // Cantiere Subconscio v0.15.0: pannello stato + attivita + on/off
+      { path: "subconscio", element: <SubconsciousScreen /> },
     ],
   },
 ]);

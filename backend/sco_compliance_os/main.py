@@ -71,6 +71,8 @@ from sco_compliance_os.services.memory.tree_store import init_tree_schema
 from sco_compliance_os.services.skills.auto_trigger import (
     register_default_subscribers as register_skill_subscribers,
 )
+from sco_compliance_os.services.subconscious.action_executor import make_default_executor
+from sco_compliance_os.services.subconscious.context_provider import build_context
 from sco_compliance_os.services.subconscious.tick_loop import (
     SubconsciousTickLoop,
     set_active_loop,
@@ -296,7 +298,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Avvia background task SOLO se settings.subconscious_enabled (default OFF privacy).
     _subconscious_loop = SubconsciousTickLoop(
         interval_seconds=settings.subconscious_interval_seconds,
-        context_provider=None,  # context provider cabling -> Wave 2 (Memory Tree wiring)
+        context_provider=build_context,
+        action_executor=make_default_executor(),
     )
     set_active_loop(_subconscious_loop)
     if settings.subconscious_enabled:

@@ -16,6 +16,6 @@ da dichiarare nel .spec quando si genererà il sidecar bundle):
 
 from __future__ import annotations
 
-__version__ = "0.14.0"
+__version__ = "0.15.0"
 __author__ = "Antonio Silvestro Amodeo"
 __all__ = ["__author__", "__version__"]

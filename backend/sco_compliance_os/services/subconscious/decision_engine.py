@@ -97,7 +97,13 @@ class SubconsciousContext:
             for t in self.active_triggers[:5]:
                 kind = t.get("event_type", "?")
                 conn = t.get("connector", "?")
-                parts.append(f"- {conn}/{kind}")
+                if kind == "deadline":
+                    title = str(t.get("title", "?"))[:80]
+                    days = t.get("days_remaining", "?")
+                    due = t.get("due_date", "?")
+                    parts.append(f"- [scadenza] {title} — tra {days} giorni (il {due})")
+                else:
+                    parts.append(f"- {conn}/{kind}")
         return "\n".join(parts) or "(empty context)"
 
 
@@ -139,6 +145,9 @@ OUTPUT FORMAT (JSON puro, NIENTE markdown, NIENTE prosa):
 Regole:
 - Se il contesto e' chiaramente irrilevante o ripetitivo -> SKIP.
 - Privilegia SKIP. Antonio preferisce un subconscious silenzioso a uno rumoroso.
+- Se fra gli active triggers c'e' una scadenza (deadline) imminente, valuta ESCALATE
+  per proporre un promemoria: proposed_action.kind="reminder", summary con titolo
+  scadenza + giorni rimanenti. Le scadenze sono il segnale piu' importante.
 - ESCALATE solo quando un'azione discrezionale e' richiesta.
 - Niente prosa fuori dal JSON.
 """

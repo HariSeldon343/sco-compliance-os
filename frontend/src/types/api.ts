@@ -61,6 +61,60 @@ export interface ResetDataResult {
   deleted: string[];
 }
 
+/** Subconscio: stato del tick loop (cantiere Subconscio v0.15.0) */
+export interface SubconsciousStatus {
+  enabled: boolean;
+  running: boolean;
+  interval_seconds: number;
+  interval_seconds_effective: number;
+  is_throttle_busy: boolean;
+  last_tick_started_at: string | null;
+  last_tick_completed_at: string | null;
+  last_tick_decision: string | null;
+  last_tick_rationale: string | null;
+  last_tick_cancelled: boolean;
+  last_tick_used_llm: boolean;
+  last_tick_action_executed: boolean;
+  last_tick_action_detail: string | null;
+  consecutive_failures: number;
+  ticks_today: number;
+  ticks_today_date: string | null;
+  total_ticks: number;
+}
+
+/** Subconscio: una entry del registro attivita */
+export interface SubconsciousActivityEntry {
+  ts: string;
+  decision: string;
+  rationale: string;
+  proposed_action: Record<string, unknown> | null;
+  used_llm: boolean;
+  manual: boolean;
+  cancelled: boolean;
+  action_executed: boolean;
+  action_detail: string | null;
+}
+
+/** Subconscio: risposta /activity */
+export interface SubconsciousActivityResponse {
+  entries: SubconsciousActivityEntry[];
+  count: number;
+}
+
+/** Subconscio: esito enable/disable */
+export interface SubconsciousToggleResponse {
+  running: boolean;
+  message: string;
+}
+
+/** Subconscio: esito di un battito manuale */
+export interface SubconsciousTickResponse {
+  decision: string;
+  rationale: string;
+  proposed_action: Record<string, unknown> | null;
+  used_llm: boolean;
+}
+
 /** Allegato file inviato insieme al messaggio chat */
 export interface ChatAttachment {
   path: string;

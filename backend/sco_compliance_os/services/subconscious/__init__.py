@@ -22,6 +22,7 @@ Riferimenti vault:
 
 from __future__ import annotations
 
+from .context_provider import build_context
 from .decision_engine import (
     Decision,
     DecisionEngine,
@@ -38,4 +39,5 @@ __all__ = [
     "SubconsciousContext",
     "SubconsciousTickLoop",
     "TickThrottle",
+    "build_context",
 ]

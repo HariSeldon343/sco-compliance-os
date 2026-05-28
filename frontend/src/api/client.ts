@@ -14,6 +14,10 @@ import type {
   IntegrationItem,
   ResetDataResult,
   SkillSummary,
+  SubconsciousActivityResponse,
+  SubconsciousStatus,
+  SubconsciousTickResponse,
+  SubconsciousToggleResponse,
   MessageItem,
   TreeChunkItem,
   TreeLevel,
@@ -113,6 +117,31 @@ export const apiClient = {
       return request<ResetDataResult>("/api/system/reset-data", {
         method: "POST",
         body: JSON.stringify({ confirm }),
+      });
+    },
+  },
+
+  // ---- Subconscio (cantiere Subconscio v0.15.0) ----
+  subconscious: {
+    async status(): Promise<SubconsciousStatus> {
+      return request<SubconsciousStatus>("/api/subconscious/status");
+    },
+    async activity(n = 50): Promise<SubconsciousActivityResponse> {
+      return request<SubconsciousActivityResponse>(`/api/subconscious/activity?n=${n}`);
+    },
+    async enable(): Promise<SubconsciousToggleResponse> {
+      return request<SubconsciousToggleResponse>("/api/subconscious/enable", {
+        method: "POST",
+      });
+    },
+    async disable(): Promise<SubconsciousToggleResponse> {
+      return request<SubconsciousToggleResponse>("/api/subconscious/disable", {
+        method: "POST",
+      });
+    },
+    async tick(): Promise<SubconsciousTickResponse> {
+      return request<SubconsciousTickResponse>("/api/subconscious/tick", {
+        method: "POST",
       });
     },
   },
