@@ -8,6 +8,7 @@ import { useProjectStore } from "@/store/project-store";
 
 import type {
   ConversationItem,
+  ChatAttachment,
   HotnessItem,
   IntegrationItem,
   SkillSummary,
@@ -184,9 +185,17 @@ export const apiClient = {
     message: string;
     model_slug?: string;
     agent_mode: ChatMode;
+    attachments?: ChatAttachment[];
     onEvent?: (event: { kind: string; data: Record<string, unknown>; seq: number }) => void;
   }): Promise<void> {
-    const { conversation_id, message, model_slug, agent_mode, onEvent } = params;
+    const {
+      conversation_id,
+      message,
+      model_slug,
+      agent_mode,
+      attachments = [],
+      onEvent,
+    } = params;
     const res = await fetch(`${BACKEND_URL}/api/chat/stream`, {
       method: "POST",
       headers: {
@@ -199,6 +208,7 @@ export const apiClient = {
         model_slug,
         agent_mode,
         project_path: useProjectStore.getState().activeProjectPath,
+        attachments,
       }),
     }).catch((err) => {
       throw new ApiError(0, "network", `Backend non raggiungibile: ${err}`);

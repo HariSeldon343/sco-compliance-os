@@ -131,6 +131,22 @@ PERMISSION_MODE_MAP: dict[AgentModeLiteral, str] = {
 # ----- Schemi Pydantic -----
 
 
+class ChatAttachmentPayload(BaseModel):
+    """Allegato file inviato dal frontend."""
+
+    path: str = Field(..., description="Percorso assoluto del file sul filesystem utente.")
+    name: str = Field(..., description="Nome file leggibile (basename).")
+    size: int = Field(..., ge=0, description="Dimensione del file in byte calcolata localmente.")
+    content: str | None = Field(
+        default=None,
+        description="Contenuto testuale estratto se disponibile, altrimenti None.",
+    )
+    truncated: bool = Field(
+        default=False,
+        description="True se il contenuto fornito e' stato troncato lato frontend.",
+    )
+
+
 class ChatStreamRequest(BaseModel):
     """Richiesta di streaming chat."""
 
@@ -151,6 +167,11 @@ class ChatStreamRequest(BaseModel):
     project_path: str | None = Field(
         default=None,
         description="Cartella lavoro progetto attivo (override working directory).",
+    )
+    attachments: list[ChatAttachmentPayload] = Field(
+        default_factory=list,
+        max_length=10,
+        description="Allegati forniti dall'utente come contesto.",
     )
     tier: str | None = Field(
         default=None,
@@ -200,6 +221,31 @@ class MessageOut(BaseModel):
     ask_user_question: dict[str, Any] | None = None
     tool_calls: list[dict[str, Any]] | None = None
     created_at: str
+
+
+def build_attachments_prompt_block(attachments: list[ChatAttachmentPayload]) -> str:
+    """Rende gli allegati in un blocco testuale da prependere al messaggio."""
+
+    if not attachments:
+        return ""
+
+    lines: list[str] = ["[Allegati forniti dall'utente]"]
+    for item in attachments:
+        truncated_suffix = ", troncato" if item.truncated else ""
+        lines.append(
+            f"--- File: {item.name} (path: {item.path}, {item.size} bytes{truncated_suffix})"
+        )
+        if item.content:
+            lines.append(item.content)
+        else:
+            lines.append("[contenuto binario, solo path disponibile]")
+        lines.append(f"--- Fine file: {item.name}")
+        lines.append("")
+
+    if lines[-1] == "":
+        lines.pop()
+    lines.append("[Messaggio utente]")
+    return "\n".join(lines)
 
 
 # ----- Dependency helpers -----
@@ -380,7 +426,9 @@ async def chat_stream(
                 selected_skill_from_proposal = selected_option
                 try:
                     if conv.active_skill != selected_option or (conv.active_skill_step or 0) != 0:
-                        await store.set_active_skill(payload.conversation_id, selected_option, step=0)
+                        await store.set_active_skill(
+                            payload.conversation_id, selected_option, step=0
+                        )
                     conv.active_skill = selected_option
                     conv.active_skill_step = 0
                 except Exception as exc:
@@ -520,9 +568,7 @@ async def chat_stream(
             effective_system_prompt = f"{profile_markdown}\n\n{base_system_prompt}"
 
         if selected_skill_from_proposal:
-            effective_system_prompt = (
-                f"{effective_system_prompt}\n\nSkill attiva richiesta dall'utente: {selected_skill_from_proposal}"
-            )
+            effective_system_prompt = f"{effective_system_prompt}\n\nSkill attiva richiesta dall'utente: {selected_skill_from_proposal}"
 
         # Risolvi tenant config + tier
         tier_value: Tier = payload.tier if payload.tier else "agentic-v1"  # type: ignore[assignment]
@@ -619,18 +665,26 @@ async def chat_stream(
             if not messages_list or messages_list[-1].get("role") != "user":
                 messages_list.append({"role": "user", "content": payload.message})
 
+            attachments_block = build_attachments_prompt_block(payload.attachments)
+
             # Feature 4 componente A: ottimizzazione SILENZIOSA del prompt utente.
             # Arricchisce SOLO la copia inviata all'LLM (ultimo messaggio user di
             # messages_list); il DB e la UI conservano il messaggio originale
-            # (gia persistito sopra). L'utente non vede la versione ottimizzata.
+            # (gia' persistito sopra). L'utente non vede la versione ottimizzata.
             if messages_list and messages_list[-1].get("role") == "user":
-                _optimized, _was_optimized = optimize_prompt(messages_list[-1]["content"])
-                if _was_optimized:
-                    messages_list[-1]["content"] = _optimized
+                optimized_message, was_optimized = optimize_prompt(payload.message)
+                if was_optimized:
                     logger.info(
                         "chat_stream.prompt_optimized",
                         conversation_id=payload.conversation_id,
                     )
+                else:
+                    optimized_message = payload.message
+
+                if attachments_block:
+                    messages_list[-1]["content"] = f"{attachments_block}\n{optimized_message}"
+                else:
+                    messages_list[-1]["content"] = optimized_message
 
             logger.info(
                 "chat_stream.history_loaded",
@@ -955,8 +1009,14 @@ async def chat_stream(
                     ingest_inputs,
                 )
 
+                attachments_block = build_attachments_prompt_block(payload.attachments)
+                user_section = (
+                    f"{attachments_block}\n{payload.message}"
+                    if attachments_block
+                    else payload.message
+                )
                 turn_combined = (
-                    f"[USER]\n{payload.message}\n\n[ASSISTANT]\n{''.join(assistant_text_buf)}"
+                    f"[USER]\n{user_section}\n\n[ASSISTANT]\n{''.join(assistant_text_buf)}"
                 )
                 # Trim long content per evitare bloat memoria (cap 8000 char).
                 if len(turn_combined) > 8000:

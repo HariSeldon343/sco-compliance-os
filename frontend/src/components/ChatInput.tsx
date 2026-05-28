@@ -21,11 +21,12 @@ import {
   HelpCircle,
   Rocket,
   ShieldOff,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { useChatStore, useChatModeStore } from "@/store/chat-store";
-import type { ChatMode } from "@/types/api";
+import type { ChatAttachment, ChatMode } from "@/types/api";
 import { cn } from "@/lib/cn";
 import { MicButton } from "@/components/voice/MicButton";
 import { SecurityWarningModal } from "@/components/SecurityWarningModal";
@@ -39,6 +40,18 @@ import type { SkillSummary } from "@/types/api";
 // Mantengo MAX_CHARS solo come WARN soft (display contatore in rosso oltre).
 const MAX_CHARS = Number.POSITIVE_INFINITY;
 const SOFT_WARN_CHARS = 32000;
+const MAX_ATTACHMENTS = 10;
+const MAX_ATTACHMENT_BYTES = 200 * 1024; // 200 KB
+
+function formatFileSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return "0 B";
+  }
+  const units = ["B", "KB", "MB", "GB"] as const;
+  const index = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
+  const value = bytes / 1024 ** index;
+  return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${units[index]}`;
+}
 
 interface ModeConfig {
   value: ChatMode;
@@ -123,6 +136,7 @@ export function ChatInput() {
   const [modeOpen, setModeOpen] = useState(false);
   const [securityWarningOpen, setSecurityWarningOpen] = useState(false);
   const [pendingMode, setPendingMode] = useState<ChatMode | null>(null);
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const mode = useChatModeStore((s) => s.mode);
   const setMode = useChatModeStore((s) => s.setMode);
   const yoloAcknowledged = useChatModeStore((s) => s.yoloAcknowledged);
@@ -330,15 +344,143 @@ export function ChatInput() {
     }
 
     closeSlash();
-    await sendMessage(textToSend);
+    await sendMessage(textToSend, attachments);
+    setAttachments([]);
   };
 
 
 
   const handleAttach = () => {
-    // TODO: integrare @tauri-apps/plugin-dialog `open({ multiple: true })`
-    // per ora stub con toast
-    toast.info("Allegato file: in arrivo (Tauri dialog stub)");
+    void (async () => {
+      try {
+        const availableSlots = MAX_ATTACHMENTS - attachments.length;
+        if (availableSlots <= 0) {
+          toast.warning("Puoi allegare al massimo 10 file.");
+          return;
+        }
+
+        const [{ open: openDialog }, fs] = await Promise.all([
+          import("@tauri-apps/plugin-dialog"),
+          import("@tauri-apps/plugin-fs"),
+        ]);
+
+        const selection = await openDialog({
+          multiple: true,
+          filters: [
+            {
+              name: "Documenti",
+              extensions: [
+                "txt",
+                "md",
+                "json",
+                "yaml",
+                "yml",
+                "csv",
+                "log",
+                "py",
+                "ts",
+                "tsx",
+                "js",
+                "jsx",
+                "toml",
+                "rs",
+              ],
+            },
+            { name: "Tutti", extensions: ["*"] },
+          ],
+        });
+
+        const selectedPaths = Array.isArray(selection)
+          ? selection.filter((p) => p.length > 0)
+          : [];
+
+        if (selectedPaths.length === 0) {
+          return;
+        }
+
+        const existingPaths = new Set(attachments.map((item) => item.path));
+        const next: ChatAttachment[] = [];
+
+        for (const rawPath of selectedPaths) {
+          if (existingPaths.has(rawPath) || next.some((item) => item.path === rawPath)) {
+            continue;
+          }
+          if (existingPaths.size + next.length >= MAX_ATTACHMENTS) {
+            toast.warning("Puoi allegare al massimo 10 file.");
+            break;
+          }
+
+          const name = rawPath.split(/[\\/]/).pop() ?? rawPath;
+          let size = 0;
+          try {
+            const info = await fs.stat(rawPath);
+            size = info.size ?? 0;
+          } catch {
+            // Ignora errore: se fallisce manteniamo size = 0.
+          }
+
+          let content: string | null = null;
+          let truncated = false;
+
+          if (size > 0 && size <= MAX_ATTACHMENT_BYTES) {
+            try {
+              content = await fs.readTextFile(rawPath);
+            } catch {
+              content = null;
+            }
+          } else if (size > MAX_ATTACHMENT_BYTES) {
+            truncated = true;
+            toast.warning(`"${name}" supera 200 KB: allego solo l'inizio.`);
+            try {
+              const fileHandle = await fs.open(rawPath, { read: true });
+              const buffer = new Uint8Array(MAX_ATTACHMENT_BYTES);
+              const bytesRead = await fileHandle.read(buffer);
+              await fileHandle.close();
+              if (bytesRead && bytesRead > 0) {
+                const decoder = new TextDecoder("utf-8", { fatal: false });
+                content = decoder.decode(buffer.slice(0, bytesRead));
+              } else {
+                content = "";
+              }
+            } catch {
+              content = null;
+            }
+          }
+
+          next.push({
+            path: rawPath,
+            name,
+            size,
+            content,
+            truncated,
+          });
+        }
+
+        if (next.length === 0) {
+          return;
+        }
+
+        setAttachments((prev) => {
+          const merged = [...prev];
+          for (const attachment of next) {
+            if (merged.length >= MAX_ATTACHMENTS) {
+              break;
+            }
+            if (!merged.some((item) => item.path === attachment.path)) {
+              merged.push(attachment);
+            }
+          }
+          return merged;
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        toast.error(`Selezione file fallita: ${message}`);
+      }
+    })();
+  };
+
+  const handleRemoveAttachment = (index: number) => {
+    setAttachments((prev) => prev.filter((_, idx) => idx !== index));
   };
 
   const handleSlashCommand = () => {
@@ -399,6 +541,43 @@ export function ChatInput() {
             overLimit ? "border-red-500" : "border-sco-border",
           )}
         >
+          {attachments.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 px-4 pt-3">
+              {attachments.map((attachment, index) => (
+                <span
+                  key={attachment.path}
+                  className="group inline-flex items-center gap-2 rounded-full bg-sco-muted/70 px-3 py-1 text-xs text-sco-text dark:text-sco-text-dark"
+                >
+                  <span className="flex items-center gap-1">
+                    <Paperclip size={12} className="text-sco-blue" />
+                    <span className="font-medium">{attachment.name}</span>
+                    <span className="text-sco-muted-foreground">
+                      {formatFileSize(attachment.size)}
+                    </span>
+                    {attachment.truncated && (
+                      <span className="text-sco-muted-foreground">
+                        (troncato)
+                      </span>
+                    )}
+                    {attachment.content === null && (
+                      <span className="text-sco-muted-foreground">
+                        (solo percorso)
+                      </span>
+                    )}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveAttachment(index)}
+                    className="rounded-full p-0.5 text-sco-muted-foreground transition-colors hover:bg-sco-muted hover:text-sco-text dark:hover:text-sco-text-dark"
+                    title="Rimuovi allegato"
+                    aria-label={`Rimuovi ${attachment.name}`}
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
           {/* Textarea */}
           <div className="relative">
             <SlashCommandsPopover

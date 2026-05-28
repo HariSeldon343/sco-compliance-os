@@ -8,6 +8,7 @@ import type {
   MessageItem,
   AskUserQuestionWidget,
   WikiIngestProposal,
+  ChatAttachment,
 } from "@/types/api";
 import { apiClient } from "@/api/client";
 
@@ -101,7 +102,7 @@ interface ChatState {
   setConversationMode: (conversationId: string, mode: ChatMode) => void;
   createConversation: (title?: string) => string;
   deleteConversation: (id: string) => Promise<void>;
-  sendMessage: (text: string, attachments?: string[]) => Promise<void>;
+  sendMessage: (text: string, attachments?: ChatAttachment[]) => Promise<void>;
   answerAskUserQuestion: (messageId: string, optionId: string) => void;
   /**
    * Invia la scelta dell'utente per un widget AskUserQuestion inline
@@ -316,7 +317,7 @@ export const useChatStore = create<ChatState>()(
         });
       },
 
-      sendMessage: async (text, _attachments) => {
+      sendMessage: async (text, attachments = []) => {
         const state = get();
         let convId = state.activeConversationId;
         const now = new Date().toISOString();
@@ -398,6 +399,7 @@ export const useChatStore = create<ChatState>()(
             conversation_id: conversationId,
             message: text,
             agent_mode: chatMode,
+            attachments,
             onEvent: (event) => {
               if (event.kind === "text_delta") {
                 const chunk = String(event.data?.text ?? "");

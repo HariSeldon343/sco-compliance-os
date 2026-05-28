@@ -46,6 +46,15 @@ export interface MessageItem {
   created_at: string; // ISO 8601
 }
 
+/** Allegato file inviato insieme al messaggio chat */
+export interface ChatAttachment {
+  path: string;
+  name: string;
+  size: number;
+  content: string | null;
+  truncated: boolean;
+}
+
 /** Conversazione (intestazione + metadata) */
 export interface ConversationItem {
   id: Id;
