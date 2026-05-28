@@ -1,4 +1,4 @@
-﻿"""Router /api/skills/builder — costruzione skill personalizzate via wizard chat
+"""Router /api/skills/builder — costruzione skill personalizzate via wizard chat
 oppure modalita' advanced (system prompt + frontmatter editor).
 
 Goal v0.8.1 Antonio: "chiunque puo' costruire un sottoagente specializzato — o
@@ -33,7 +33,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from sco_compliance_os.config import Settings, get_settings
 from sco_compliance_os.core.logging_setup import get_logger
-from sco_compliance_os.services.skills.loader import discover_skills, get_skill
+from sco_compliance_os.services.skills.loader import get_skill
 
 logger = get_logger(__name__)
 
@@ -45,9 +45,7 @@ router_skills_crud = APIRouter(prefix="/api/skills", tags=["skills-builder"])
 
 # ----- Vocabolari chiusi -----
 
-AgentTypeLiteral = Literal[
-    "auditor", "consulente", "analista", "scrittore", "ricercatore", "altro"
-]
+AgentTypeLiteral = Literal["auditor", "consulente", "analista", "scrittore", "ricercatore", "altro"]
 AmbitoLiteral = Literal[
     "cybersecurity",
     "compliance-sanitaria",
@@ -118,9 +116,7 @@ class WizardSkillRequest(BaseModel):
     def _validate_tools(cls, v: list[str]) -> list[str]:
         invalid = [t for t in v if t not in ALLOWED_TOOLS]
         if invalid:
-            raise ValueError(
-                f"Tool non ammessi: {invalid}. Vocabolario: {sorted(ALLOWED_TOOLS)}"
-            )
+            raise ValueError(f"Tool non ammessi: {invalid}. Vocabolario: {sorted(ALLOWED_TOOLS)}")
         return v
 
 
@@ -162,9 +158,7 @@ class SkillPatchRequest(BaseModel):
             return None
         invalid = [t for t in v if t not in ALLOWED_TOOLS]
         if invalid:
-            raise ValueError(
-                f"Tool non ammessi: {invalid}. Vocabolario: {sorted(ALLOWED_TOOLS)}"
-            )
+            raise ValueError(f"Tool non ammessi: {invalid}. Vocabolario: {sorted(ALLOWED_TOOLS)}")
         return v
 
 
@@ -337,17 +331,9 @@ def _build_skill_md(spec: WizardSkillRequest, resolved_slug: str) -> str:
 
     example_block = ""
     if spec.example_question:
-        example_block = (
-            "\n## Esempio domanda gestita bene\n\n"
-            f"> {spec.example_question}\n"
-        )
+        example_block = f"\n## Esempio domanda gestita bene\n\n> {spec.example_question}\n"
 
-    return (
-        f"---\n{fm_yaml}---\n\n"
-        f"# {spec.name}\n\n"
-        f"{body_main}\n"
-        f"{example_block}"
-    )
+    return f"---\n{fm_yaml}---\n\n# {spec.name}\n\n{body_main}\n{example_block}"
 
 
 def _default_body_from_tone(spec: WizardSkillRequest) -> str:
@@ -378,8 +364,7 @@ def _default_body_from_tone(spec: WizardSkillRequest) -> str:
         "altro": "Sei un agente specializzato.",
     }
     return (
-        f"{type_map[spec.agent_type]} {spec.description}\n\n"
-        f"## Come scrivi\n\n{tone_map[spec.tone]}"
+        f"{type_map[spec.agent_type]} {spec.description}\n\n## Come scrivi\n\n{tone_map[spec.tone]}"
     )
 
 
@@ -533,11 +518,7 @@ async def patch_skill(
             re.DOTALL,
         )
         example_block = example_match.group(0) if example_match else ""
-        body = (
-            f"# {frontmatter_dict.get('name', slug)}\n\n"
-            f"{payload.system_prompt}\n"
-            f"{example_block}"
-        )
+        body = f"# {frontmatter_dict.get('name', slug)}\n\n{payload.system_prompt}\n{example_block}"
 
     fm_yaml = yaml.safe_dump(
         frontmatter_dict,

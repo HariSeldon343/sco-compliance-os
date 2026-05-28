@@ -32,6 +32,7 @@ import time
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TypedDict
 
 import structlog
 
@@ -40,11 +41,18 @@ from sco_compliance_os.config import get_settings
 logger = structlog.get_logger(__name__)
 
 
+class PiperVoiceMeta(TypedDict):
+    onnx_url: str
+    json_url: str
+    language: str
+    size_bytes: int
+
+
 # ----- Costanti voci + binario -----
 
 # Voci Piper. Ogni voce = (onnx model + json config).
 # Mirror ufficiale rhasspy/piper-voices su HuggingFace.
-PIPER_VOICES = {
+PIPER_VOICES: dict[str, PiperVoiceMeta] = {
     "it_IT-paola-medium": {
         "onnx_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/it/it_IT/paola/medium/it_IT-paola-medium.onnx",
         "json_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/it/it_IT/paola/medium/it_IT-paola-medium.onnx.json",
@@ -171,14 +179,13 @@ def _download_voice_blocking(voice_name: str) -> tuple[Path, Path]:
 def _run_piper_blocking(
     text: str,
     onnx_path: Path,
-    json_path: Path,  # noqa: ARG001 (piper trova .onnx.json next to .onnx)
+    json_path: Path,
 ) -> bytes:
     """Sintetizza testo via piper. Ritorna WAV bytes. Blocking."""
     piper = _resolve_piper_bin()
     if not piper:
         raise RuntimeError(
-            "piper binary not found. Install piper or place in "
-            "~/.sco-compliance-os/voice-bin/"
+            "piper binary not found. Install piper or place in ~/.sco-compliance-os/voice-bin/"
         )
 
     with tempfile.TemporaryDirectory() as td:
@@ -210,7 +217,7 @@ def _run_piper_blocking(
                 raise RuntimeError("piper did not produce output WAV")
             return out_path.read_bytes()
         except subprocess.TimeoutExpired:
-            raise RuntimeError("piper timeout (>60s)")
+            raise RuntimeError("piper timeout (>60s)") from None
 
 
 # ----- Pubblico async -----
@@ -238,9 +245,7 @@ async def synthesize(
     if not text.strip():
         raise ValueError("Empty text")
     if voice not in PIPER_VOICES:
-        raise ValueError(
-            f"Unknown voice: {voice}. Available: {list(PIPER_VOICES.keys())}"
-        )
+        raise ValueError(f"Unknown voice: {voice}. Available: {list(PIPER_VOICES.keys())}")
 
     # Trim a 2000 char per sicurezza latency
     text = text.strip()[:2000]
@@ -249,17 +254,13 @@ async def synthesize(
     voice_paths = _resolve_voice_paths(voice)
     if voice_paths is None:
         loop = asyncio.get_running_loop()
-        voice_paths = await loop.run_in_executor(
-            None, _download_voice_blocking, voice
-        )
+        voice_paths = await loop.run_in_executor(None, _download_voice_blocking, voice)
 
     onnx_path, json_path = voice_paths
 
     # Run piper
     loop = asyncio.get_running_loop()
-    wav_bytes = await loop.run_in_executor(
-        None, _run_piper_blocking, text, onnx_path, json_path
-    )
+    wav_bytes = await loop.run_in_executor(None, _run_piper_blocking, text, onnx_path, json_path)
 
     elapsed_ms = int((time.time() - t0) * 1000)
     meta = PIPER_VOICES[voice]

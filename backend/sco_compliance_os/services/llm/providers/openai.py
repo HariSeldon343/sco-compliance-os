@@ -90,7 +90,7 @@ class OpenAIProvider(LLMProvider):
         )
         return self._client
 
-    async def stream(
+    def stream(
         self,
         messages: list[dict[str, Any]],
         model: str,
@@ -100,105 +100,109 @@ class OpenAIProvider(LLMProvider):
         extra: dict[str, Any] | None = None,
     ) -> AsyncIterator[ChunkEvent]:
         """Stream OpenAI chat.completions normalizzato a ChunkEvent."""
-        logger.info(
-            "openai_provider.stream.start",
-            model=model,
-            messages_count=len(messages),
-            max_tokens=max_tokens,
-        )
 
-        try:
-            client = self._get_client()
-        except ProviderError as perr:
-            yield ChunkEvent(
-                kind="error",
-                data={
-                    "message": str(perr),
-                    "exc_type": perr.exc_type,
-                    "provider": self.name,
-                },
-                seq=0,
-            )
-            return
-
-        # OpenAI chat schema: messages list con system come primo elemento se presente
-        openai_messages: list[dict[str, Any]] = []
-        if system_prompt:
-            openai_messages.append({"role": "system", "content": system_prompt})
-        openai_messages.extend(messages)
-
-        kwargs: dict[str, Any] = {
-            "model": model,
-            "messages": openai_messages,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-            "stream": True,
-            "stream_options": {"include_usage": True},
-        }
-        if extra:
-            for k, v in extra.items():
-                if k in ("tools", "tool_choice", "response_format", "seed"):
-                    kwargs[k] = v
-
-        seq = 0
-        final_usage: dict[str, int] = {}
-        final_stop_reason: str | None = None
-        final_model: str = model
-
-        try:
-            stream = await client.chat.completions.create(**kwargs)
-            async for chunk in stream:
-                # Chunk shape: choices[0].delta.content (text) + finish_reason
-                # Ultimo chunk con stream_options include_usage ha chunk.usage
-                if hasattr(chunk, "usage") and chunk.usage is not None:
-                    final_usage = {
-                        "input_tokens": chunk.usage.prompt_tokens,
-                        "output_tokens": chunk.usage.completion_tokens,
-                    }
-                if not chunk.choices:
-                    continue
-                choice = chunk.choices[0]
-                delta = getattr(choice, "delta", None)
-                if delta is not None and delta.content:
-                    yield ChunkEvent(
-                        kind="text_delta",
-                        data={"text": delta.content},
-                        seq=seq,
-                    )
-                    seq += 1
-                if choice.finish_reason is not None:
-                    final_stop_reason = choice.finish_reason
-                if hasattr(chunk, "model") and chunk.model:
-                    final_model = chunk.model
-
-            yield ChunkEvent(
-                kind="done",
-                data={
-                    "stop_reason": final_stop_reason or "end_turn",
-                    "usage": final_usage or {"input_tokens": 0, "output_tokens": 0},
-                    "model": final_model,
-                    "provider": self.name,
-                },
-                seq=seq,
-            )
+        async def iterator() -> AsyncIterator[ChunkEvent]:
             logger.info(
-                "openai_provider.stream.done",
-                events=seq + 1,
-                input_tokens=final_usage.get("input_tokens", 0),
-                output_tokens=final_usage.get("output_tokens", 0),
-                stop_reason=final_stop_reason,
+                "openai_provider.stream.start",
+                model=model,
+                messages_count=len(messages),
+                max_tokens=max_tokens,
             )
-        except Exception as exc:
-            logger.exception("openai_provider.stream.error", error=str(exc))
-            yield ChunkEvent(
-                kind="error",
-                data={
-                    "message": str(exc),
-                    "exc_type": type(exc).__name__,
-                    "provider": self.name,
-                },
-                seq=seq,
-            )
+
+            try:
+                client = self._get_client()
+            except ProviderError as perr:
+                yield ChunkEvent(
+                    kind="error",
+                    data={
+                        "message": str(perr),
+                        "exc_type": perr.exc_type,
+                        "provider": self.name,
+                    },
+                    seq=0,
+                )
+                return
+
+            # OpenAI chat schema: messages list con system come primo elemento se presente
+            openai_messages: list[dict[str, Any]] = []
+            if system_prompt:
+                openai_messages.append({"role": "system", "content": system_prompt})
+            openai_messages.extend(messages)
+
+            kwargs: dict[str, Any] = {
+                "model": model,
+                "messages": openai_messages,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "stream": True,
+                "stream_options": {"include_usage": True},
+            }
+            if extra:
+                for k, v in extra.items():
+                    if k in ("tools", "tool_choice", "response_format", "seed"):
+                        kwargs[k] = v
+
+            seq = 0
+            final_usage: dict[str, int] = {}
+            final_stop_reason: str | None = None
+            final_model: str = model
+
+            try:
+                stream = await client.chat.completions.create(**kwargs)
+                async for chunk in stream:
+                    # Chunk shape: choices[0].delta.content (text) + finish_reason
+                    # Ultimo chunk con stream_options include_usage ha chunk.usage
+                    if hasattr(chunk, "usage") and chunk.usage is not None:
+                        final_usage = {
+                            "input_tokens": chunk.usage.prompt_tokens,
+                            "output_tokens": chunk.usage.completion_tokens,
+                        }
+                    if not chunk.choices:
+                        continue
+                    choice = chunk.choices[0]
+                    delta = getattr(choice, "delta", None)
+                    if delta is not None and delta.content:
+                        yield ChunkEvent(
+                            kind="text_delta",
+                            data={"text": delta.content},
+                            seq=seq,
+                        )
+                        seq += 1
+                    if choice.finish_reason is not None:
+                        final_stop_reason = choice.finish_reason
+                    if hasattr(chunk, "model") and chunk.model:
+                        final_model = chunk.model
+
+                yield ChunkEvent(
+                    kind="done",
+                    data={
+                        "stop_reason": final_stop_reason or "end_turn",
+                        "usage": final_usage or {"input_tokens": 0, "output_tokens": 0},
+                        "model": final_model,
+                        "provider": self.name,
+                    },
+                    seq=seq,
+                )
+                logger.info(
+                    "openai_provider.stream.done",
+                    events=seq + 1,
+                    input_tokens=final_usage.get("input_tokens", 0),
+                    output_tokens=final_usage.get("output_tokens", 0),
+                    stop_reason=final_stop_reason,
+                )
+            except Exception as exc:
+                logger.exception("openai_provider.stream.error", error=str(exc))
+                yield ChunkEvent(
+                    kind="error",
+                    data={
+                        "message": str(exc),
+                        "exc_type": type(exc).__name__,
+                        "provider": self.name,
+                    },
+                    seq=seq,
+                )
+
+        return iterator()
 
     async def health_check(self) -> bool:
         """Probe: list models endpoint OpenAI."""

@@ -40,6 +40,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from sco_compliance_os.core.logging_setup import get_logger
+from sco_compliance_os.services.memory import tree_store
 
 logger = get_logger(__name__)
 
@@ -71,6 +72,7 @@ class Conversation(Base):
     title: Mapped[str] = mapped_column(String(200), default="Nuova conversazione")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now, onupdate=_utc_now)
+    agent_mode: Mapped[str] = mapped_column(String(16), default="auto")
 
     # v0.9.0 multi-turn skill: nome skill attiva nella conversation (es. "os-setup").
     # Quando None la conversation usa il system prompt default.
@@ -112,6 +114,7 @@ class Store:
 
     def __init__(self, db_path: Path) -> None:
         db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._db_path = db_path
         self._url = f"sqlite+aiosqlite:///{db_path}"
         self._engine: AsyncEngine = create_async_engine(self._url, echo=False, future=True)
         self._session_factory = async_sessionmaker(
@@ -128,6 +131,7 @@ class Store:
         async with self._engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
             # Migrazioni idempotenti — pattern già adottato in sco-agent-local
+            await self._safe_add_column(conn, "conversations", "agent_mode", "TEXT DEFAULT 'auto'")
             await self._safe_add_column(conn, "messages", "ask_user_question_json", "TEXT")
             await self._safe_add_column(conn, "messages", "tool_calls_json", "TEXT")
             # v0.9.0 multi-turn skill: active_skill + counter step
@@ -168,6 +172,28 @@ class Store:
     async def get_conversation(self, conv_id: str) -> Conversation | None:
         async with self.session() as sess:
             return await sess.get(Conversation, conv_id)
+
+    async def delete_conversation(self, conv_id: str) -> bool:
+        """Cancella conversation + messaggi + memory tree associato."""
+        async with self.session() as sess:
+            conv = await sess.get(Conversation, conv_id)
+            if conv is None:
+                return False
+            await sess.delete(conv)
+            await sess.commit()
+
+        try:
+            await tree_store.delete_source(
+                source_kind="chat",
+                source_id=conv_id,
+                db_path=self._db_path,
+            )
+        except Exception as exc:  # Best-effort cleanup mem_tree
+            logger.warning(
+                "store.delete_conversation.memory_tree_cleanup_failed",
+                extra={"conversation_id": conv_id, "error": str(exc)},
+            )
+        return True
 
     # ----- Messages -----
     async def append_message(
@@ -230,6 +256,14 @@ class Store:
                 return
             conv.active_skill = skill_name
             conv.active_skill_step = step
+            await sess.commit()
+
+    async def set_agent_mode(self, conversation_id: str, agent_mode: str) -> None:
+        async with self.session() as sess:
+            conv = await sess.get(Conversation, conversation_id)
+            if conv is None:
+                return
+            conv.agent_mode = agent_mode
             await sess.commit()
 
     async def close(self) -> None:

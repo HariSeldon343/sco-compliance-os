@@ -30,9 +30,9 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ _DEFAULT_MAX_TOKENS = 3000
 _MIN_VIABLE_TOKENS = 10
 
 
-class TreeChunkSourceKind(str, Enum):
+class TreeChunkSourceKind(StrEnum):
     """Vocabolario chiuso source_kind del Memory Tree bucket-seal.
 
     Valori mutualmente esclusivi. Aggiunte richiedono OK utente esplicito
@@ -60,7 +60,7 @@ class TreeChunkSourceKind(str, Enum):
     NOTE = "note"
 
 
-class TreeChunkStatus(str, Enum):
+class TreeChunkStatus(StrEnum):
     """Stato del chunk nel pipeline bucket-seal 4 fasi.
 
     Macchina a stati (transizioni ammesse):
@@ -187,7 +187,7 @@ def count_tokens(text: str) -> int:
     if not text:
         return 0
     try:
-        import tiktoken  # type: ignore
+        import tiktoken
 
         encoder = tiktoken.get_encoding("cl100k_base")
         return len(encoder.encode(text))
@@ -215,7 +215,7 @@ def compute_chunk_id(
     Returns:
         Hex digest 16 chars (64 bit, sufficiente per ~4M chunk senza collision).
     """
-    payload = f"{source_kind}|{source_id}|{seq_in_source}|{content}".encode("utf-8")
+    payload = f"{source_kind}|{source_id}|{seq_in_source}|{content}".encode()
     return hashlib.sha256(payload).hexdigest()[:16]
 
 
@@ -322,10 +322,13 @@ def chunk_text(
     """
     canonical = canonicalize_markdown(text)
     if not canonical:
-        logger.debug("chunk_text: empty after canonicalization", extra={
-            "source_kind": source_kind,
-            "source_id": source_id,
-        })
+        logger.debug(
+            "chunk_text: empty after canonicalization",
+            extra={
+                "source_kind": source_kind,
+                "source_id": source_id,
+            },
+        )
         return []
 
     now_ms = int(datetime.now(UTC).timestamp() * 1000)

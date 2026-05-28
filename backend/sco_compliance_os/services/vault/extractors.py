@@ -35,10 +35,11 @@ import hashlib
 import json
 import logging
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -156,12 +157,12 @@ def _extract_md_sync(path: Path) -> ExtractedFile:
     if match:
         body = match.group(2)
         try:
-            import yaml  # type: ignore
+            import yaml
 
             parsed = yaml.safe_load(match.group(1)) or {}
             if isinstance(parsed, dict):
                 fm = parsed
-        except Exception as yaml_err:  # noqa: BLE001
+        except Exception as yaml_err:
             # YAML invalido: prosegui con body senza frontmatter strutturato
             # (Conv. 41 tracciatura: errore loggato ma non blocca)
             logger.debug("md frontmatter parse failed for %s: %s", path, yaml_err)
@@ -186,13 +187,13 @@ def _extract_pdf_sync(path: Path) -> ExtractedFile:
     mtime_ms, size_bytes = _file_stat(path)
     ext = path.suffix.lower()
     try:
-        from pypdf import PdfReader  # type: ignore
+        from pypdf import PdfReader
     except ImportError as imp_err:
         return _build_empty_result(path, f"pypdf_unavailable: {imp_err}")
 
     try:
         reader = PdfReader(str(path))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return _build_empty_result(path, f"pdf_open_error: {exc}")
 
     pages_text: list[str] = []
@@ -202,7 +203,7 @@ def _extract_pdf_sync(path: Path) -> ExtractedFile:
             page_count += 1
             try:
                 txt = page.extract_text() or ""
-            except Exception as page_err:  # noqa: BLE001
+            except Exception as page_err:
                 logger.debug(
                     "pdf page extract failed (path=%s page=%d): %s",
                     path,
@@ -212,7 +213,7 @@ def _extract_pdf_sync(path: Path) -> ExtractedFile:
                 txt = ""
             if txt.strip():
                 pages_text.append(txt.strip())
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return _build_empty_result(path, f"pdf_iterate_error: {exc}")
 
     body = "\n\n".join(pages_text)
@@ -236,13 +237,13 @@ def _extract_docx_sync(path: Path) -> ExtractedFile:
     mtime_ms, size_bytes = _file_stat(path)
     ext = path.suffix.lower()
     try:
-        from docx import Document  # type: ignore
+        from docx import Document
     except ImportError as imp_err:
         return _build_empty_result(path, f"python_docx_unavailable: {imp_err}")
 
     try:
         doc = Document(str(path))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return _build_empty_result(path, f"docx_open_error: {exc}")
 
     parts: list[str] = []
@@ -260,7 +261,7 @@ def _extract_docx_sync(path: Path) -> ExtractedFile:
                 row_txt = " | ".join((cell.text or "").strip() for cell in row.cells)
                 if row_txt.strip(" |"):
                     parts.append(row_txt)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         # Errore parziale: ritorna quello estratto + segna l'errore
         body_so_far = "\n".join(parts)
         return ExtractedFile(
@@ -296,14 +297,14 @@ def _extract_xlsx_sync(path: Path) -> ExtractedFile:
     mtime_ms, size_bytes = _file_stat(path)
     ext = path.suffix.lower()
     try:
-        from openpyxl import load_workbook  # type: ignore
+        import openpyxl  # type: ignore[import-untyped]  # libreria senza stub py.typed
     except ImportError as imp_err:
         return _build_empty_result(path, f"openpyxl_unavailable: {imp_err}")
 
     try:
         # read_only=True + data_only=True: ignora formule, ritorna valori cached.
-        wb = load_workbook(str(path), read_only=True, data_only=True)
-    except Exception as exc:  # noqa: BLE001
+        wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
+    except Exception as exc:
         return _build_empty_result(path, f"xlsx_open_error: {exc}")
 
     parts: list[str] = []
@@ -316,14 +317,12 @@ def _extract_xlsx_sync(path: Path) -> ExtractedFile:
             ws = wb[sheet_name]
             for row in ws.iter_rows(values_only=True):
                 # Salta righe completamente vuote
-                row_vals = [
-                    str(v).strip() for v in row if v is not None and str(v).strip()
-                ]
+                row_vals = [str(v).strip() for v in row if v is not None and str(v).strip()]
                 if not row_vals:
                     continue
                 total_cells += len(row_vals)
                 parts.append(" | ".join(row_vals))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         body_so_far = "\n".join(parts)
         return ExtractedFile(
             path=str(path),
@@ -343,7 +342,7 @@ def _extract_xlsx_sync(path: Path) -> ExtractedFile:
     finally:
         try:
             wb.close()
-        except Exception:  # noqa: BLE001, S110
+        except Exception:
             pass
 
     body = "\n".join(parts)
@@ -430,7 +429,7 @@ def _extract_yaml_sync(path: Path) -> ExtractedFile:
     valid_yaml = True
     body = raw.strip()
     try:
-        import yaml  # type: ignore
+        import yaml
 
         parsed = yaml.safe_load(raw)
         if parsed is not None:
@@ -441,7 +440,7 @@ def _extract_yaml_sync(path: Path) -> ExtractedFile:
                 sort_keys=False,
                 default_flow_style=False,
             ).strip()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.debug("yaml parse failed for %s: %s", path, exc)
         valid_yaml = False
 
@@ -516,7 +515,7 @@ async def extract_file(path: Path) -> ExtractedFile:
     loop = asyncio.get_running_loop()
     try:
         result = await loop.run_in_executor(None, extractor, path)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.error("extract_file unexpected error path=%s: %s", path, exc)
         return _build_empty_result(path, f"extract_unhandled: {exc}")
 
@@ -545,9 +544,9 @@ def utc_now_ms() -> int:
 
 __all__ = [
     "EXTRACTORS",
+    "SUPPORTED_EXTENSIONS",
     "ExtractedFile",
     "ExtractorFn",
-    "SUPPORTED_EXTENSIONS",
     "extract_file",
     "is_supported",
     "utc_now_ms",

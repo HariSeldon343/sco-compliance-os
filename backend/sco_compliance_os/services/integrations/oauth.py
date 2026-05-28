@@ -47,8 +47,14 @@ import httpx
 from .base import OAuthError, OAuthTokens
 from .token_store import (
     SERVICE_NAME_PREFIX,
+)
+from .token_store import (
     delete_tokens as _delete_tokens_kr,
+)
+from .token_store import (
     get_tokens as _get_tokens_kr,
+)
+from .token_store import (
     store_tokens as _store_tokens_kr,
 )
 
@@ -82,7 +88,7 @@ class ProviderConfig:
 
 # Endpoint Google OAuth — fonte: https://accounts.google.com/.well-known/openid-configuration
 _GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
-_GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"  # noqa: S105
+_GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 _GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke"
 _GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
 
@@ -275,7 +281,7 @@ def _validate_state(state: str, expected_provider: str, expected_tenant: str) ->
     age = (datetime.now(UTC) - entry["created_at"]).total_seconds()
     if age > _STATE_TTL_SECONDS:
         return False
-    return (
+    return bool(
         entry["provider_slug"] == expected_provider and entry["tenant_id"] == expected_tenant
     )
 
@@ -529,9 +535,7 @@ async def refresh_token(
     return new_tokens
 
 
-async def revoke_oauth_credentials(
-    provider: str, tenant_id: str = "default"
-) -> bool:
+async def revoke_oauth_credentials(provider: str, tenant_id: str = "default") -> bool:
     """Revoca i token presso Google + cancella dal keyring (disconnect).
 
     Args:
@@ -574,9 +578,7 @@ async def revoke_oauth_credentials(
                 response.text[:200],
             )
     except httpx.RequestError as exc:
-        logger.warning(
-            "oauth revoke network error (proceeding with local delete) | err=%s", exc
-        )
+        logger.warning("oauth revoke network error (proceeding with local delete) | err=%s", exc)
 
     # Cancella sempre dal keyring (anche se la revoca Google ha fallito)
     _delete_tokens_kr(provider, _compose_keyring_user(tenant_id))
@@ -614,16 +616,12 @@ def store_oauth_credentials(
         _store_email(provider, tenant_id, email)
 
 
-def get_oauth_credentials(
-    provider: str, tenant_id: str = "default"
-) -> OAuthTokens | None:
+def get_oauth_credentials(provider: str, tenant_id: str = "default") -> OAuthTokens | None:
     """Recupera i token OAuth dal keyring. ``None`` se l'utente non ha connesso."""
     return _get_tokens_kr(provider, _compose_keyring_user(tenant_id))
 
 
-async def get_valid_access_token(
-    provider: str, tenant_id: str = "default"
-) -> str:
+async def get_valid_access_token(provider: str, tenant_id: str = "default") -> str:
     """Ritorna un access_token valido per il provider, refreshing se serve.
 
     Helper di alto livello: la maggior parte dei chiamanti (provider Gmail/GCal/GDrive)

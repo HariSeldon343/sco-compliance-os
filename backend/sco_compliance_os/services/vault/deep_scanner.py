@@ -105,22 +105,39 @@ _EXTENSIONS_OF_INTEREST = frozenset(
 _FRAMEWORK_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("NIS 2", re.compile(r"\b(?:NIS\s*2|NIS2|D\.Lgs\.\s*138[/-]2024)\b", re.IGNORECASE)),
     ("ISO 27001", re.compile(r"\bISO[/\s]*(?:IEC[/\s]*)?27001\b", re.IGNORECASE)),
-    ("GDPR", re.compile(r"\bGDPR|Reg(?:olamento)?\.?\s*(?:UE|EU)?\s*2016[/\-]679\b", re.IGNORECASE)),
-    ("AI Act", re.compile(r"\bAI\s*Act|Reg(?:olamento)?\.?\s*(?:UE|EU)?\s*2024[/\-]1689\b", re.IGNORECASE)),
+    (
+        "GDPR",
+        re.compile(r"\bGDPR|Reg(?:olamento)?\.?\s*(?:UE|EU)?\s*2016[/\-]679\b", re.IGNORECASE),
+    ),
+    (
+        "AI Act",
+        re.compile(r"\bAI\s*Act|Reg(?:olamento)?\.?\s*(?:UE|EU)?\s*2024[/\-]1689\b", re.IGNORECASE),
+    ),
     ("ISO 42001", re.compile(r"\bISO[/\s]*(?:IEC[/\s]*)?42001\b", re.IGNORECASE)),
     ("ISO 9001", re.compile(r"\bISO[/\s]*9001(?!\d)\b", re.IGNORECASE)),
     ("D.Lgs. 81/2008", re.compile(r"\bD\.Lgs\.\s*81[/-]2008\b", re.IGNORECASE)),
     ("ISO 14001", re.compile(r"\bISO[/\s]*14001\b", re.IGNORECASE)),
-    ("Accreditamento sanitario", re.compile(r"\baccreditament[oi]\s+(?:istituzional[ei]|sanitar[ie])\b", re.IGNORECASE)),
+    (
+        "Accreditamento sanitario",
+        re.compile(r"\baccreditament[oi]\s+(?:istituzional[ei]|sanitar[ie])\b", re.IGNORECASE),
+    ),
     ("ISO 22301", re.compile(r"\bISO[/\s]*22301\b", re.IGNORECASE)),
     ("ISO 20000-1", re.compile(r"\bISO[/\s]*(?:IEC[/\s]*)?20000[\s\-]*1\b", re.IGNORECASE)),
     ("L. 90/2024", re.compile(r"\bL(?:egge)?\.?\s*90[/-]2024\b", re.IGNORECASE)),
     ("ISO 27017", re.compile(r"\bISO[/\s]*(?:IEC[/\s]*)?27017\b", re.IGNORECASE)),
     ("ISO 27018", re.compile(r"\bISO[/\s]*(?:IEC[/\s]*)?27018\b", re.IGNORECASE)),
     ("D.Lgs. 231/2001", re.compile(r"\bD\.Lgs\.\s*231[/-]2001\b", re.IGNORECASE)),
-    ("MDR", re.compile(r"\b(?:MDR|Reg(?:olamento)?\.?\s*(?:UE|EU)?\s*2017[/\-]745)\b", re.IGNORECASE)),
+    (
+        "MDR",
+        re.compile(r"\b(?:MDR|Reg(?:olamento)?\.?\s*(?:UE|EU)?\s*2017[/\-]745)\b", re.IGNORECASE),
+    ),
     ("GDP", re.compile(r"\bGDP\b(?:\s+\d{4})?", re.IGNORECASE)),
-    ("Codice PI", re.compile(r"\bCodice\s+(?:di\s+)?prevenzione\s+incendi|D\.M\.\s*3[/-]8[/-]2015\b", re.IGNORECASE)),
+    (
+        "Codice PI",
+        re.compile(
+            r"\bCodice\s+(?:di\s+)?prevenzione\s+incendi|D\.M\.\s*3[/-]8[/-]2015\b", re.IGNORECASE
+        ),
+    ),
     ("ITIL", re.compile(r"\bITIL(?:\s*v?[34])?\b", re.IGNORECASE)),
 ]
 
@@ -131,17 +148,64 @@ _SIGLA_PATTERN = re.compile(r"\b([A-Z]{2,6})\b")
 # Pattern detection lingue (heuristic word frequency).
 _ITALIAN_TOKENS = frozenset(
     {
-        "il", "la", "le", "lo", "gli", "un", "una", "di", "del", "della",
-        "che", "con", "per", "non", "sono", "essere", "questo", "questa",
-        "perche", "perché", "anche", "come", "quando", "dove", "dopo",
-        "delle", "negli", "nella", "molto", "quindi", "infatti",
+        "il",
+        "la",
+        "le",
+        "lo",
+        "gli",
+        "un",
+        "una",
+        "di",
+        "del",
+        "della",
+        "che",
+        "con",
+        "per",
+        "non",
+        "sono",
+        "essere",
+        "questo",
+        "questa",
+        "perche",
+        "perché",
+        "anche",
+        "come",
+        "quando",
+        "dove",
+        "dopo",
+        "delle",
+        "negli",
+        "nella",
+        "molto",
+        "quindi",
+        "infatti",
     }
 )
 _ENGLISH_TOKENS = frozenset(
     {
-        "the", "and", "or", "but", "with", "from", "this", "that", "which",
-        "where", "when", "what", "have", "has", "been", "being", "because",
-        "however", "therefore", "while", "whereas", "moreover", "furthermore",
+        "the",
+        "and",
+        "or",
+        "but",
+        "with",
+        "from",
+        "this",
+        "that",
+        "which",
+        "where",
+        "when",
+        "what",
+        "have",
+        "has",
+        "been",
+        "being",
+        "because",
+        "however",
+        "therefore",
+        "while",
+        "whereas",
+        "moreover",
+        "furthermore",
     }
 )
 
@@ -346,9 +410,31 @@ def _detect_sigle(md_paths: list[Path]) -> list[tuple[str, int]]:
 
     blacklist = frozenset(
         {
-            "OK", "PDF", "URL", "API", "HTTP", "HTML", "XML", "JSON",
-            "CEO", "CTO", "PM", "QA", "UI", "UX", "OS", "DB", "SQL",
-            "TODO", "FIXME", "NA", "TBD", "ID", "GMT", "UTC", "PST",
+            "OK",
+            "PDF",
+            "URL",
+            "API",
+            "HTTP",
+            "HTML",
+            "XML",
+            "JSON",
+            "CEO",
+            "CTO",
+            "PM",
+            "QA",
+            "UI",
+            "UX",
+            "OS",
+            "DB",
+            "SQL",
+            "TODO",
+            "FIXME",
+            "NA",
+            "TBD",
+            "ID",
+            "GMT",
+            "UTC",
+            "PST",
         }
     )
 
@@ -397,9 +483,9 @@ def _detect_framework_occurrences(md_paths: list[Path]) -> list[tuple[str, int]]
     return [(fw, c) for fw, c in file_hits.most_common() if c > 0]
 
 
-def _scan_frontmatter_distributions(md_paths: list[Path]) -> tuple[
-    dict[str, int], dict[str, int], dict[str, int], list[tuple[str, int]], int
-]:
+def _scan_frontmatter_distributions(
+    md_paths: list[Path],
+) -> tuple[dict[str, int], dict[str, int], dict[str, int], list[tuple[str, int]], int]:
     """Parse frontmatter di sample md files + raccoglie distribuzioni.
 
     Returns:
@@ -549,7 +635,7 @@ def to_markdown_summary(report: DeepScanReport) -> str:
         - Tabelle per dati strutturati invece di periodi lunghi.
     """
     lines: list[str] = []
-    lines.append(f"## Scansione profonda del vault \"{report.vault_name}\"")
+    lines.append(f'## Scansione profonda del vault "{report.vault_name}"')
     lines.append("")
 
     # Riga apertura sintetica
@@ -559,9 +645,7 @@ def to_markdown_summary(report: DeepScanReport) -> str:
             f"limite di sicurezza raggiunto). Durata: {report.scan_duration_sec}s."
         )
     else:
-        lines.append(
-            f"Scansionati {report.total_files} file in {report.scan_duration_sec}s."
-        )
+        lines.append(f"Scansionati {report.total_files} file in {report.scan_duration_sec}s.")
     lines.append("")
 
     # Tabella file per estensione (top 6)
@@ -596,9 +680,7 @@ def to_markdown_summary(report: DeepScanReport) -> str:
     if report.md_files_parsed > 0 and (
         report.entity_type_distribution or report.ambito_canonico_distribution
     ):
-        lines.append(
-            f"### Metadati SCO ({report.md_files_parsed} file markdown analizzati)"
-        )
+        lines.append(f"### Metadati SCO ({report.md_files_parsed} file markdown analizzati)")
         lines.append("")
         if report.entity_type_distribution:
             top_ents = list(report.entity_type_distribution.items())[:5]
@@ -635,27 +717,20 @@ def to_markdown_summary(report: DeepScanReport) -> str:
         other_pct = int(report.languages_detected.get("other", 0) * 100)
         lines.append("### Lingue rilevate")
         lines.append("")
-        lines.append(
-            f"Italiano {it_pct}%, Inglese {en_pct}%, Altro {other_pct}%"
-        )
+        lines.append(f"Italiano {it_pct}%, Inglese {en_pct}%, Altro {other_pct}%")
         lines.append("")
 
     # Sigle top (cruscotto candidate glossario Conv. 38)
     if report.sigle_top:
         lines.append("### Sigle ricorrenti (candidate glossario)")
         lines.append("")
-        sample_sigle = ", ".join(
-            f"{s} ({c})" for s, c in report.sigle_top[:12]
-        )
+        sample_sigle = ", ".join(f"{s} ({c})" for s, c in report.sigle_top[:12])
         lines.append(sample_sigle)
         lines.append("")
 
     lines.append("---")
     lines.append("")
-    lines.append(
-        "Ora ti faccio 10 domande veloci per personalizzare l'agente. "
-        "Una alla volta."
-    )
+    lines.append("Ora ti faccio 10 domande veloci per personalizzare l'agente. Una alla volta.")
 
     return "\n".join(lines)
 

@@ -103,9 +103,7 @@ _RE_EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 _RE_URL = re.compile(r"https?://[^\s<>\"']{4,}", re.IGNORECASE)
 
 # Pattern date IT/EN comuni (YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY).
-_RE_DATE = re.compile(
-    r"\b(?:\d{4}-\d{2}-\d{2}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b"
-)
+_RE_DATE = re.compile(r"\b(?:\d{4}-\d{2}-\d{2}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b")
 
 # Pattern names propri italiani: 2+ parole capitalizzate consecutive.
 _RE_PROPER_NAME = re.compile(r"\b[A-ZÀ-Þ][a-zà-ÿ]+(?:\s+[A-ZÀ-Þ][a-zà-ÿ]+)+\b")
@@ -275,6 +273,7 @@ def _freshness_signal(timestamp_ms: int, now_ms: int) -> float:
     if age_days < 0:
         return 1.0
     import math
+
     return math.exp(-math.log(2) * age_days / 30.0)
 
 
@@ -470,9 +469,7 @@ async def llm_extract_importance(chunk: TreeChunk) -> float:
         # Cost tracking
         input_tok = response.usage.input_tokens
         output_tok = response.usage.output_tokens
-        est_cost_usd = (
-            input_tok * LLM_COST_PER_INPUT_TOK + output_tok * LLM_COST_PER_OUTPUT_TOK
-        )
+        est_cost_usd = input_tok * LLM_COST_PER_INPUT_TOK + output_tok * LLM_COST_PER_OUTPUT_TOK
         logger.info(
             "llm_extract_importance.success",
             extra={
@@ -613,12 +610,12 @@ async def admission_decision(
 
 
 __all__ = [
-    "AdmissionDecision",
-    "CheapSignals",
     "CHEAP_WEIGHTS",
     "DEFINITE_DROP",
     "DEFINITE_KEEP",
     "DROP_BASELINE",
+    "AdmissionDecision",
+    "CheapSignals",
     "admission_decision",
     "cheap_signals",
     "cheap_total",

@@ -135,43 +135,31 @@ _AMBITO_KEYWORD_MAP: dict[str, frozenset[str]] = {
     "cybersicurezza": frozenset(
         {"nis 2", "nis2", "iso 27001", "iso/iec 27001", "csirt", "acn", "cybersicurezza"}
     ),
-    "governance-ai": frozenset(
-        {"ai act", "iso 42001", "ai system", "intelligenza artificiale"}
-    ),
+    "governance-ai": frozenset({"ai act", "iso 42001", "ai system", "intelligenza artificiale"}),
     "privacy-protezione-dati": frozenset(
         {"gdpr", "privacy", "dpia", "trattamento dati personali", "garante privacy"}
     ),
     "accreditamento-sanitario": frozenset(
         {"accreditamento", "irccs", "asl", "drg", "ospedale", "sanitario"}
     ),
-    "dispositivi-medici": frozenset(
-        {"mdr", "ivdr", "dispositivo medico", "ce marking medical"}
-    ),
+    "dispositivi-medici": frozenset({"mdr", "ivdr", "dispositivo medico", "ce marking medical"}),
     "radioprotezione": frozenset(
         {"radioprotezione", "esposizione medica", "irradiazione", "d.lgs. 101/2020"}
     ),
-    "sicurezza-lavoro": frozenset(
-        {"81/2008", "rspp", "dvr", "duvri", "asr", "salute e sicurezza"}
-    ),
+    "sicurezza-lavoro": frozenset({"81/2008", "rspp", "dvr", "duvri", "asr", "salute e sicurezza"}),
     "farmacovigilanza": frozenset(
         {"farmacovigilanza", "gdp", "good distribution practice", "mah", "ema"}
     ),
     "service-management-ict": frozenset(
         {"iso 20000", "itil", "service management", "service level agreement"}
     ),
-    "appalti-pubblici": frozenset(
-        {"appalti", "36/2023", "rup", "consip", "mepa", "anac", "gara"}
-    ),
+    "appalti-pubblici": frozenset({"appalti", "36/2023", "rup", "consip", "mepa", "anac", "gara"}),
     "prevenzione-incendi": frozenset(
         {"prevenzione incendi", "uni 9795", "en 54", "decreto controlli", "codice pi"}
     ),
-    "compliance-231": frozenset(
-        {"231/2001", "modello organizzativo", "odv", "reati presupposto"}
-    ),
+    "compliance-231": frozenset({"231/2001", "modello organizzativo", "odv", "reati presupposto"}),
     "qualita-sgq": frozenset({"iso 9001", "sgq", "sistema qualita", "qualita"}),
-    "gestione-ambientale": frozenset(
-        {"iso 14001", "emas", "152/2006", "testo unico ambiente"}
-    ),
+    "gestione-ambientale": frozenset({"iso 14001", "emas", "152/2006", "testo unico ambiente"}),
     "sicurezza-alimentare": frozenset(
         {"haccp", "852/2004", "sicurezza alimentare", "igiene alimenti"}
     ),
@@ -200,9 +188,7 @@ _NORMATIVE_REGEXES: list[tuple[str, re.Pattern[str]]] = [
     ),
     (
         "iso-iec",
-        re.compile(
-            r"\bISO(?:/IEC)?\s*\d{4,5}(?:[-:]\d+)?(?::\d{4})?", re.IGNORECASE
-        ),
+        re.compile(r"\bISO(?:/IEC)?\s*\d{4,5}(?:[-:]\d+)?(?::\d{4})?", re.IGNORECASE),
     ),
     (
         "dpr",
@@ -210,9 +196,7 @@ _NORMATIVE_REGEXES: list[tuple[str, re.Pattern[str]]] = [
     ),
     (
         "dm",
-        re.compile(
-            r"\bDM\s*\d{1,3}\s*/\s*\d{1,2}\s*/\s*\d{4}", re.IGNORECASE
-        ),
+        re.compile(r"\bDM\s*\d{1,3}\s*/\s*\d{1,2}\s*/\s*\d{4}", re.IGNORECASE),
     ),
 ]
 
@@ -326,8 +310,14 @@ def generate_slug_suggestion(title: str, *, max_len: int = _SLUG_MAX_LEN) -> str
     # Lowercase + sostituzione caratteri accentati italiani comuni.
     cleaned = title.lower()
     for src, dst in [
-        ("à", "a"), ("è", "e"), ("é", "e"), ("ì", "i"), ("ò", "o"),
-        ("ù", "u"), ("ç", "c"), ("ñ", "n"),
+        ("à", "a"),
+        ("è", "e"),
+        ("é", "e"),
+        ("ì", "i"),
+        ("ò", "o"),
+        ("ù", "u"),
+        ("ç", "c"),
+        ("ñ", "n"),
     ]:
         cleaned = cleaned.replace(src, dst)
     # Replace separatori comuni con dash.
@@ -343,7 +333,7 @@ def generate_slug_suggestion(title: str, *, max_len: int = _SLUG_MAX_LEN) -> str
 
 def build_proposal_id(conversation_id: str, message_id: str) -> str:
     """Genera proposal_id deterministico (sha256 sui 2 input, 16 hex char)."""
-    seed = f"{conversation_id}::{message_id}".encode("utf-8")
+    seed = f"{conversation_id}::{message_id}".encode()
     return hashlib.sha256(seed).hexdigest()[:16]
 
 
@@ -464,7 +454,7 @@ def classify_url_to_destination(
         # Strip leading "www."
         if domain.startswith("www."):
             domain = domain[4:]
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("classify_url_to_destination: URL parse error %s: %s", url, exc)
         return "memory_tree", 0.1, f"URL non parsabile: {url}"
 
@@ -530,9 +520,24 @@ def classify_attachment_to_destination(
 
     # Heuristica filename normativo (chiavi tipiche).
     filename_normative_hints = (
-        "d-lgs", "d.lgs", "dlgs", "decreto", "legge", "regolamento", "reg-ue",
-        "regue", "direttiva", "iso-iec", "iso-", "uni-", "dpr", "dpcm", "dm-",
-        "circolare", "linee-guida", "linee-guida-",
+        "d-lgs",
+        "d.lgs",
+        "dlgs",
+        "decreto",
+        "legge",
+        "regolamento",
+        "reg-ue",
+        "regue",
+        "direttiva",
+        "iso-iec",
+        "iso-",
+        "uni-",
+        "dpr",
+        "dpcm",
+        "dm-",
+        "circolare",
+        "linee-guida",
+        "linee-guida-",
     )
     is_normative_filename = any(hint in filename for hint in filename_normative_hints)
 
@@ -649,8 +654,12 @@ def propose_frontmatter_draft(
             subtype_hint = refs[0][0]
             # Mappa subtype hint -> entity_type top-level.
             if subtype_hint in {
-                "decreto-legislativo", "legge-statale", "regolamento-ue",
-                "direttiva-ue", "dpr", "dm",
+                "decreto-legislativo",
+                "legge-statale",
+                "regolamento-ue",
+                "direttiva-ue",
+                "dpr",
+                "dm",
             }:
                 base["entity_type"] = "atto-normativo"
                 base["entity_subtype"] = subtype_hint
@@ -750,14 +759,10 @@ def analyze_message_for_wiki_ingest(
             continue
         mime = att.get("mime_type", "")
         content_preview = att.get("content_preview", "") or att.get("text_content", "")
-        dest, conf, rationale = classify_attachment_to_destination(
-            path, mime, content_preview
-        )
+        dest, conf, rationale = classify_attachment_to_destination(path, mime, content_preview)
         title = att.get("title") or Path(path).stem
         slug = generate_slug_suggestion(title)
-        fm_draft = propose_frontmatter_draft(
-            dest, title, content_preview, file_path=path
-        )
+        fm_draft = propose_frontmatter_draft(dest, title, content_preview, file_path=path)
         slot = WikiIngestSlot(
             source_type="attachment",
             title=title,
@@ -799,9 +804,7 @@ def analyze_message_for_wiki_ingest(
         if not title:
             title = url
         slug = generate_slug_suggestion(title)
-        fm_draft = propose_frontmatter_draft(
-            dest, title, "", source_url=url
-        )
+        fm_draft = propose_frontmatter_draft(dest, title, "", source_url=url)
         slot = WikiIngestSlot(
             source_type="url",
             title=title,
@@ -836,9 +839,7 @@ def analyze_message_for_wiki_ingest(
         if conf < 0.3:
             continue
         slug = generate_slug_suggestion(title)
-        fm_draft = propose_frontmatter_draft(
-            dest, title, snippet, source_url=url
-        )
+        fm_draft = propose_frontmatter_draft(dest, title, snippet, source_url=url)
         slot = WikiIngestSlot(
             source_type="search_result",
             title=title,

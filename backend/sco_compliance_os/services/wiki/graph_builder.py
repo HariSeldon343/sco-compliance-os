@@ -277,9 +277,7 @@ def _entity_to_node(doc: VaultDocument, slug: str, vault_root: Path) -> dict[str
     }
 
 
-def _cliente_to_node(
-    doc: VaultDocument, cliente_id: str, vault_root: Path
-) -> dict[str, Any]:
+def _cliente_to_node(doc: VaultDocument, cliente_id: str, vault_root: Path) -> dict[str, Any]:
     """Serializza cliente business come nodo grafo."""
     category = "scadenza" if doc.entity_type == "scadenza" else "cliente"
     return {
@@ -692,9 +690,8 @@ def build_vault_graph(
     # Walk completo vault per estrarre wikilink dal body markdown.
     # Emette nodi 'note' generici + edge categoria 'wikilink'.
     note_paths: dict[str, str] = {}
-    body_edges_count = 0
     if include_body_wikilinks:
-        body_edges, body_edges_count = _walk_body_wikilinks(
+        body_edges, _body_edges_count = _walk_body_wikilinks(
             vault_root,
             nodes_by_id,
             note_paths,

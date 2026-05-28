@@ -3,6 +3,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 import type {
+  ChatMode,
   ConversationItem,
   MessageItem,
   AskUserQuestionWidget,
@@ -10,15 +11,17 @@ import type {
 } from "@/types/api";
 import { apiClient } from "@/api/client";
 
-// Permission mode UX dell'agente. Backend non ha ancora cablaggio param dedicato
-// (carry-over v0.2.0): per ora vive solo lato frontend come preferenza utente
-// persistita. Quando backend esporrà `permission_mode` su POST /api/chat/stream,
-// basterà inoltrarlo dallo store. Pattern Conv. 47 single source of truth.
-export type ChatMode = "plan" | "ask" | "auto";
+export type { ChatMode } from "@/types/api";
 
+// Permission mode UX dell'agente: lo store mantiene la scelta corrente e
+// impedisce la persistenza della modalit? "yolo" oltre la sessione attiva.
+// Il backend v0.14.0 salva agent_mode per conversation e propaga permission_mode
+// verso l'LLM.
 interface ChatModeState {
   mode: ChatMode;
   setMode: (mode: ChatMode) => void;
+  yoloAcknowledged: boolean;
+  setYoloAcknowledged: (acknowledged: boolean) => void;
 }
 
 export const useChatModeStore = create<ChatModeState>()(
@@ -27,11 +30,22 @@ export const useChatModeStore = create<ChatModeState>()(
       // Default coerente con regola permanente GOAL-PERSISTENCE 20/05:
       // "auto" = procede in autonomia fino al completamento della condizione.
       mode: "auto",
-      setMode: (mode) => set({ mode }),
+      yoloAcknowledged: false,
+      setMode: (mode) =>
+        set((state) => ({
+          mode,
+          yoloAcknowledged: mode === "yolo" ? state.yoloAcknowledged : false,
+        })),
+      setYoloAcknowledged: (acknowledged) => set({ yoloAcknowledged: acknowledged }),
     }),
     {
       name: "sco-chat-mode",
-      partialize: (s) => ({ mode: s.mode }),
+      partialize: (s) => ({ mode: s.mode === "yolo" ? "auto" : s.mode }),
+      onRehydrateStorage: () => (state) => {
+        if (state?.mode === "yolo") {
+          state.mode = "auto";
+        }
+      },
     },
   ),
 );
@@ -84,8 +98,9 @@ interface ChatState {
 
   // Actions
   setActiveConversation: (id: string | null) => void;
+  setConversationMode: (conversationId: string, mode: ChatMode) => void;
   createConversation: (title?: string) => string;
-  deleteConversation: (id: string) => void;
+  deleteConversation: (id: string) => Promise<void>;
   sendMessage: (text: string, attachments?: string[]) => Promise<void>;
   answerAskUserQuestion: (messageId: string, optionId: string) => void;
   /**
@@ -164,6 +179,15 @@ export const useChatStore = create<ChatState>()(
         // deduce SOLO dal fetch, non da optimistic UI memory.
         if (!id) return;
         const state = get();
+        const modeStore = useChatModeStore.getState();
+        const nextMode = state.conversations[id]?.agent_mode ?? "auto";
+        if (nextMode === "yolo" && !modeStore.yoloAcknowledged) {
+          if (modeStore.mode !== "auto") {
+            modeStore.setMode("auto");
+          }
+        } else if (modeStore.mode !== nextMode) {
+          modeStore.setMode(nextMode);
+        }
         const isOptimisticConv = id.startsWith("stub-") || id.startsWith("conv-");
         const cached = state.messagesByConv[id] ?? [];
         const conv = state.conversations[id];
@@ -193,6 +217,53 @@ export const useChatStore = create<ChatState>()(
         }
       },
 
+      setConversationMode: (conversationId, mode) => {
+        const state = get();
+        const current = state.conversations[conversationId];
+        if (!current) {
+          return;
+        }
+
+        if (current.agent_mode !== mode) {
+          set({
+            conversations: {
+              ...state.conversations,
+              [conversationId]: { ...current, agent_mode: mode },
+            },
+          });
+        }
+
+        const isStubId =
+          conversationId.startsWith("conv-") || conversationId.startsWith("stub-");
+        if (isStubId) {
+          return;
+        }
+
+        void apiClient
+          .setConversationMode(conversationId, mode)
+          .then((updated) => {
+            set((s) => {
+              const existing = s.conversations[conversationId];
+              if (!existing) {
+                return {};
+              }
+              return {
+                conversations: {
+                  ...s.conversations,
+                  [conversationId]: { ...existing, ...updated },
+                },
+              };
+            });
+          })
+          .catch((err) => {
+            set({
+              error: `Errore aggiornamento modalita conversazione: ${
+                err instanceof Error ? err.message : err
+              }`,
+            });
+          });
+      },
+
       createConversation: (title = "Nuova conversazione") => {
         const id = `conv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const now = new Date().toISOString();
@@ -203,6 +274,7 @@ export const useChatStore = create<ChatState>()(
           created_at: now,
           updated_at: now,
           message_count: 0,
+          agent_mode: "auto",
         };
         set((s) => ({
           conversations: { ...s.conversations, [id]: conv },
@@ -212,15 +284,34 @@ export const useChatStore = create<ChatState>()(
         return id;
       },
 
-      deleteConversation: (id) => {
+      deleteConversation: async (id) => {
+        const state = get();
+        if (!state.conversations[id]) {
+          return;
+        }
+
+        try {
+          await apiClient.deleteConversation(id);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          set({
+            error: `Errore cancellazione conversazione: ${message}`,
+          });
+          throw err;
+        }
+
         set((s) => {
-          const { [id]: _removed, ...rest } = s.conversations;
+          const { [id]: _removedConv, ...restConvs } = s.conversations;
           const { [id]: _removedMsgs, ...restMsgs } = s.messagesByConv;
+          const nextKnown = new Set(s.knownConversationIds);
+          nextKnown.delete(id);
           return {
-            conversations: rest,
+            conversations: restConvs,
             messagesByConv: restMsgs,
+            knownConversationIds: nextKnown,
             activeConversationId:
               s.activeConversationId === id ? null : s.activeConversationId,
+            lastAutoNavigated: s.lastAutoNavigated === id ? null : s.lastAutoNavigated,
           };
         });
       },
@@ -274,6 +365,7 @@ export const useChatStore = create<ChatState>()(
         }
 
         const conversationId: string = convId!;
+        const chatMode = useChatModeStore.getState().mode;
 
         // Append messaggio utente locale
         const userMsg: MessageItem = {
@@ -305,6 +397,7 @@ export const useChatStore = create<ChatState>()(
           await apiClient.sendChatMessage({
             conversation_id: conversationId,
             message: text,
+            agent_mode: chatMode,
             onEvent: (event) => {
               if (event.kind === "text_delta") {
                 const chunk = String(event.data?.text ?? "");
@@ -340,7 +433,19 @@ export const useChatStore = create<ChatState>()(
                   }));
                 }
               } else if (event.kind === "done") {
-                set({ isStreaming: false });
+                set((s) => {
+            const current = s.conversations[conversationId];
+            if (!current || current.agent_mode === chatMode) {
+              return {};
+            }
+            return {
+              conversations: {
+                ...s.conversations,
+                [conversationId]: { ...current, agent_mode: chatMode },
+              },
+            };
+          });
+          set({ isStreaming: false });
               }
             },
           });
@@ -688,6 +793,22 @@ export const useChatStore = create<ChatState>()(
             lastFetchAt: Date.now(),
           });
 
+          const activeId = get().activeConversationId;
+          if (activeId) {
+            const activeConv = newConvs[activeId];
+            if (activeConv) {
+              const modeStore = useChatModeStore.getState();
+              const nextMode = activeConv.agent_mode ?? "auto";
+              if (nextMode === "yolo" && !modeStore.yoloAcknowledged) {
+                if (modeStore.mode !== "auto") {
+                  modeStore.setMode("auto");
+                }
+              } else if (modeStore.mode !== nextMode) {
+                modeStore.setMode(nextMode);
+              }
+            }
+          }
+
           // Se auto-select scattato → chiama setActiveConversation (NON set diretto)
           // così triggera anche il fetch messaggi della conversation appena creata
           // (Conv. 48: backend single source of truth dei messaggi). Inoltre marca
@@ -783,3 +904,4 @@ export const useChatStore = create<ChatState>()(
     },
   ),
 );
+

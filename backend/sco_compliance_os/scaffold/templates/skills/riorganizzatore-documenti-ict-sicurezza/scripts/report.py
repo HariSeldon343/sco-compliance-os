@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 try:
-    import openpyxl
+    import openpyxl  # type: ignore[import-untyped]
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     HAS_OPENPYXL = True
 except ImportError:

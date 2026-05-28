@@ -56,9 +56,7 @@ async def test_license_activate_valid(
 
 
 @pytest.mark.asyncio
-async def test_license_activate_invalid(
-    client: AsyncClient, httpx_mock: HTTPXMock
-) -> None:
+async def test_license_activate_invalid(client: AsyncClient, httpx_mock: HTTPXMock) -> None:
     """POST activate con SaaS 401 → status=invalid is_valid=False."""
     httpx_mock.add_response(
         url="https://sco-saas-claude.vercel.app/api/v1/license/validate",

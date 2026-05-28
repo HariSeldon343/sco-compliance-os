@@ -39,7 +39,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import os
 import shutil
 import sqlite3
 import sys
@@ -279,9 +278,7 @@ def _parse_ask_user_question_widget(content: str) -> dict[str, Any] | None:
     """
     import re
 
-    match = re.search(
-        r"<ASK_USER_QUESTION>(.+?)</ASK_USER_QUESTION>", content, flags=re.DOTALL
-    )
+    match = re.search(r"<ASK_USER_QUESTION>(.+?)</ASK_USER_QUESTION>", content, flags=re.DOTALL)
     if not match:
         return None
     try:
@@ -387,9 +384,7 @@ async def step_03_onboarding_status(client: httpx.AsyncClient) -> StepResult:
         )
 
 
-async def step_04_vault_register(
-    client: httpx.AsyncClient, vault_path: str
-) -> StepResult:
+async def step_04_vault_register(client: httpx.AsyncClient, vault_path: str) -> StepResult:
     """POST /api/vault/add con vault path."""
     t0 = time.time()
     try:
@@ -429,9 +424,7 @@ async def step_04_vault_register(
         )
 
 
-async def step_05_wait_setup_conversation(
-    client: httpx.AsyncClient, vault_name: str
-) -> StepResult:
+async def step_05_wait_setup_conversation(client: httpx.AsyncClient, vault_name: str) -> StepResult:
     """Poll /api/chat/conversations finche' compare 'Configurazione iniziale'.
 
     Returns:
@@ -444,9 +437,7 @@ async def step_05_wait_setup_conversation(
 
     while time.time() < deadline:
         try:
-            r = await client.get(
-                "/api/chat/conversations", timeout=TIMEOUT_ENDPOINT
-            )
+            r = await client.get("/api/chat/conversations", timeout=TIMEOUT_ENDPOINT)
             convs = r.json()
             last_count = len(convs)
             for c in convs:
@@ -482,9 +473,7 @@ async def step_05_wait_setup_conversation(
     )
 
 
-async def step_06_verify_deep_scan_and_q1(
-    client: httpx.AsyncClient, conv_id: str
-) -> StepResult:
+async def step_06_verify_deep_scan_and_q1(client: httpx.AsyncClient, conv_id: str) -> StepResult:
     """Conv. setup deve contenere: msg-1 deep scan report + msg-2 con widget Q1."""
     t0 = time.time()
     try:
@@ -503,9 +492,7 @@ async def step_06_verify_deep_scan_and_q1(
             content = m.get("content", "")
             if "1/10" in content and "<ASK_USER_QUESTION>" in content:
                 q1_msg = m
-            elif "Scansione profonda" in content or "deep_scan" in str(
-                m.get("tool_calls") or ""
-            ):
+            elif "Scansione profonda" in content or "deep_scan" in str(m.get("tool_calls") or ""):
                 deep_scan_msg = m
 
         details = {
@@ -607,10 +594,7 @@ async def step_07_answer_q1_q10(
                     }
                 )
             # Check completion marker.
-            if (
-                "Profilo registrato" in assistant_text
-                or "Profilo salvato" in assistant_text
-            ):
+            if "Profilo registrato" in assistant_text or "Profilo salvato" in assistant_text:
                 details["completion_detected"] = True
                 break
             # Check errors.
@@ -633,11 +617,7 @@ async def step_07_answer_q1_q10(
             )
             break
 
-    status = (
-        "PASS"
-        if (details["answers_sent"] >= 5 and not details["stream_errors"])
-        else "FAIL"
-    )
+    status = "PASS" if (details["answers_sent"] >= 5 and not details["stream_errors"]) else "FAIL"
     return StepResult(
         step_num=7,
         name="Risposte Q1-Q10 simulate",
@@ -659,17 +639,13 @@ def _read_memory_tree_db(db_path: Path) -> dict[str, Any]:
         "chat_chunks_count": 0,
     }
     try:
-        cur.execute(
-            "SELECT source_kind, COUNT(*) FROM mem_tree_chunks GROUP BY source_kind"
-        )
+        cur.execute("SELECT source_kind, COUNT(*) FROM mem_tree_chunks GROUP BY source_kind")
         for kind, count in cur.fetchall():
             out["chunks_by_source"][kind] = count
             if kind == "chat":
                 out["chat_chunks_count"] = count
 
-        cur.execute(
-            "SELECT level, COUNT(*) FROM mem_tree_summaries GROUP BY level"
-        )
+        cur.execute("SELECT level, COUNT(*) FROM mem_tree_summaries GROUP BY level")
         for level, count in cur.fetchall():
             out["summaries_by_level"][f"L{level}"] = count
     except sqlite3.OperationalError as exc:
@@ -790,9 +766,7 @@ async def step_09_new_chat_task(client: httpx.AsyncClient) -> StepResult:
     )
 
 
-async def step_10_memory_recall(
-    client: httpx.AsyncClient, *, skip_llm: bool = False
-) -> StepResult:
+async def step_10_memory_recall(client: httpx.AsyncClient, *, skip_llm: bool = False) -> StepResult:
     """Verifica memory recall: nuova chat che fa riferimento a info Q1.
 
     Crea una nuova conversation + invia messaggio "ricorda chi sono e che lavoro faccio".
@@ -816,7 +790,7 @@ async def step_10_memory_recall(
         )
         conv_id = r.json()["id"]
 
-        events, text = await _consume_sse_stream(
+        _events, text = await _consume_sse_stream(
             client,
             "/api/chat/stream",
             {
@@ -839,9 +813,7 @@ async def step_10_memory_recall(
     text_lower = text.lower()
     mentions_name = "mario" in text_lower or "rossi" in text_lower
     mentions_role = "consulente" in text_lower or "consulting" in text_lower
-    mentions_field = (
-        "cyber" in text_lower or "sicurezza" in text_lower or "nis" in text_lower
-    )
+    mentions_field = "cyber" in text_lower or "sicurezza" in text_lower or "nis" in text_lower
 
     details = {
         "conv_id": conv_id,
@@ -946,11 +918,7 @@ async def run_user_journey(
 
         # Step 7: risposte Q1-Q10.
         if setup_conv_id:
-            report.add(
-                await step_07_answer_q1_q10(
-                    client, setup_conv_id, skip_llm=skip_llm_stream
-                )
-            )
+            report.add(await step_07_answer_q1_q10(client, setup_conv_id, skip_llm=skip_llm_stream))
         else:
             report.add(
                 StepResult(
@@ -983,12 +951,8 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="SCO Compliance OS - Autotest E2E user journey",
     )
-    parser.add_argument(
-        "--backend-url", default=DEFAULT_BACKEND_URL, help="Backend URL"
-    )
-    parser.add_argument(
-        "--vault-path", default=DEFAULT_VAULT_PATH, help="Vault path da registrare"
-    )
+    parser.add_argument("--backend-url", default=DEFAULT_BACKEND_URL, help="Backend URL")
+    parser.add_argument("--vault-path", default=DEFAULT_VAULT_PATH, help="Vault path da registrare")
     parser.add_argument(
         "--user-data-dir",
         default=str(DEFAULT_USER_DATA_DIR),

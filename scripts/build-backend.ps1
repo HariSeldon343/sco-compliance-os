@@ -51,11 +51,26 @@ try {
 
     if (-not $NoVerify) {
         Write-Host "==> Verify sidecar runs (Conv. 44 lesson 3 smoke)" -ForegroundColor Cyan
-        $verifyProc = Start-Process -FilePath $SidecarDest -ArgumentList "--help" -NoNewWindow -PassThru -Wait -ErrorAction SilentlyContinue
-        if ($verifyProc.ExitCode -ne 0 -and $verifyProc.ExitCode -ne 2) {
+        # FIX 28/05 (CO#6): il backend NON ha un handler --help/--version, quindi
+        # con `--help` avvia direttamente uvicorn e resta in ascolto per sempre.
+        # Il vecchio pattern `Start-Process -Wait` bloccava lo script all'infinito
+        # (+ lasciava zombie sidecar dopo kill incompleto, incidenti 27/05 PID
+        # 39344 e 6768). Nuovo pattern: avvia senza -Wait, attendi max 8s. Se il
+        # processo e' ancora vivo = uvicorn partito correttamente (binario sano)
+        # -> killalo + figli e considera OK. Se esce prima con codice != 0/2 =
+        # errore reale (hidden import mancante).
+        $verifyProc = Start-Process -FilePath $SidecarDest -ArgumentList "--help" -NoNewWindow -PassThru -ErrorAction SilentlyContinue
+        $exited = $verifyProc.WaitForExit(8000)
+        if (-not $exited) {
+            Write-Host "    Sidecar avviato (uvicorn in ascolto, nessun handler --help) -> binario OK." -ForegroundColor Green
+            # Kill figli orfani prima del padre (uvicorn worker / reloader)
+            Get-CimInstance Win32_Process -Filter "ParentProcessId = $($verifyProc.Id)" -ErrorAction SilentlyContinue |
+                ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+            Stop-Process -Id $verifyProc.Id -Force -ErrorAction SilentlyContinue
+        } elseif ($verifyProc.ExitCode -ne 0 -and $verifyProc.ExitCode -ne 2) {
             Write-Warning "Sidecar exit code $($verifyProc.ExitCode). Verifica hidden imports in $Spec."
         } else {
-            Write-Host "    Sidecar OK." -ForegroundColor Green
+            Write-Host "    Sidecar OK (exit $($verifyProc.ExitCode))." -ForegroundColor Green
         }
     }
 

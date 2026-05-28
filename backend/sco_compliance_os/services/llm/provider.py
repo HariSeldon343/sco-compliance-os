@@ -17,6 +17,7 @@ from typing import Any, Literal, Protocol, runtime_checkable
 # Kind di chunk emesso durante lo stream. Set chiuso comune ai 4 provider.
 # Mapping al sistema AgentEvent esistente:
 # - text_delta -> AgentEvent kind="text_delta"
+# - ask_user_question -> AgentEvent kind="ask_user_question"
 # - tool_use -> AgentEvent kind="tool_use"
 # - tool_result -> AgentEvent kind="tool_result"
 # - thinking -> AgentEvent kind="thinking"
@@ -25,6 +26,7 @@ from typing import Any, Literal, Protocol, runtime_checkable
 ChunkKind = Literal[
     "text_delta",
     "tool_use",
+    "ask_user_question",
     "tool_result",
     "thinking",
     "done",
@@ -96,7 +98,7 @@ class LLMProvider(Protocol):
 
     name: str
 
-    async def stream(
+    def stream(
         self,
         messages: list[dict[str, Any]],
         model: str,

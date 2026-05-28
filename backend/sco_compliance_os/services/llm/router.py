@@ -240,9 +240,7 @@ async def _fetch_tenant_config_from_saas(tenant_id: str) -> dict[str, Any]:
 
     license_key = settings.license_key.get_secret_value().strip()
     if not license_key:
-        logger.info(
-            "llm_router.tenant_config.no_license_key", tenant_id=tenant_id
-        )
+        logger.info("llm_router.tenant_config.no_license_key", tenant_id=tenant_id)
         return {}
 
     import httpx
@@ -358,9 +356,7 @@ def _build_provider(
 
     if provider_name == "ollama":
         # Ollama: nessuna API key richiesta, base_url default localhost
-        ollama_base = (
-            tenant_config.get("ollama_base_url", "") or ""
-        )
+        ollama_base = tenant_config.get("ollama_base_url", "") or ""
         config = ProviderConfig(
             name="ollama",
             api_key="",
@@ -415,7 +411,8 @@ def _resolve_tier_chain(
     )
     # Preserva default chain escludendo eventuale duplicato dell'override
     rest = [
-        s for s in default_chain
+        s
+        for s in default_chain
         if not (s.provider_name == override_provider and s.model == override_model)
     ]
     return [override_spec, *rest]
@@ -473,9 +470,7 @@ async def route(
 
         # Tenta build provider
         try:
-            provider = _build_provider(
-                spec.provider_name, spec.model, tenant_config
-            )
+            provider = _build_provider(spec.provider_name, spec.model, tenant_config)
         except ProviderError as perr:
             last_error = perr
             logger.warning(
@@ -555,9 +550,7 @@ async def discover_providers(tenant_config: dict[str, Any] | None = None) -> lis
                 "ollama": "llama3.2:3b",
             }[provider_name]
 
-            provider = _build_provider(
-                provider_name, placeholder_model, tenant_config
-            )
+            provider = _build_provider(provider_name, placeholder_model, tenant_config)
             # health check
             healthy = await provider.health_check()
             available = healthy
@@ -605,9 +598,7 @@ async def health_all_providers(
                 "gemini": "gemini-1.5-flash",
                 "ollama": "llama3.2:3b",
             }[provider_name]
-            provider = _build_provider(
-                provider_name, placeholder_model, tenant_config
-            )
+            provider = _build_provider(provider_name, placeholder_model, tenant_config)
             healthy = await provider.health_check()
             results[provider_name] = {
                 "healthy": healthy,

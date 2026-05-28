@@ -34,11 +34,14 @@ import time
 from collections.abc import AsyncIterator, Iterable
 from contextlib import asynccontextmanager
 from pathlib import Path
+from types import TracebackType
+from typing import Any
 
 import aiosqlite
+from aiosqlite import Row
 
 from .store import default_db_path
-from .tree_chunker import TreeChunk, TreeChunkStatus
+from .tree_chunker import TreeChunk
 
 logger = logging.getLogger(__name__)
 
@@ -179,7 +182,7 @@ class CircuitBreaker:
         self._opened_at: float = 0.0
         self._lock = asyncio.Lock()
 
-    async def __aenter__(self) -> "CircuitBreaker":
+    async def __aenter__(self) -> CircuitBreaker:
         async with self._lock:
             now = time.monotonic()
             if self._state == self.STATE_OPEN:
@@ -197,7 +200,12 @@ class CircuitBreaker:
                 )
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         async with self._lock:
             if exc_type is None:
                 # Success -> reset.
@@ -353,7 +361,7 @@ async def _connection(db_path: Path | None = None) -> AsyncIterator[aiosqlite.Co
         yield db
 
 
-def _chunk_to_row(c: TreeChunk) -> tuple:
+def _chunk_to_row(c: TreeChunk) -> tuple[Any, ...]:
     """Serializza TreeChunk in tupla per INSERT OR REPLACE."""
     return (
         c.id,
@@ -535,7 +543,7 @@ async def list_chunks(
         Lista TreeChunk ordinata per created_at_ms DESC.
     """
     sql = "SELECT * FROM mem_tree_chunks WHERE 1=1"
-    params: list = []
+    params: list[Any] = []
     if status:
         sql += " AND status = ?"
         params.append(status)
@@ -577,6 +585,34 @@ async def delete_chunk(chunk_id: str, db_path: Path | None = None) -> bool:
         return False
 
 
+async def delete_source(
+    source_kind: str,
+    source_id: str,
+    db_path: Path | None = None,
+) -> tuple[int, int]:
+    """Cancella tutti i chunk + summaries per una sorgente specifica."""
+    deleted_chunks = 0
+    deleted_summaries = 0
+    try:
+        async with _tree_breaker:
+            async with _connection(db_path) as db:
+                cur_chunks = await db.execute(
+                    "DELETE FROM mem_tree_chunks WHERE source_kind = ? AND source_id = ?",
+                    (source_kind, source_id),
+                )
+                deleted_chunks = cur_chunks.rowcount or 0
+                cur_summaries = await db.execute(
+                    "DELETE FROM mem_tree_summaries WHERE tree_kind = 'source' AND tree_id = ?",
+                    (source_id,),
+                )
+                deleted_summaries = cur_summaries.rowcount or 0
+                await db.commit()
+    except (CircuitBreakerOpenError, Exception) as exc:
+        logger.warning("delete_source: errore: %s", exc)
+        return 0, 0
+    return deleted_chunks, deleted_summaries
+
+
 async def count_by_status(db_path: Path | None = None) -> dict[str, int]:
     """Conta chunks raggruppati per status (cruscotto Conv. 41 tracciatura).
 
@@ -596,8 +632,11 @@ async def count_by_status(db_path: Path | None = None) -> dict[str, int]:
                     async for row in cur:
                         out[row["status"]] = int(row["cnt"])
                 async with db.execute("SELECT COUNT(*) FROM mem_tree_chunks") as cur:
-                    row = await cur.fetchone()
-                    out["total"] = int(row[0]) if row else 0
+                    row_opt = await cur.fetchone()
+                    if row_opt is None:
+                        raise RuntimeError("row attesa")
+                    row_total: Row = row_opt
+                    out["total"] = int(row_total[0])
     except (CircuitBreakerOpenError, Exception) as exc:
         logger.warning("count_by_status: errore: %s", exc)
         out["total"] = 0
@@ -681,8 +720,10 @@ async def mark_chunks_sealed(
     if not chunk_ids:
         return 0
     placeholders = ",".join("?" * len(chunk_ids))
+
+    # i valori passano come parametri SQL separati. Nessun user input nell'SQL.
     sql = (
-        f"UPDATE mem_tree_chunks "
+        f"UPDATE mem_tree_chunks "  # noqa: S608
         f"SET status = 'sealed', parent_summary_id = ? "
         f"WHERE id IN ({placeholders})"
     )
@@ -719,7 +760,7 @@ async def get_admitted_chunks_for_seal(
         "SELECT * FROM mem_tree_chunks "
         "WHERE status = 'admitted' AND owner = ? AND parent_summary_id IS NULL"
     )
-    params: list = [owner]
+    params: list[Any] = [owner]
     if source_id:
         sql += " AND source_id = ?"
         params.append(source_id)

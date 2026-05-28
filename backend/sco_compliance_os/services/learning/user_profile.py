@@ -26,14 +26,14 @@ import re
 import unicodedata
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 
 from sco_compliance_os.core.logging_setup import get_logger
 
 logger = get_logger(__name__)
 
 
-class ProfileCategory(str, Enum):
+class ProfileCategory(StrEnum):
     """Categoria di preferenza utente estratta.
 
     - identity: chi e l'utente (nome, ruolo, professione, organizzazione)
@@ -93,7 +93,9 @@ PATTERNS: list[tuple[re.Pattern[str], ProfileCategory, float, str]] = [
     # IT: "Il mio nome e Mario", "Mi chiamo Antonio"
     # EN: "My name is John", "I am called Sarah"
     (
-        _ci(r"(?:il mio nome\s+(?:e|è)|mi chiamo|my name is|i am called|i'm called)\s+([\w\s'-]{2,60})"),
+        _ci(
+            r"(?:il mio nome\s+(?:e|è)|mi chiamo|my name is|i am called|i'm called)\s+([\w\s'-]{2,60})"
+        ),
         ProfileCategory.identity,
         0.95,
         "name",
@@ -102,7 +104,9 @@ PATTERNS: list[tuple[re.Pattern[str], ProfileCategory, float, str]] = [
     # IT: "Lavoro come consulente", "Sono un ingegnere"
     # EN: "I work as a developer", "I am a doctor"
     (
-        _ci(r"(?:lavoro come|sono un[oa]?|faccio il|i work as|i am an?|i'm an?)\s+([\w\s'-]{3,80})"),
+        _ci(
+            r"(?:lavoro come|sono un[oa]?|faccio il|i work as|i am an?|i'm an?)\s+([\w\s'-]{3,80})"
+        ),
         ProfileCategory.identity,
         0.85,
         "role",
@@ -111,7 +115,9 @@ PATTERNS: list[tuple[re.Pattern[str], ProfileCategory, float, str]] = [
     # IT: "La mia azienda e SCO Consulting", "Lavoro per Fortibyte"
     # EN: "My company is Acme", "I work for Google"
     (
-        _ci(r"(?:la mia azienda\s+(?:e|è)|lavoro per|my company is|i work for|i work at)\s+([\w\s\.,'-]{2,80})"),
+        _ci(
+            r"(?:la mia azienda\s+(?:e|è)|lavoro per|my company is|i work for|i work at)\s+([\w\s\.,'-]{2,80})"
+        ),
         ProfileCategory.identity,
         0.85,
         "organization",
@@ -120,7 +126,9 @@ PATTERNS: list[tuple[re.Pattern[str], ProfileCategory, float, str]] = [
     # IT: "Preferisco il formato breve", "Mi piace la sintesi puntuale"
     # EN: "I prefer concise answers", "I like markdown"
     (
-        _ci(r"(?:preferisco|mi piace|prediligo|i prefer|i like|i'd like)\s+([\w\s'\.\-àèéìòù]{3,150})"),
+        _ci(
+            r"(?:preferisco|mi piace|prediligo|i prefer|i like|i'd like)\s+([\w\s'\.\-àèéìòù]{3,150})"
+        ),
         ProfileCategory.preference,
         0.75,
         "preferisco",
@@ -129,7 +137,9 @@ PATTERNS: list[tuple[re.Pattern[str], ProfileCategory, float, str]] = [
     # IT: "Non voglio bullet list", "Odio le emoji decorative"
     # EN: "I don't want long intros", "I hate filler"
     (
-        _ci(r"(?:non voglio|non mi piace|odio|detesto|i don'?t want|i don'?t like|i hate)\s+([\w\s'\.\-àèéìòù]{3,150})"),
+        _ci(
+            r"(?:non voglio|non mi piace|odio|detesto|i don'?t want|i don'?t like|i hate)\s+([\w\s'\.\-àèéìòù]{3,150})"
+        ),
         ProfileCategory.aversion,
         0.85,
         "non-voglio",
@@ -138,7 +148,9 @@ PATTERNS: list[tuple[re.Pattern[str], ProfileCategory, float, str]] = [
     # IT: "Sempre rispondi in italiano", "D'ora in poi usa virgolette dritte"
     # EN: "Always respond in English", "From now on use markdown"
     (
-        _ci(r"(?:sempre|d'?ora in poi|da (?:adesso|ora) in poi|always|from now on)[\s,:]+([\w\s'\.\-àèéìòù]{3,150})"),
+        _ci(
+            r"(?:sempre|d'?ora in poi|da (?:adesso|ora) in poi|always|from now on)[\s,:]+([\w\s'\.\-àèéìòù]{3,150})"
+        ),
         ProfileCategory.preference,
         0.90,
         "regola-sempre",
@@ -156,7 +168,9 @@ PATTERNS: list[tuple[re.Pattern[str], ProfileCategory, float, str]] = [
     # IT: "Il mio fuso orario e Europe/Rome", "Sono in Italia"
     # EN: "My timezone is UTC+1", "I'm in PST"
     (
-        _ci(r"(?:il mio fuso orario\s+(?:e|è)|sono in|my timezone is|i'?m in)\s+([\w/+\-:\s]{2,40})"),
+        _ci(
+            r"(?:il mio fuso orario\s+(?:e|è)|sono in|my timezone is|i'?m in)\s+([\w/+\-:\s]{2,40})"
+        ),
         ProfileCategory.fact,
         0.80,
         "timezone",
@@ -174,7 +188,9 @@ PATTERNS: list[tuple[re.Pattern[str], ProfileCategory, float, str]] = [
     # IT: "Il mio stack e Python e FastAPI", "Uso TypeScript e React"
     # EN: "My stack is Node and Express", "I use Rust and Tauri"
     (
-        _ci(r"(?:il mio stack\s+(?:e|è)|uso|utilizzo|my stack is|i use|i'?m using)\s+([\w\s,'\.+\-#]{3,150})"),
+        _ci(
+            r"(?:il mio stack\s+(?:e|è)|uso|utilizzo|my stack is|i use|i'?m using)\s+([\w\s,'\.+\-#]{3,150})"
+        ),
         ProfileCategory.stack,
         0.80,
         "stack",
@@ -183,7 +199,9 @@ PATTERNS: list[tuple[re.Pattern[str], ProfileCategory, float, str]] = [
     # IT: "Il mio editor e VSCode", "Lavoro con Cursor"
     # EN: "My editor is Vim", "I work with IntelliJ"
     (
-        _ci(r"(?:il mio editor\s+(?:e|è)|lavoro con|my editor is|i work with)\s+([\w\s,'\.+\-#]{2,60})"),
+        _ci(
+            r"(?:il mio editor\s+(?:e|è)|lavoro con|my editor is|i work with)\s+([\w\s,'\.+\-#]{2,60})"
+        ),
         ProfileCategory.stack,
         0.75,
         "editor",
@@ -192,7 +210,9 @@ PATTERNS: list[tuple[re.Pattern[str], ProfileCategory, float, str]] = [
     # IT: "Il mio OS e Windows 11", "Uso macOS"
     # EN: "My OS is Linux", "I'm on Ubuntu"
     (
-        _ci(r"(?:il mio (?:os|sistema operativo)\s+(?:e|è)|my os is|i'?m on)\s+([\w\s,'\.+\-#]{2,40})"),
+        _ci(
+            r"(?:il mio (?:os|sistema operativo)\s+(?:e|è)|my os is|i'?m on)\s+([\w\s,'\.+\-#]{2,40})"
+        ),
         ProfileCategory.stack,
         0.80,
         "os",
@@ -201,7 +221,9 @@ PATTERNS: list[tuple[re.Pattern[str], ProfileCategory, float, str]] = [
     # IT: "Voglio un tono formale", "Preferisco uno stile diretto"
     # EN: "I want a casual tone", "Use a formal style"
     (
-        _ci(r"(?:voglio un tono|preferisco uno stile|use a\s+\w+\s+tone|i want a\s+\w+\s+tone)\s+([\w\s'\.\-àèéìòù]{3,80})"),
+        _ci(
+            r"(?:voglio un tono|preferisco uno stile|use a\s+\w+\s+tone|i want a\s+\w+\s+tone)\s+([\w\s'\.\-àèéìòù]{3,80})"
+        ),
         ProfileCategory.preference,
         0.80,
         "tono",
@@ -210,7 +232,9 @@ PATTERNS: list[tuple[re.Pattern[str], ProfileCategory, float, str]] = [
     # IT: "Rispondi in markdown", "Voglio risposte brevi"
     # EN: "Answer in JSON", "I want short answers"
     (
-        _ci(r"(?:rispondi in|voglio risposte|answer in|i want\s+\w+\s+answers?|reply in)\s+([\w\s,'\.\-àèéìòù]{3,80})"),
+        _ci(
+            r"(?:rispondi in|voglio risposte|answer in|i want\s+\w+\s+answers?|reply in)\s+([\w\s,'\.\-àèéìòù]{3,80})"
+        ),
         ProfileCategory.preference,
         0.80,
         "formato",
@@ -219,7 +243,9 @@ PATTERNS: list[tuple[re.Pattern[str], ProfileCategory, float, str]] = [
     # IT: "Sii conciso", "Sii dettagliato"
     # EN: "Be concise", "Be verbose"
     (
-        _ci(r"\b(?:sii|be)\s+(conciso|breve|dettagliato|verboso|sintetico|prolisso|concise|verbose|brief|detailed|terse)\b"),
+        _ci(
+            r"\b(?:sii|be)\s+(conciso|breve|dettagliato|verboso|sintetico|prolisso|concise|verbose|brief|detailed|terse)\b"
+        ),
         ProfileCategory.preference,
         0.75,
         "lunghezza",
@@ -237,7 +263,9 @@ PATTERNS: list[tuple[re.Pattern[str], ProfileCategory, float, str]] = [
     # IT: "Voglio esempi concreti", "Dammi casi reali"
     # EN: "I want real examples", "Give me concrete cases"
     (
-        _ci(r"(?:voglio esempi|dammi (?:esempi|casi)|i want\s+\w*\s*examples?|give me\s+\w*\s*(?:examples?|cases?))\s*([\w\s'\.\-àèéìòù]{0,100})"),
+        _ci(
+            r"(?:voglio esempi|dammi (?:esempi|casi)|i want\s+\w*\s*examples?|give me\s+\w*\s*(?:examples?|cases?))\s*([\w\s'\.\-àèéìòù]{0,100})"
+        ),
         ProfileCategory.preference,
         0.70,
         "esempi",
@@ -246,7 +274,9 @@ PATTERNS: list[tuple[re.Pattern[str], ProfileCategory, float, str]] = [
     # IT: "Il mio ruolo e Lead Auditor", "Il mio titolo e CTO"
     # EN: "My role is Architect", "My title is Director"
     (
-        _ci(r"(?:il mio (?:ruolo|titolo)\s+(?:e|è)|my (?:role|title) is)\s+([\w\s,'\.\-àèéìòù]{2,80})"),
+        _ci(
+            r"(?:il mio (?:ruolo|titolo)\s+(?:e|è)|my (?:role|title) is)\s+([\w\s,'\.\-àèéìòù]{2,80})"
+        ),
         ProfileCategory.identity,
         0.90,
         "title",
@@ -255,7 +285,9 @@ PATTERNS: list[tuple[re.Pattern[str], ProfileCategory, float, str]] = [
     # IT: "Il mio progetto principale e sco-compliance-os", "Sviluppo Compliance Copilot"
     # EN: "My main project is acme-api", "I'm building Foo"
     (
-        _ci(r"(?:il mio progetto principale\s+(?:e|è)|sviluppo|my main project is|i'?m building)\s+([\w\s,'\.\-#+]{2,80})"),
+        _ci(
+            r"(?:il mio progetto principale\s+(?:e|è)|sviluppo|my main project is|i'?m building)\s+([\w\s,'\.\-#+]{2,80})"
+        ),
         ProfileCategory.stack,
         0.75,
         "project",
@@ -264,7 +296,9 @@ PATTERNS: list[tuple[re.Pattern[str], ProfileCategory, float, str]] = [
     # IT: "Cita le fonti", "Includi riferimenti normativi puntuali"
     # EN: "Cite sources", "Include references"
     (
-        _ci(r"\b(?:cita (?:le )?fonti|includi (?:riferimenti|citazioni)|cite (?:the )?sources?|include references?)\b([\w\s'\.\-àèéìòù]{0,100})"),
+        _ci(
+            r"\b(?:cita (?:le )?fonti|includi (?:riferimenti|citazioni)|cite (?:the )?sources?|include references?)\b([\w\s'\.\-àèéìòù]{0,100})"
+        ),
         ProfileCategory.preference,
         0.80,
         "citazioni",

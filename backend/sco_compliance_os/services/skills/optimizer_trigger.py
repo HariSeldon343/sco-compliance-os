@@ -40,7 +40,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from sco_compliance_os.config import get_settings
 from sco_compliance_os.core.agent_sdk_runner import AgentEvent
@@ -140,7 +140,7 @@ async def _ingest_bootstrap_chunks(
     vault_name: str,
     extended_scan: dict[str, Any],
     optimizer_output: str,
-) -> dict[str, int]:
+) -> dict[str, int | str]:
     """Popola memory_tree con bootstrap chunks dal deep scan + output optimizer.
 
     source_kind = "document" (vocabolario chiuso TreeChunkSourceKind:
@@ -215,7 +215,7 @@ async def _ingest_bootstrap_chunks(
             )
 
         counts = await ingest_inputs(inputs, consult_llm_on_borderline=False)
-        return counts.to_dict()
+        return cast(dict[str, int | str], counts.to_dict())
     except Exception as exc:
         logger.exception(
             "optimizer_trigger.ingest_bootstrap_failed",
@@ -453,7 +453,7 @@ async def handle_setup_completed(payload: dict[str, Any]) -> None:
 
     # 3. Banner iniziale come messaggio assistant (visibile in chat).
     banner_md = (
-        f"Ottimizzazione in corso per il vault \"{vault_name}\".\n\n"
+        f'Ottimizzazione in corso per il vault "{vault_name}".\n\n'
         f"Sto scansionando in profondita la struttura del vault, "
         f"costruendo il quadro dei framework normativi e dei clienti "
         f"presenti, e pre-caricando il contesto per le prime risposte "
@@ -520,9 +520,7 @@ async def handle_setup_completed(payload: dict[str, Any]) -> None:
             context=base_context,
             on_event=_capture_event,
         )
-        ottimizzatore_text = (
-            ottimizzatore_result.assistant_text or "".join(ottimizzatore_chunks)
-        )
+        ottimizzatore_text = ottimizzatore_result.assistant_text or "".join(ottimizzatore_chunks)
         ottimizzatore_success = ottimizzatore_result.success
     except Exception as exc:
         logger.exception(
@@ -548,9 +546,7 @@ async def handle_setup_completed(payload: dict[str, Any]) -> None:
                         "kind": "skill_invocation",
                         "skill_name": "os-ottimizzatore",
                         "success": ottimizzatore_success,
-                        "extended_scan_total_files": extended_scan.get(
-                            "total_files", 0
-                        ),
+                        "extended_scan_total_files": extended_scan.get("total_files", 0),
                     }
                 ],
             )
@@ -622,8 +618,6 @@ async def refresh_cache(vault_name: str = "vault-corrente") -> dict[str, Any]:
             else _DEFAULT_SYSTEM_PROMPT
         )
     except Exception:
-        warmup_prompt = (
-            "Sei l'agente SCO Compliance OS. Vault attivo: " + vault_name
-        ) * 10
+        warmup_prompt = ("Sei l'agente SCO Compliance OS. Vault attivo: " + vault_name) * 10
 
     return await _warmup_anthropic_cache(warmup_prompt)

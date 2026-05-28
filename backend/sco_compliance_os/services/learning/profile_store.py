@@ -33,6 +33,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import aiosqlite
 
@@ -218,14 +219,11 @@ async def list_preferences(
         Lista Preference ordinate per display priority.
     """
     sql = "SELECT * FROM user_profile WHERE tenant_id = ?"
-    params: list = [tenant_id]
+    params: list[Any] = [tenant_id]
     if category is not None:
         sql += " AND category = ?"
         params.append(category.value)
-    sql += (
-        " ORDER BY pinned DESC, seen_count DESC, confidence DESC, last_seen_at DESC"
-        " LIMIT ?"
-    )
+    sql += " ORDER BY pinned DESC, seen_count DESC, confidence DESC, last_seen_at DESC LIMIT ?"
     params.append(limit)
     async with _connection(db_path) as db:
         async with db.execute(sql, params) as cur:

@@ -83,8 +83,7 @@ def _wiki_dir(vault_root: Path, category: str) -> Path:
     """Risolve path categoria wiki, valida vocabolario chiuso."""
     if category not in WIKI_CATEGORIES:
         raise WikiCategoryError(
-            f"Categoria '{category}' fuori vocabolario chiuso "
-            f"({sorted(WIKI_CATEGORIES)})"
+            f"Categoria '{category}' fuori vocabolario chiuso ({sorted(WIKI_CATEGORIES)})"
         )
     return vault_root / "wiki" / category
 
@@ -213,11 +212,7 @@ def list_wiki_files(
 
     # Enumera .md non _index.
     md_files = sorted(
-        (
-            p
-            for p in wiki_dir.glob("*.md")
-            if p.is_file() and p.name not in _SKIP_FILENAMES
-        ),
+        (p for p in wiki_dir.glob("*.md") if p.is_file() and p.name not in _SKIP_FILENAMES),
         key=lambda p: p.name.lower(),
     )
 
@@ -237,9 +232,7 @@ def list_wiki_files(
         if status and doc.status != status:
             continue
 
-        results.append(
-            _doc_to_summary_dict(doc, _slug_from_path(md), _last_modified_iso(md))
-        )
+        results.append(_doc_to_summary_dict(doc, _slug_from_path(md), _last_modified_iso(md)))
 
     total = len(results)
     paged = results[offset : offset + limit] if limit > 0 else results
@@ -265,9 +258,7 @@ def get_wiki_file(vault_root: Path, category: str, slug: str) -> dict[str, Any]:
         ValueError: slug con caratteri non sicuri (path traversal protection).
     """
     if not _SLUG_SAFE_RE.match(slug):
-        raise ValueError(
-            f"Slug '{slug}' contiene caratteri non ammessi (solo a-z, 0-9, ., _, -)"
-        )
+        raise ValueError(f"Slug '{slug}' contiene caratteri non ammessi (solo a-z, 0-9, ., _, -)")
 
     wiki_dir = _wiki_dir(vault_root, category)
     md_path = wiki_dir / f"{slug}.md"
@@ -279,9 +270,7 @@ def get_wiki_file(vault_root: Path, category: str, slug: str) -> dict[str, Any]:
         # Verify resolved path è sotto wiki_dir.
         resolved.relative_to(resolved_dir)
     except (ValueError, OSError) as exc:
-        raise WikiNotFoundError(
-            f"Path resolution fallita per {category}/{slug}: {exc}"
-        ) from exc
+        raise WikiNotFoundError(f"Path resolution fallita per {category}/{slug}: {exc}") from exc
 
     if not resolved.exists() or not resolved.is_file():
         raise WikiNotFoundError(f"Wiki file {category}/{slug}.md non trovato")
@@ -308,9 +297,7 @@ def wiki_stats(vault_root: Path) -> dict[str, Any]:
             counts[category] = 0
             continue
         counts[category] = sum(
-            1
-            for p in cat_dir.glob("*.md")
-            if p.is_file() and p.name not in _SKIP_FILENAMES
+            1 for p in cat_dir.glob("*.md") if p.is_file() and p.name not in _SKIP_FILENAMES
         )
     return {
         "vault_path": str(vault_root),

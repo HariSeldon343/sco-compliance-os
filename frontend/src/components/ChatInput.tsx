@@ -2,7 +2,14 @@
 // Mode dropdown ora persistito nello store chatMode (Conv. 47 single source of truth).
 // Le descrizioni sono in linguaggio semplice (regola 14/05).
 // v0.13.0 PSI: send button con shine ripple effect + Framer Motion whileTap microinteraction.
-import { useRef, useState, type KeyboardEvent, type ChangeEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type KeyboardEvent,
+} from "react";
 import { motion } from "framer-motion";
 import {
   Send,
@@ -13,12 +20,19 @@ import {
   ListChecks,
   HelpCircle,
   Rocket,
+  ShieldOff,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { useChatStore, useChatModeStore, type ChatMode } from "@/store/chat-store";
+import { useChatStore, useChatModeStore } from "@/store/chat-store";
+import type { ChatMode } from "@/types/api";
 import { cn } from "@/lib/cn";
 import { MicButton } from "@/components/voice/MicButton";
+import { SecurityWarningModal } from "@/components/SecurityWarningModal";
+import { apiClient } from "@/api/client";
+import { SlashCommandsPopover, type SlashCommandsPopoverHandle } from "@/components/SlashCommandsPopover";
+import type { SkillSummary } from "@/types/api";
+
 
 // v0.11.0: rimosso hard cap 8000 char. Anthropic API supporta fino a ~200k
 // token input + il prompt caching nel proxy SaaS ammortizza messaggi lunghi.
@@ -35,8 +49,8 @@ interface ModeConfig {
 }
 
 // Tre modalita di interazione con l'agente. Linguaggio semplice 14/05.
-// Backend non cabla ancora `permission_mode` (carry-over v0.2.0): per ora
-// la scelta vive lato frontend come preferenza utente persistita.
+// Backend v0.14.0 persiste agent_mode per conversation e propaga
+// permission_mode verso l'LLM.
 const MODES: ModeConfig[] = [
   {
     value: "plan",
@@ -60,45 +74,266 @@ const MODES: ModeConfig[] = [
       "Va dritto fino al risultato finale. Default consigliato.",
     icon: Rocket,
   },
+  {
+    value: "yolo",
+    label: "Senza autorizzazioni - tutti i permessi",
+    shortLabel: "Libero",
+    description: "L'agente fa tutto da solo, senza chiedere.",
+    icon: ShieldOff,
+  },
 ];
+
+interface SlashTokenContext {
+  start: number;
+  query: string;
+}
+
+function findSlashToken(text: string, cursor: number): SlashTokenContext | null {
+  if (cursor <= 0 || cursor > text.length) {
+    return null;
+  }
+
+  const whitespace = /\s/;
+  let index = cursor - 1;
+  while (index >= 0) {
+    const char = text[index];
+    if (char === "/") {
+      const prevChar = index > 0 ? text[index - 1] : "";
+      if (index > 0 && !whitespace.test(prevChar)) {
+        return null;
+      }
+      const query = text.slice(index + 1, cursor);
+      if (whitespace.test(query)) {
+        return null;
+      }
+      return { start: index, query };
+    }
+    if (whitespace.test(char)) {
+      return null;
+    }
+    index -= 1;
+  }
+
+  return null;
+}
 
 export function ChatInput() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [value, setValue] = useState("");
   const [modeOpen, setModeOpen] = useState(false);
+  const [securityWarningOpen, setSecurityWarningOpen] = useState(false);
+  const [pendingMode, setPendingMode] = useState<ChatMode | null>(null);
   const mode = useChatModeStore((s) => s.mode);
   const setMode = useChatModeStore((s) => s.setMode);
+  const yoloAcknowledged = useChatModeStore((s) => s.yoloAcknowledged);
+  const setYoloAcknowledged = useChatModeStore((s) => s.setYoloAcknowledged);
   const isStreaming = useChatStore((s) => s.isStreaming);
   const sendMessage = useChatStore((s) => s.sendMessage);
+  const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const setConversationMode = useChatStore((s) => s.setConversationMode);
+
+  const slashPopoverRef = useRef<SlashCommandsPopoverHandle>(null);
+  const [slashOpen, setSlashOpen] = useState(false);
+  const [slashQuery, setSlashQuery] = useState("");
+  const [slashTokenRange, setSlashTokenRange] = useState<{ start: number; end: number } | null>(null);
+  const [slashSkills, setSlashSkills] = useState<SkillSummary[]>([]);
+  const slashLoadedRef = useRef(false);
+  const slashLoadErrorRef = useRef(false);
+
+  const resizeTextarea = useCallback((el: HTMLTextAreaElement) => {
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 240)}px`;
+  }, []);
+
+  const closeSlash = useCallback(() => {
+    setSlashOpen(false);
+    setSlashQuery("");
+    setSlashTokenRange(null);
+    slashPopoverRef.current?.resetSelection();
+  }, []);
+
+  const updateSlashContext = useCallback(
+    (textValue: string, cursor: number) => {
+      const context = findSlashToken(textValue, cursor);
+      if (context) {
+        setSlashTokenRange({ start: context.start, end: cursor });
+        setSlashQuery(context.query);
+        setSlashOpen(true);
+      } else {
+        if (slashOpen) {
+          setSlashOpen(false);
+        }
+        setSlashTokenRange(null);
+        setSlashQuery("");
+        slashPopoverRef.current?.resetSelection();
+      }
+    },
+    [slashOpen],
+  );
+
+  useEffect(() => {
+    if (!slashOpen || slashLoadedRef.current) {
+      return;
+    }
+    let cancelled = false;
+    apiClient.skills
+      .list()
+      .then((skills) => {
+        if (cancelled) return;
+        setSlashSkills(skills);
+        slashLoadedRef.current = true;
+        if (!skills.length) {
+          slashPopoverRef.current?.resetSelection();
+        }
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        if (!slashLoadErrorRef.current) {
+          slashLoadErrorRef.current = true;
+          toast.error("Impossibile caricare le skill disponibili.");
+        }
+        console.error("slash.commands.load_failed", error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [slashOpen]);
+
 
   const charCount = value.length;
   const overLimit = charCount > MAX_CHARS;
-  const canSend = value.trim().length > 0 && !isStreaming && !overLimit;
+  const canSend = value.trim().length > 0 && !isStreaming && !overLimit && !slashOpen;
 
   const handleChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
-    setValue(e.target.value);
-    // Auto-grow textarea
+    const nextValue = e.target.value;
+    const cursor = e.target.selectionStart ?? nextValue.length;
+    setValue(nextValue);
     const el = textareaRef.current;
     if (el) {
-      el.style.height = "auto";
-      el.style.height = `${Math.min(el.scrollHeight, 240)}px`;
+      resizeTextarea(el);
     }
+    updateSlashContext(nextValue, cursor);
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (slashOpen) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        slashPopoverRef.current?.highlightNext();
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        slashPopoverRef.current?.highlightPrevious();
+        return;
+      }
+      if (e.key === "Tab") {
+        e.preventDefault();
+        if (e.shiftKey) {
+          slashPopoverRef.current?.highlightPrevious();
+        } else {
+          const selected = slashPopoverRef.current?.selectCurrent();
+          if (!selected) {
+            closeSlash();
+          }
+        }
+        return;
+      }
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        const selected = slashPopoverRef.current?.selectCurrent();
+        if (!selected) {
+          closeSlash();
+        }
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeSlash();
+        return;
+      }
+    }
+
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void handleSend();
     }
   };
 
+  const handleSkillSelect = useCallback(
+    (skill: SkillSummary) => {
+      const insertion = `/${skill.name} `;
+      setValue((current) => {
+        const range = slashTokenRange ?? { start: current.length, end: current.length };
+        const before = current.slice(0, range.start);
+        const after = current.slice(range.end);
+        const nextValue = `${before}${insertion}${after}`;
+        requestAnimationFrame(() => {
+          const el = textareaRef.current;
+          if (!el) return;
+          resizeTextarea(el);
+          const caret = before.length + insertion.length;
+          el.focus();
+          el.setSelectionRange(caret, caret);
+          updateSlashContext(nextValue, caret);
+        });
+        return nextValue;
+      });
+      closeSlash();
+    },
+    [closeSlash, resizeTextarea, slashTokenRange, updateSlashContext],
+  );
+
+
+  const handleConfirmSecurityWarning = useCallback(() => {
+    if (pendingMode !== "yolo") {
+      setSecurityWarningOpen(false);
+      setPendingMode(null);
+      return;
+    }
+    setYoloAcknowledged(true);
+    setMode("yolo");
+    if (activeConversationId) {
+      setConversationMode(activeConversationId, "yolo");
+    }
+    setSecurityWarningOpen(false);
+    setPendingMode(null);
+    setModeOpen(false);
+  }, [
+    activeConversationId,
+    pendingMode,
+    setConversationMode,
+    setMode,
+    setModeOpen,
+    setPendingMode,
+    setSecurityWarningOpen,
+    setYoloAcknowledged,
+  ]);
+
+  const handleCancelSecurityWarning = useCallback(() => {
+    setSecurityWarningOpen(false);
+    setPendingMode(null);
+    setModeOpen(false);
+  }, [setModeOpen, setPendingMode, setSecurityWarningOpen]);
+
   const handleSend = async () => {
-    const text = value.trim();
-    if (!text || isStreaming || overLimit) return;
+    if (slashOpen) {
+      return;
+    }
+
+    const textToSend = value.trim();
+    if (!textToSend || isStreaming || overLimit) return;
+
     setValue("");
-    if (textareaRef.current) textareaRef.current.style.height = "auto";
-    await sendMessage(text);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
+
+    closeSlash();
+    await sendMessage(textToSend);
   };
+
+
 
   const handleAttach = () => {
     // TODO: integrare @tauri-apps/plugin-dialog `open({ multiple: true })`
@@ -107,28 +342,48 @@ export function ChatInput() {
   };
 
   const handleSlashCommand = () => {
-    toast.info("Slash commands: in arrivo (skill registry stub)");
+    const el = textareaRef.current;
+    const cursor = el?.selectionStart ?? value.length;
+    setValue((current) => {
+      const before = current.slice(0, cursor);
+      const after = current.slice(cursor);
+      const needsSpace = before.length > 0 && !/\s$/.test(before);
+      const insertion = `${needsSpace ? " " : ""}/`;
+      const nextValue = `${before}${insertion}${after}`;
+      requestAnimationFrame(() => {
+        const node = textareaRef.current;
+        if (!node) return;
+        resizeTextarea(node);
+        const nextCursor = cursor + insertion.length;
+        node.focus();
+        node.setSelectionRange(nextCursor, nextCursor);
+        updateSlashContext(nextValue, nextCursor);
+      });
+      return nextValue;
+    });
   };
 
   // Callback STT: appende il testo trascritto al contenuto corrente del textarea.
   // Pattern: se input vuoto, sostituisce; se gia' contenuto, appende con spazio.
-  const handleTranscript = (text: string) => {
-    setValue((cur) => {
-      const trimmed = cur.trim();
-      const next = trimmed ? `${cur}${cur.endsWith(" ") ? "" : " "}${text}` : text;
-      // Auto-grow textarea dopo l'append
+  const handleTranscript = (textChunk: string) => {
+    setValue((current) => {
+      const trimmed = current.trim();
+      const needsSpace = trimmed.length > 0 && !current.endsWith(" ");
+      const prefix = trimmed.length > 0 ? `${current}${needsSpace ? " " : ""}` : "";
+      const nextValue = `${prefix}${textChunk}`;
       requestAnimationFrame(() => {
         const el = textareaRef.current;
-        if (el) {
-          el.style.height = "auto";
-          el.style.height = `${Math.min(el.scrollHeight, 240)}px`;
-          el.focus();
-          el.setSelectionRange(next.length, next.length);
-        }
+        if (!el) return;
+        resizeTextarea(el);
+        el.focus();
+        el.setSelectionRange(nextValue.length, nextValue.length);
+        updateSlashContext(nextValue, nextValue.length);
       });
-      return next;
+      return nextValue;
     });
   };
+
+
 
   const currentMode = MODES.find((m) => m.value === mode) ?? MODES[2];
   const CurrentModeIcon = currentMode.icon;
@@ -145,17 +400,28 @@ export function ChatInput() {
           )}
         >
           {/* Textarea */}
-          <textarea
-            ref={textareaRef}
-            value={value}
-            onChange={handleChange}
-            onKeyDown={handleKeyDown}
-            placeholder="Scrivi un messaggio..."
-            rows={1}
-            data-tour="chat-input-textarea"
-            className="resize-none border-0 bg-transparent px-4 pt-3.5 pb-2 text-sm leading-relaxed text-sco-text placeholder:text-sco-muted-foreground/70 focus:outline-none dark:text-sco-text-dark"
-            disabled={isStreaming}
-          />
+          <div className="relative">
+            <SlashCommandsPopover
+              ref={slashPopoverRef}
+              open={slashOpen}
+              query={slashQuery}
+              skills={slashSkills}
+              onSelect={handleSkillSelect}
+              onClose={closeSlash}
+              anchorRef={textareaRef}
+            />
+            <textarea
+              ref={textareaRef}
+              value={value}
+              onChange={handleChange}
+              onKeyDown={handleKeyDown}
+              placeholder="Scrivi un messaggio..."
+              rows={1}
+              data-tour="chat-input-textarea"
+              className="resize-none border-0 bg-transparent px-4 pt-3.5 pb-2 text-sm leading-relaxed text-sco-text placeholder:text-sco-muted-foreground/70 focus:outline-none dark:text-sco-text-dark"
+              disabled={isStreaming}
+            />
+          </div>
 
           {/* Toolbar inferiore */}
           <div className="flex items-center justify-between px-2.5 py-2">
@@ -239,7 +505,20 @@ export function ChatInput() {
                             role="option"
                             aria-selected={selected}
                             onClick={() => {
+                              if (m.value === "yolo") {
+                                if (!yoloAcknowledged) {
+                                  setPendingMode("yolo");
+                                  setSecurityWarningOpen(true);
+                                  setModeOpen(false);
+                                  return;
+                                }
+                                setYoloAcknowledged(true);
+                              }
                               setMode(m.value);
+                              if (activeConversationId) {
+                                setConversationMode(activeConversationId, m.value);
+                              }
+                              setPendingMode(null);
                               setModeOpen(false);
                             }}
                             className={cn(
@@ -351,6 +630,19 @@ export function ChatInput() {
           lascia il tuo dispositivo senza conferma.
         </p>
       </div>
+      <SecurityWarningModal
+        open={securityWarningOpen}
+        onConfirm={handleConfirmSecurityWarning}
+        onCancel={handleCancelSecurityWarning}
+      />
     </div>
   );
 }
+
+
+
+
+
+
+
+

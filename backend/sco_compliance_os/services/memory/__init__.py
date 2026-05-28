@@ -31,7 +31,7 @@ __all__ = [
     "tree_builder",
     # Memory Tree bucket-seal 4 fasi clean-room (subagent DEV-MEMORY-TREE 24/05/2026)
     "tree_chunker",
+    "tree_ingester",
     "tree_scoring",
     "tree_store",
-    "tree_ingester",
 ]

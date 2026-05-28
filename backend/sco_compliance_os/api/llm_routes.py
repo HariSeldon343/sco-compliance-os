@@ -107,9 +107,7 @@ async def get_my_llm_config(
     try:
         return await get_effective_llm_config(tenant_id)
     except Exception as exc:
-        logger.exception(
-            "llm_routes.get_my_llm_config.error", tenant_id=tenant_id, error=str(exc)
-        )
+        logger.exception("llm_routes.get_my_llm_config.error", tenant_id=tenant_id, error=str(exc))
         raise HTTPException(
             status_code=500,
             detail=f"Errore fetch tenant LLM config: {exc}",

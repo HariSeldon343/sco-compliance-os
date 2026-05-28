@@ -33,7 +33,7 @@ import { cn } from "@/lib/cn";
 // Pre-fix: hardcoded "0.8.1" mai bumpato → card Aggiornamenti app + Info app
 // mostravano "v0.8.1" anche su app v0.13.5 installata.
 const APP_VERSION_FALLBACK =
-  (typeof __APP_VERSION__ !== "undefined" && __APP_VERSION__) || "0.13.7";
+  (typeof __APP_VERSION__ !== "undefined" && __APP_VERSION__) || "0.14.0";
 
 export function AdvancedTab() {
   const integrations = useIntegrationsStore((s) => s.integrations);

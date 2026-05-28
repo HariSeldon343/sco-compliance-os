@@ -38,7 +38,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Response
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
@@ -351,9 +351,7 @@ async def oauth_callback(
     # Caso utente ha rifiutato o errore Google
     if error:
         logger.warning("integration.callback.error", slug=slug, error=error)
-        html = _render_callback_page(
-            slug=slug, success=False, message=f"OAuth fallito: {error}"
-        )
+        html = _render_callback_page(slug=slug, success=False, message=f"OAuth fallito: {error}")
         return HTMLResponse(content=html, status_code=200)
 
     if not code:
@@ -386,9 +384,7 @@ async def oauth_callback(
         )
         return HTMLResponse(content=html, status_code=200)
 
-    logger.info(
-        "integration.callback.success", slug=slug, email=result.get("email")
-    )
+    logger.info("integration.callback.success", slug=slug, email=result.get("email"))
     html = _render_callback_page(
         slug=slug,
         success=True,
@@ -398,9 +394,7 @@ async def oauth_callback(
     return HTMLResponse(content=html, status_code=200)
 
 
-def _render_callback_page(
-    slug: str, success: bool, message: str, email: str | None = None
-) -> str:
+def _render_callback_page(slug: str, success: bool, message: str, email: str | None = None) -> str:
     """Pagina HTML mostrata al termine del flow OAuth nel browser.
 
     Tenta di notificare l'app desktop via ``window.opener.postMessage`` e
@@ -450,7 +444,7 @@ try {{
       type: 'sco-oauth-callback',
       slug: '{slug}',
       success: {str(success).lower()},
-      email: {f'"{email}"' if email else 'null'},
+      email: {f'"{email}"' if email else "null"},
       message: {message!r}
     }}, '*');
   }}
@@ -461,7 +455,7 @@ setTimeout(function() {{ try {{ window.close(); }} catch (e) {{}} }}, 2000);
 </html>"""
 
 
-@router.delete("/{slug}", status_code=204)
+@router.delete("/{slug}", status_code=204, response_class=Response, response_model=None)
 async def disconnect_integration(slug: str) -> None:
     """Revoca i token presso Google + cancella dal keyring (disconnect)."""
     if slug not in _INTEGRATIONS_CATALOG:
@@ -546,9 +540,7 @@ async def fetch_integration_data(
                 status_code=501, detail=f"Provider '{slug}' senza data fetcher implementato"
             )
     except OAuthError as exc:
-        logger.warning(
-            "integration.data.failed", slug=slug, err_code=exc.code, err_msg=exc.message
-        )
+        logger.warning("integration.data.failed", slug=slug, err_code=exc.code, err_msg=exc.message)
         raise _oauth_error_to_http(exc) from exc
 
     logger.info("integration.data.success", slug=slug, count=len(items))

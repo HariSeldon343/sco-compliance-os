@@ -54,18 +54,13 @@ async def test_vault_register_creates_setup_conversation(
     )
 
     # Cerca la conversation 'Configurazione iniziale'
-    setup_convs = [
-        c for c in convs if "Configurazione iniziale" in c.get("title", "")
-    ]
+    setup_convs = [c for c in convs if "Configurazione iniziale" in c.get("title", "")]
     assert len(setup_convs) >= 1, (
-        f"Nessuna conv 'Configurazione iniziale' trovata. "
-        f"Titoli: {[c['title'] for c in convs]}"
+        f"Nessuna conv 'Configurazione iniziale' trovata. Titoli: {[c['title'] for c in convs]}"
     )
 
     title = setup_convs[0]["title"]
-    assert "autotrigger-test" in title, (
-        f"Atteso vault_name nel titolo: {title}"
-    )
+    assert "autotrigger-test" in title, f"Atteso vault_name nel titolo: {title}"
 
 
 @pytest.mark.asyncio
@@ -119,9 +114,7 @@ async def test_vault_register_re_add_creates_new_conversation(
 
 
 @pytest.mark.asyncio
-async def test_vault_setup_conversation_has_messages(
-    client: AsyncClient, temp_vault: Path
-) -> None:
+async def test_vault_setup_conversation_has_messages(client: AsyncClient, temp_vault: Path) -> None:
     """La conversation setup deve avere messaggi assistant con tool_calls skill_invocation.
 
     NOTA: in assenza di creds Anthropic, l'execute_skill fallisce ma
@@ -137,9 +130,7 @@ async def test_vault_setup_conversation_has_messages(
     await asyncio.sleep(3.5)
 
     convs = await client.get("/api/chat/conversations")
-    setup_convs = [
-        c for c in convs.json() if "Configurazione iniziale" in c.get("title", "")
-    ]
+    setup_convs = [c for c in convs.json() if "Configurazione iniziale" in c.get("title", "")]
     assert setup_convs, "Conv 'Configurazione iniziale' non creata"
 
     conv_id = setup_convs[0]["id"]

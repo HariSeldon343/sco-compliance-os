@@ -124,6 +124,20 @@ async def list_skills(
     return [_skill_to_summary(s) for s in skills]
 
 
+@router.get("", response_model=list[SkillSummary], include_in_schema=False)
+@router.get("/", response_model=list[SkillSummary], include_in_schema=False)
+async def list_skills_alias(
+    vault_path: str | None = None,
+    include_legacy: bool = False,
+) -> list[SkillSummary]:
+    """Alias compatibile per GET /api/skills."""
+
+    return await list_skills(
+        vault_path=vault_path,
+        include_legacy=include_legacy,
+    )
+
+
 @router.post("/run")
 async def run_skill(
     payload: SkillRunRequest,
@@ -146,9 +160,7 @@ async def run_skill(
     else:
         existing = await store.get_conversation(conv_id)
         if existing is None:
-            raise HTTPException(
-                status_code=404, detail=f"Conversation {conv_id} non trovata"
-            )
+            raise HTTPException(status_code=404, detail=f"Conversation {conv_id} non trovata")
 
     assert conv_id is not None  # post-check per type checker
 
@@ -173,11 +185,7 @@ async def run_skill(
                 yield f"data: {json.dumps(event_payload, ensure_ascii=False)}\n\n"
         except Exception as exc:
             logger.exception("skills.run.stream_error", error=str(exc))
-            yield (
-                "data: "
-                + json.dumps({"kind": "error", "data": {"message": str(exc)}})
-                + "\n\n"
-            )
+            yield ("data: " + json.dumps({"kind": "error", "data": {"message": str(exc)}}) + "\n\n")
             success = False
         finally:
             text = "".join(assistant_buf)

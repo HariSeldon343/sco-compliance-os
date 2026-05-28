@@ -227,9 +227,7 @@ def _resolve_scope_dirs(vault_root: Path | None) -> list[tuple[Path, SkillScope]
 
     # Legacy bundled: relative al modulo Python scaffold/templates/skills/
     # Path risolto via __file__ del modulo loader.
-    legacy_dir = (
-        Path(__file__).resolve().parent.parent.parent / "scaffold" / "templates" / "skills"
-    )
+    legacy_dir = Path(__file__).resolve().parent.parent.parent / "scaffold" / "templates" / "skills"
 
     scopes: list[tuple[Path, SkillScope]] = [(user_dir, "user")]
     if vault_root is not None:

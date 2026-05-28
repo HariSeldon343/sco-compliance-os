@@ -26,4 +26,4 @@ Architettura layer:
 
 from __future__ import annotations
 
-__all__ = ["gmail", "gcal", "gdrive"]
+__all__ = ["gcal", "gdrive", "gmail"]

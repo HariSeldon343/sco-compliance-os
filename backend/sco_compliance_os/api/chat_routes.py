@@ -10,13 +10,12 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator
-from typing import Any
+from pathlib import Path
+from typing import Any, Literal, cast
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-
-from pathlib import Path
 
 from sco_compliance_os.config import Settings, get_settings
 from sco_compliance_os.core.agent_sdk_runner import _DEFAULT_SYSTEM_PROMPT
@@ -31,7 +30,7 @@ from sco_compliance_os.services.learning.setup_answer_persistor import (
     is_setup_step_user_answer,
     persist_setup_answer,
 )
-from sco_compliance_os.services.llm.provider import ProviderError
+from sco_compliance_os.services.llm.provider import LLMProvider, ProviderError
 from sco_compliance_os.services.llm.router import (
     Tier,
     get_tenant_llm_config,
@@ -97,10 +96,30 @@ def _get_skill_catalog_for_prompt(vault_root: Path | None = None) -> str:
         lines.append(truncated_marker)
     return "\n".join(lines)
 
+
 logger = get_logger(__name__)
+
+ChatModeLiteral = Literal["plan", "ask", "auto", "yolo"]
+
+AGENT_MODE_PERMISSION_MAP: dict[str, str] = {
+    "plan": "plan",
+    "ask": "default",
+    "auto": "acceptEdits",
+    "yolo": "bypassPermissions",
+}
+
+DEFAULT_PERMISSION_MODE = "default"
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
+
+AgentModeLiteral = Literal["plan", "ask", "auto", "yolo"]
+PERMISSION_MODE_MAP: dict[AgentModeLiteral, str] = {
+    "plan": "plan",
+    "ask": "default",
+    "auto": "acceptEdits",
+    "yolo": "bypassPermissions",
+}
 
 # ----- Schemi Pydantic -----
 
@@ -110,6 +129,10 @@ class ChatStreamRequest(BaseModel):
 
     conversation_id: str = Field(..., description="ID conversation di destinazione.")
     message: str = Field(..., min_length=1, description="Messaggio utente.")
+    agent_mode: ChatModeLiteral = Field(
+        default="auto",
+        description="Modalità operativa dell'agente per questa conversazione.",
+    )
     model_slug: str | None = Field(
         default=None,
         description="Override modello (default da settings.model_default).",
@@ -117,6 +140,10 @@ class ChatStreamRequest(BaseModel):
     agent: str | None = Field(
         default=None,
         description="Nome agent/subagent da usare (es. compliance-os, dev, etc).",
+    )
+    project_path: str | None = Field(
+        default=None,
+        description="Cartella lavoro progetto attivo (override working directory).",
     )
     tier: str | None = Field(
         default=None,
@@ -134,6 +161,15 @@ class ConversationCreateRequest(BaseModel):
     title: str | None = Field(default=None, max_length=200)
 
 
+class ConversationUpdateRequest(BaseModel):
+    """Richiesta aggiornamento conversation."""
+
+    agent_mode: ChatModeLiteral | None = Field(
+        default=None,
+        description="Nuova modalità agente per la conversazione.",
+    )
+
+
 class ConversationOut(BaseModel):
     """Schema response conversation."""
 
@@ -141,6 +177,7 @@ class ConversationOut(BaseModel):
     title: str
     created_at: str
     updated_at: str
+    agent_mode: ChatModeLiteral = "auto"
 
 
 class MessageOut(BaseModel):
@@ -185,10 +222,22 @@ async def chat_stream(
     """
     store = get_store(settings.memory_tree_db_path)
     conv = await store.get_conversation(payload.conversation_id)
+    effective_cwd = payload.project_path
+    logger.info(
+        "chat_stream conversation=%s project_path=%s", payload.conversation_id, effective_cwd
+    )
     if conv is None:
         raise HTTPException(
             status_code=404, detail=f"Conversation {payload.conversation_id} non trovata"
         )
+
+    agent_mode_value = payload.agent_mode or conv.agent_mode or "auto"
+    if agent_mode_value not in AGENT_MODE_PERMISSION_MAP:
+        agent_mode_value = "auto"
+    if agent_mode_value != conv.agent_mode:
+        await store.set_agent_mode(payload.conversation_id, agent_mode_value)
+        conv.agent_mode = agent_mode_value
+    permission_mode = AGENT_MODE_PERMISSION_MAP.get(agent_mode_value, DEFAULT_PERMISSION_MODE)
 
     # Persisti messaggio utente prima dello stream
     user_msg = await store.append_message(
@@ -232,10 +281,7 @@ async def chat_stream(
             parts = ["## Contesto rilevante dalla memoria\n"]
             cumulative_chars = len(parts[0])
             for s in relevant:
-                snippet = (
-                    f"\n### [{s.tree_kind}:{s.tree_id} L{s.level}]\n"
-                    f"{s.content_summary}\n"
-                )
+                snippet = f"\n### [{s.tree_kind}:{s.tree_id} L{s.level}]\n{s.content_summary}\n"
                 if cumulative_chars + len(snippet) > 4000:
                     parts.append("\n[...summary aggiuntive omesse per cap context...]\n")
                     break
@@ -309,9 +355,7 @@ async def chat_stream(
 
         effective_system_prompt = base_system_prompt
         if profile_markdown:
-            effective_system_prompt = (
-                f"{profile_markdown}\n\n{base_system_prompt}"
-            )
+            effective_system_prompt = f"{profile_markdown}\n\n{base_system_prompt}"
 
         # Risolvi tenant config + tier
         tier_value: Tier = payload.tier if payload.tier else "agentic-v1"  # type: ignore[assignment]
@@ -320,6 +364,8 @@ async def chat_stream(
 
             # Override esplicito model_slug nella request: short-circuit a Anthropic
             # con quel modello, bypassando router per backward-compat.
+            provider: LLMProvider | None = None
+
             if payload.model_slug:
                 from sco_compliance_os.services.llm.providers.anthropic import (
                     build_anthropic_provider_from_license,
@@ -332,9 +378,7 @@ async def chat_stream(
                 active_provider_name = "anthropic"
                 resolved_model = payload.model_slug
             else:
-                decision = await route(
-                    tier=tier_value, tenant_config=tenant_config
-                )
+                decision = await route(tier=tier_value, tenant_config=tenant_config)
                 provider = decision.provider
                 active_provider_name = decision.provider_name
                 resolved_model = decision.model
@@ -371,9 +415,7 @@ async def chat_stream(
                 skill_meta = get_skill(conv.active_skill, vault_root=None)
                 if skill_meta is not None:
                     skill_body_prepend = (
-                        f"# Skill attiva: {skill_meta.name}\n\n"
-                        f"{skill_meta.load_body()}\n\n"
-                        "---\n\n"
+                        f"# Skill attiva: {skill_meta.name}\n\n{skill_meta.load_body()}\n\n---\n\n"
                     )
                     logger.info(
                         "chat_stream.skill_body_prepended",
@@ -417,11 +459,22 @@ async def chat_stream(
                 active_skill=conv.active_skill,
             )
 
+            provider_extra: dict[str, Any] = {}
+            if permission_mode:
+                provider_extra["permission_mode"] = permission_mode
+                provider_extra["metadata"] = {"permission_mode": permission_mode}
+            if effective_cwd:
+                provider_extra["working_directory"] = effective_cwd
+
+            if provider is None:
+                raise RuntimeError("Provider non inizializzato")
+
             async for ev in provider.stream(
                 messages=messages_list,
                 model=resolved_model,
                 max_tokens=4096,
                 system_prompt=effective_system_prompt,
+                extra=provider_extra or None,
             ):
                 # Accumula contenuto per persistenza finale
                 if ev.kind == "text_delta":
@@ -458,11 +511,7 @@ async def chat_stream(
             # Defensive: se nessun text emesso E nessun widget E nessun
             # tool_call → log warning diagnostico + inietta fallback message
             # visibile invece di persistere content="" silente.
-            if (
-                not final_text.strip()
-                and ask_user_question_payload is None
-                and not tool_calls_buf
-            ):
+            if not final_text.strip() and ask_user_question_payload is None and not tool_calls_buf:
                 logger.warning(
                     "chat_stream.empty_assistant_response",
                     conversation_id=payload.conversation_id,
@@ -470,12 +519,8 @@ async def chat_stream(
                     onboarding_status=onboarding_status_str
                     if "onboarding_status_str" in dir()
                     else None,
-                    history_count=len(messages_list)
-                    if "messages_list" in dir()
-                    else None,
-                    model=resolved_model
-                    if "resolved_model" in dir()
-                    else None,
+                    history_count=len(messages_list) if "messages_list" in dir() else None,
+                    model=resolved_model if "resolved_model" in dir() else None,
                 )
                 # Inietta messaggio di refusal trasparente con suggerimento.
                 final_text = (
@@ -527,9 +572,7 @@ async def chat_stream(
                             step=persist_result.get("step_key"),
                             persisted=persist_result.get("persisted"),
                             slug=persist_result.get("preference_slug"),
-                            team_member_updated=persist_result.get(
-                                "team_member_updated"
-                            ),
+                            team_member_updated=persist_result.get("team_member_updated"),
                             reason=persist_result.get("reason"),
                         )
 
@@ -540,9 +583,7 @@ async def chat_stream(
                     )
                     is_completed = any(m in final_text for m in completion_markers)
                     if is_completed:
-                        await store.set_active_skill(
-                            payload.conversation_id, None, None
-                        )
+                        await store.set_active_skill(payload.conversation_id, None, None)
                         logger.info(
                             "chat_stream.skill_completed",
                             conversation_id=payload.conversation_id,
@@ -582,15 +623,9 @@ async def chat_stream(
                                         # Carry-over v0.13.3: conversation -> vault
                                         # binding strutturato (per ora single-vault MVP).
                                         last_entry = entries[-1]
-                                        vault_path_resolved = str(
-                                            last_entry.get("path", "")
-                                        )
-                                        vault_name_resolved = str(
-                                            last_entry.get("name", "Vault")
-                                        )
-                                        vault_id_resolved = str(
-                                            last_entry.get("id", "")
-                                        )
+                                        vault_path_resolved = str(last_entry.get("path", ""))
+                                        vault_name_resolved = str(last_entry.get("name", "Vault"))
+                                        vault_id_resolved = str(last_entry.get("id", ""))
                                 except Exception as reg_exc:
                                     logger.warning(
                                         "chat_stream.optimizer_vault_lookup_failed",
@@ -648,17 +683,13 @@ async def chat_stream(
                     if "web_search" not in tool_name and "search" not in tool_name:
                         continue
                     # I risultati possono vivere in result, content, output.
-                    raw_result = (
-                        tc.get("result") or tc.get("content") or tc.get("output")
-                    )
+                    raw_result = tc.get("result") or tc.get("content") or tc.get("output")
                     if isinstance(raw_result, list):
                         for hit in raw_result:
                             if isinstance(hit, dict):
                                 search_hits.append(hit)
                     elif isinstance(raw_result, dict):
-                        hits_list = raw_result.get("hits") or raw_result.get(
-                            "results", []
-                        )
+                        hits_list = raw_result.get("hits") or raw_result.get("results", [])
                         if isinstance(hits_list, list):
                             for hit in hits_list:
                                 if isinstance(hit, dict):
@@ -673,18 +704,14 @@ async def chat_stream(
                         args = tc.get("args") or tc.get("input") or {}
                         if isinstance(args, dict):
                             file_path = (
-                                args.get("file_path")
-                                or args.get("path")
-                                or args.get("filename")
+                                args.get("file_path") or args.get("path") or args.get("filename")
                             )
                             if file_path:
                                 attachment_hits.append(
                                     {
                                         "path": str(file_path),
                                         "mime_type": "",
-                                        "content_preview": str(
-                                            tc.get("result", "")
-                                        )[:4000],
+                                        "content_preview": str(tc.get("result", ""))[:4000],
                                     }
                                 )
 
@@ -749,8 +776,7 @@ async def chat_stream(
                 )
 
                 turn_combined = (
-                    f"[USER]\n{payload.message}\n\n"
-                    f"[ASSISTANT]\n{''.join(assistant_text_buf)}"
+                    f"[USER]\n{payload.message}\n\n[ASSISTANT]\n{''.join(assistant_text_buf)}"
                 )
                 # Trim long content per evitare bloat memoria (cap 8000 char).
                 if len(turn_combined) > 8000:
@@ -759,7 +785,7 @@ async def chat_stream(
                 # Fire-and-forget: non await il task (lo schedula come bg).
                 import asyncio as _asyncio
 
-                _asyncio.create_task(
+                _asyncio.create_task(  # noqa: RUF006 — fire-and-forget bg ingest intenzionale
                     ingest_inputs(
                         [
                             IngestInput(
@@ -813,6 +839,7 @@ async def list_conversations(
             title=c.title,
             created_at=c.created_at.isoformat(),
             updated_at=c.updated_at.isoformat(),
+            agent_mode=cast(ChatModeLiteral, c.agent_mode or "auto"),
         )
         for c in convs
     ]
@@ -831,6 +858,35 @@ async def create_conversation(
         title=conv.title,
         created_at=conv.created_at.isoformat(),
         updated_at=conv.updated_at.isoformat(),
+        agent_mode=cast(ChatModeLiteral, conv.agent_mode or "auto"),
+    )
+
+
+@router.patch("/conversations/{conv_id}", response_model=ConversationOut)
+async def update_conversation(
+    conv_id: str,
+    payload: ConversationUpdateRequest,
+    settings: Settings = Depends(get_settings),
+) -> ConversationOut:
+    """Aggiorna metadata della conversation (attualmente agent_mode)."""
+
+    store = get_store(settings.memory_tree_db_path)
+    conv = await store.get_conversation(conv_id)
+    if conv is None:
+        raise HTTPException(status_code=404, detail=f"Conversation {conv_id} non trovata")
+
+    if payload.agent_mode is not None:
+        await store.set_agent_mode(conv_id, payload.agent_mode)
+        conv = await store.get_conversation(conv_id)
+        if conv is None:
+            raise HTTPException(status_code=404, detail=f"Conversation {conv_id} non trovata")
+
+    return ConversationOut(
+        id=conv.id,
+        title=conv.title,
+        created_at=conv.created_at.isoformat(),
+        updated_at=conv.updated_at.isoformat(),
+        agent_mode=cast(ChatModeLiteral, conv.agent_mode or "auto"),
     )
 
 
@@ -865,3 +921,18 @@ async def get_conversation_messages(
             )
         )
     return out
+
+
+@router.delete(
+    "/conversations/{conv_id}", status_code=204, response_class=Response, response_model=None
+)
+async def delete_conversation(
+    conv_id: str,
+    settings: Settings = Depends(get_settings),
+) -> Response:
+    """Cancella conversation + messaggi + artifacts memory tree."""
+    store = get_store(settings.memory_tree_db_path)
+    deleted = await store.delete_conversation(conv_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Conversation {conv_id} non trovata")
+    return Response(status_code=204)

@@ -111,7 +111,8 @@ async def test_tree_seal_force(client: AsyncClient) -> None:
                         "ISO/IEC 27001:2022, Reg. UE 2024/1689 AI Act. "
                         "Soggetti essenziali devono adottare misure tecniche "
                         "organizzative proporzionate al rischio cyber."
-                    ) * 3,
+                    )
+                    * 3,
                     "owner": "local",
                     "tags": ["seal-test"],
                 }
@@ -142,9 +143,7 @@ async def test_tree_seal_force(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_tree_summaries_list(client: AsyncClient) -> None:
     """GET /api/memory/tree/summaries?level=1 → lista summaries L1 (può essere vuota)."""
-    response = await client.get(
-        "/api/memory/tree/summaries", params={"level": 1, "owner": "local"}
-    )
+    response = await client.get("/api/memory/tree/summaries", params={"level": 1, "owner": "local"})
     assert response.status_code == 200, response.text
     summaries = response.json()
     assert isinstance(summaries, list)
@@ -165,7 +164,8 @@ async def test_tree_summaries_relevant_query(client: AsyncClient) -> None:
                         "NIS 2 è la direttiva UE 2022/2555 recepita in Italia "
                         "con D.Lgs. 138/2024. Si applica a soggetti essenziali "
                         "e importanti. Notifica incidenti significativi entro 24h."
-                    ) * 5,
+                    )
+                    * 5,
                     "owner": "local",
                     "tags": ["nis2"],
                 }

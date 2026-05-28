@@ -1,6 +1,7 @@
-// SCO Compliance OS — sidebar 280px collapsible stile Claude Desktop / OpenHuman
+﻿// SCO Compliance OS â€” sidebar 280px collapsible stile Claude Desktop / OpenHuman
 import { useState, useEffect } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
+import * as Dialog from "@radix-ui/react-dialog";
 import {
   MessageSquare,
   Database,
@@ -15,17 +16,22 @@ import {
   Sparkles,
   FolderTree,
   Network,
+  Trash,
+  Loader2,
+  FolderGit2,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { useChatStore } from "@/store/chat-store";
 import { useVaultStore } from "@/store/vault-store";
+import { useProjectStore } from "@/store/project-store";
 import { cn } from "@/lib/cn";
 
 // Fallback version se backend /health non risponde. Conv. 47 enforcement:
 // fonte autoritativa = backend_version da GET /health (vedi useBackendVersion hook).
 // v0.10.0: import diretto da package.json via Vite define __APP_VERSION__.
 const APP_VERSION_FALLBACK =
-  (typeof __APP_VERSION__ !== "undefined" && __APP_VERSION__) || "0.13.7";
+  (typeof __APP_VERSION__ !== "undefined" && __APP_VERSION__) || "0.14.0";
 
 interface NavItem {
   to: string;
@@ -35,7 +41,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Chat", icon: MessageSquare },
-  // Wave 2 OpenHuman replica — Wiki Memory Tree gerarchico L0/L1/L2
+  // Wave 2 OpenHuman replica â€” Wiki Memory Tree gerarchico L0/L1/L2
   { to: "/wiki", label: "Wiki", icon: FolderTree },
   // v0.12.0 GAMMA design: visualizza vault come rete force-directed 2D
   { to: "/grafo", label: "Grafo", icon: Network },
@@ -90,7 +96,10 @@ function relativeTimestamp(iso: string): string {
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [vaultMenuOpen, setVaultMenuOpen] = useState(false);
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [backendVersion, setBackendVersion] = useState<string>(APP_VERSION_FALLBACK);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const navigate = useNavigate();
 
   const conversations = useChatStore((s) => s.conversations);
@@ -98,6 +107,9 @@ export function Sidebar() {
   const setActive = useChatStore((s) => s.setActiveConversation);
   const createConv = useChatStore((s) => s.createConversation);
   const fetchConversations = useChatStore((s) => s.fetchConversations);
+  const deleteConversation = useChatStore((s) => s.deleteConversation);
+  const { activeProjectPath, activeProjectName, setActiveProject, clearActiveProject } =
+    useProjectStore();
   // v0.8.1 fix auto-navigation: track lastAutoNavigated per intercettare
   // auto-select dello store e triggera react-router navigate('/'). Lo store
   // non puo` chiamare useNavigate (e' un hook), quindi il pattern e' "store
@@ -105,9 +117,9 @@ export function Sidebar() {
   const lastAutoNavigated = useChatStore((s) => s.lastAutoNavigated);
 
   // v1.0.2 fix sidebar visibility: auto-fetch al mount + polling 5s.
-  // Backend è single source of truth (Conv. 47): la sidebar deve riflettere
+  // Backend Ã¨ single source of truth (Conv. 47): la sidebar deve riflettere
   // SEMPRE lo stato corrente del DB, anche per conversation auto-create dal
-  // skill loader post-vault.registered (os-setup → "Configurazione iniziale del vault X").
+  // skill loader post-vault.registered (os-setup â†’ "Configurazione iniziale del vault X").
   useEffect(() => {
     // Mount immediato: silent=false per mostrare toast su nuove "Configurazione iniziale"
     void fetchConversations({ silent: false });
@@ -133,11 +145,60 @@ export function Sidebar() {
     }
   }, [lastAutoNavigated, activeId, navigate]);
 
+  const closeDeleteDialog = () => {
+    setIsDeleting(false);
+    setDeleteTarget(null);
+  };
+
+  const handleChangeProject = async () => {
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: "Scegli cartella progetto",
+      });
+      if (typeof selected !== "string") {
+        return;
+      }
+      const sanitized = selected.replace(/[\\/]+$/, "");
+      const segments = sanitized.split(/[\\/]/).filter((segment) => segment.length > 0);
+      const inferredName = segments.at(-1)?.trim() || sanitized;
+      setActiveProject(selected, inferredName);
+      toast.success(`Progetto attivo: ${inferredName}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      toast.error(`Errore selezione progetto: ${message}`);
+    } finally {
+      setProjectMenuOpen(false);
+    }
+  };
+
+  const handleClearProject = () => {
+    clearActiveProject();
+    toast.success("Progetto rimosso.");
+    setProjectMenuOpen(false);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget || isDeleting) return;
+    setIsDeleting(true);
+    try {
+      await deleteConversation(deleteTarget.id);
+      toast.success(`Chat "${deleteTarget.title}" eliminata.`);
+      closeDeleteDialog();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error(`Errore cancellazione chat: ${message}`);
+      setIsDeleting(false);
+    }
+  };
+
   // v0.8.1 fix auto-navigation: fallback ridondante per assicurare auto-select
   // anche in scenari edge dove fetchConversations potrebbe non aver scattato.
   // Watch conversations dictionary: se compare nuova "Configurazione iniziale"
   // o "Ottimizzazione iniziale" (v0.13.2 DEV-AUTO-OPTIMIZER) non ancora
-  // auto-naviata E utente e' su welcome screen → seleziona + naviga.
+  // auto-naviata E utente e' su welcome screen â†’ seleziona + naviga.
   // Pattern Conv. 47/48 single source of truth: deduce dallo store.
   useEffect(() => {
     const optimizerWelcome = Object.values(conversations).find((c) =>
@@ -153,7 +214,7 @@ export function Sidebar() {
     if (lastAutoNavigated === welcomeCandidate.id) return;
     // Salta se l'utente sta gia` su una conv (no preempt: utente lavora altrove)
     if (activeId && activeId !== welcomeCandidate.id) return;
-    // Tutte condizioni OK → auto-select + naviga
+    // Tutte condizioni OK â†’ auto-select + naviga
     setActive(welcomeCandidate.id);
     useChatStore.setState({ lastAutoNavigated: welcomeCandidate.id });
     if (window.location.pathname !== "/") {
@@ -301,6 +362,56 @@ export function Sidebar() {
         </div>
       )}
 
+
+      {/* === Progetto attivo (solo expanded) === */}
+      {!collapsed && (
+        <div className="px-3 pt-3">
+          <button
+            type="button"
+            onClick={() => setProjectMenuOpen(!projectMenuOpen)}
+            className="flex w-full items-center justify-between rounded-lg border border-sco-border bg-sco-bg px-3 py-2 text-xs transition-colors hover:border-sco-blue/60"
+          >
+            <span className="flex items-center gap-2 truncate">
+              <FolderGit2
+                size={13}
+                className="shrink-0 text-amber-500"
+                aria-hidden="true"
+              />
+              <span className="truncate font-medium">{activeProjectName ?? "Nessun progetto"}</span>
+            </span>
+            <ChevronDown
+              size={13}
+              className={cn(
+                "shrink-0 text-sco-muted-foreground transition-transform",
+                projectMenuOpen && "rotate-180",
+              )}
+            />
+          </button>
+          {projectMenuOpen && (
+            <div className="mt-2 rounded-lg border border-sco-border bg-sco-surface-elevated p-2 text-xs text-sco-muted-foreground">
+              <button
+                type="button"
+                className="w-full rounded-md px-2 py-1.5 text-left font-medium text-sco-text hover:bg-sco-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sco-blue dark:text-sco-text-dark"
+                onClick={() => {
+                  void handleChangeProject();
+                }}
+              >
+                Cambia cartella
+              </button>
+              {activeProjectPath && (
+                <button
+                  type="button"
+                  className="mt-1 w-full rounded-md px-2 py-1.5 text-left font-medium text-red-600 hover:bg-red-600/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                  onClick={handleClearProject}
+                >
+                  Rimuovi progetto
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* === Pinned (sezione futura, mostrata vuota come placeholder) === */}
       {!collapsed && (
         <div className="px-3 pt-4">
@@ -325,7 +436,7 @@ export function Sidebar() {
             {conversationList.map((c) => {
               const isActive = activeId === c.id;
               return (
-                <li key={c.id}>
+                <li key={c.id} className="group relative">
                   <button
                     type="button"
                     onClick={() => {
@@ -333,7 +444,7 @@ export function Sidebar() {
                       navigate("/");
                     }}
                     className={cn(
-                      "group flex w-full flex-col gap-0.5 rounded-md px-3 py-2 text-left transition-colors duration-150",
+                      "flex w-full flex-col gap-0.5 rounded-md px-3 pr-9 py-2 text-left transition-colors duration-150",
                       isActive
                         ? "bg-sco-blue/10 text-sco-text dark:text-sco-text-dark"
                         : "hover:bg-sco-muted",
@@ -360,6 +471,24 @@ export function Sidebar() {
                     >
                       {relativeTimestamp(c.updated_at)}
                     </span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Cancella chat ${c.title}`}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setIsDeleting(false);
+                      setDeleteTarget({ id: c.id, title: c.title });
+                    }}
+                    className={cn(
+                      "absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-full p-1 text-sco-muted-foreground",
+                      "opacity-0 transition-opacity duration-150",
+                      "hover:bg-sco-muted hover:text-sco-text focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sco-blue",
+                      deleteTarget?.id === c.id ? "opacity-100" : "group-hover:opacity-100",
+                    )}
+                  >
+                    <Trash size={14} />
                   </button>
                 </li>
               );
@@ -426,6 +555,73 @@ export function Sidebar() {
       >
         v{backendVersion}
       </div>
+
+      <Dialog.Root
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeDeleteDialog();
+          }
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay
+            className={cn(
+              "fixed inset-0 z-40",
+              "bg-black/55 backdrop-blur-sm",
+              "data-[state=open]:animate-fade-in data-[state=closed]:opacity-0",
+            )}
+          />
+          <Dialog.Content
+            className={cn(
+              "fixed left-1/2 top-1/2 z-50 w-[360px] max-w-[92vw]",
+              "-translate-x-1/2 -translate-y-1/2 rounded-xl border border-sco-border bg-sco-surface-elevated p-5 shadow-2xl outline-none",
+              "data-[state=open]:animate-scale-in",
+            )}
+          >
+            <Dialog.Title className="text-base font-semibold text-sco-text dark:text-sco-text-dark">
+              Cancella chat
+            </Dialog.Title>
+            <Dialog.Description className="mt-2 text-sm text-sco-muted-foreground">
+              Vuoi davvero cancellare questa chat?
+            </Dialog.Description>
+            {deleteTarget && (
+              <p className="mt-3 truncate text-sm font-medium text-sco-text dark:text-sco-text-dark">
+                {deleteTarget.title}
+              </p>
+            )}
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-sco-border px-4 py-2 text-sm font-medium text-sco-text transition-colors hover:bg-sco-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sco-blue dark:text-sco-text-dark"
+                onClick={closeDeleteDialog}
+                disabled={isDeleting}
+              >
+                Annulla
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors",
+                  "hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500",
+                  isDeleting && "opacity-80",
+                )}
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Cancello...</span>
+                  </>
+                ) : (
+                  "Cancella"
+                )}
+              </button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </aside>
   );
 }

@@ -48,9 +48,7 @@ def _group_by_category(
     profile_store, quindi NON ri-ordinare qui — pattern SCO single
     source of truth per ranking.
     """
-    grouped: dict[ProfileCategory, list[Preference]] = {
-        cat: [] for cat in _SECTION_ORDER
-    }
+    grouped: dict[ProfileCategory, list[Preference]] = {cat: [] for cat in _SECTION_ORDER}
     for pref in preferences:
         grouped[pref.category].append(pref)
     return grouped

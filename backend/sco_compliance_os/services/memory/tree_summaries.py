@@ -42,10 +42,10 @@ import math
 import re
 import time
 from collections import Counter
-from collections.abc import Iterable
-from dataclasses import dataclass, field
-from enum import Enum
+from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
+from typing import Any
 
 import aiosqlite
 
@@ -92,7 +92,7 @@ SUMMARIZER_MAX_INPUT_CHARS = 100_000
 # --------------------------------------------------------------------------
 
 
-class TreeKind(str, Enum):
+class TreeKind(StrEnum):
     """Vocabolario chiuso 3 alberi concentrici (clean-room ispirato OpenHuman)."""
 
     SOURCE = "source"  # 1 albero per source (chat thread, email account, document)
@@ -100,7 +100,7 @@ class TreeKind(str, Enum):
     GLOBAL = "global"  # radice utente cumulativa
 
 
-class SummaryStatus(str, Enum):
+class SummaryStatus(StrEnum):
     """Stato lifecycle della TreeSummary."""
 
     PENDING = "pending"  # in buffer, attende threshold per seal next level
@@ -183,9 +183,7 @@ def compute_summary_id(
     Idempotent: stessi children -> stesso ID -> upsert no-op.
     """
     sorted_kids = sorted(children_ids)
-    payload = (
-        f"{tree_kind}|{tree_id}|{level}|{','.join(sorted_kids)}".encode("utf-8")
-    )
+    payload = f"{tree_kind}|{tree_id}|{level}|{','.join(sorted_kids)}".encode()
     return hashlib.sha256(payload).hexdigest()[:16]
 
 
@@ -198,17 +196,13 @@ def _summary_row_to_dataclass(row: aiosqlite.Row) -> TreeSummary:
     """Deserializza row in TreeSummary."""
     try:
         children_chunk_ids = (
-            json.loads(row["children_chunk_ids_json"])
-            if row["children_chunk_ids_json"]
-            else []
+            json.loads(row["children_chunk_ids_json"]) if row["children_chunk_ids_json"] else []
         )
     except (json.JSONDecodeError, TypeError):
         children_chunk_ids = []
     try:
         children_summary_ids = (
-            json.loads(row["children_summary_ids_json"])
-            if row["children_summary_ids_json"]
-            else []
+            json.loads(row["children_summary_ids_json"]) if row["children_summary_ids_json"] else []
         )
     except (json.JSONDecodeError, TypeError):
         children_summary_ids = []
@@ -281,7 +275,7 @@ async def list_summaries(
 ) -> list[TreeSummary]:
     """Lista summaries con filtri opzionali."""
     sql = "SELECT * FROM mem_tree_summaries WHERE 1=1"
-    params: list = []
+    params: list[Any] = []
     if tree_kind:
         sql += " AND tree_kind = ?"
         params.append(tree_kind)
@@ -342,8 +336,9 @@ async def mark_summaries_cascaded(
     if not summary_ids:
         return 0
     placeholders = ",".join("?" * len(summary_ids))
+
     sql = (
-        f"UPDATE mem_tree_summaries SET parent_summary_id = ? "
+        f"UPDATE mem_tree_summaries SET parent_summary_id = ? "  # noqa: S608
         f"WHERE id IN ({placeholders})"
     )
     try:
@@ -455,8 +450,7 @@ async def summarize_with_llm(
         input_tok = response.usage.input_tokens
         output_tok = response.usage.output_tokens
         est_cost_usd = (
-            input_tok * SUMMARIZER_COST_PER_INPUT_TOK
-            + output_tok * SUMMARIZER_COST_PER_OUTPUT_TOK
+            input_tok * SUMMARIZER_COST_PER_INPUT_TOK + output_tok * SUMMARIZER_COST_PER_OUTPUT_TOK
         )
 
         logger.info(
@@ -586,11 +580,7 @@ async def seal_chunks(
         return None
 
     target_tokens = (
-        TARGET_TOKENS_L1
-        if level == 1
-        else TARGET_TOKENS_L2
-        if level == 2
-        else TARGET_TOKENS_L3
+        TARGET_TOKENS_L1 if level == 1 else TARGET_TOKENS_L2 if level == 2 else TARGET_TOKENS_L3
     )
 
     children_chunk_ids = [c.id for c in chunks]
@@ -750,9 +740,7 @@ async def seal_summaries_to_next_level(
         )
         return None
 
-    cascaded = await mark_summaries_cascaded(
-        children_summary_ids, summary_id, db_path=db_path
-    )
+    cascaded = await mark_summaries_cascaded(children_summary_ids, summary_id, db_path=db_path)
 
     logger.info(
         "seal_summaries_to_next_level.success",
@@ -1044,7 +1032,7 @@ async def query_relevant_summaries(
 
     # Score each summary
     scored: list[tuple[float, TreeSummary]] = []
-    for summary, doc_tokens in zip(all_summaries, docs_tokens):
+    for summary, doc_tokens in zip(all_summaries, docs_tokens, strict=False):
         if not doc_tokens:
             continue
         score = _bm25_score(
@@ -1078,10 +1066,10 @@ __all__ = [
     "SEAL_L2_THRESHOLD_TOKENS",
     "SEAL_L3_THRESHOLD_TOKENS",
     "SUMMARIZER_MODEL",
-    "SummaryStatus",
     "TARGET_TOKENS_L1",
     "TARGET_TOKENS_L2",
     "TARGET_TOKENS_L3",
+    "SummaryStatus",
     "TreeKind",
     "TreeSummary",
     "cascade_seal",

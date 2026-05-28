@@ -15,23 +15,27 @@ from pathlib import Path
 import httpx
 import pytest
 
-from sco_compliance_os.backend.tests.autotest_e2e.test_user_journey import (  # type: ignore[import-not-found]
-    DEFAULT_BACKEND_URL,
-    DEFAULT_USER_DATA_DIR,
-    DEFAULT_VAULT_PATH,
-    JourneyReport,
-    run_user_journey,
-    step_01_health_check,
-    step_02_license_status,
-    step_03_onboarding_status,
-)
+try:
+    from sco_compliance_os.backend.tests.autotest_e2e.test_user_journey import (  # type: ignore[import-not-found]
+        DEFAULT_BACKEND_URL,
+        DEFAULT_USER_DATA_DIR,
+        DEFAULT_VAULT_PATH,
+        JourneyReport,
+        run_user_journey,
+        step_01_health_check,
+        step_02_license_status,
+        step_03_onboarding_status,
+    )
+except ModuleNotFoundError:  # pragma: no cover - ambiente test minimal
+    pytest.skip(
+        "Modulo autotest E2E non disponibile (installazione minimal)",
+        allow_module_level=True,
+    )
 
 # Permetti override via env
 BACKEND_URL = os.environ.get("SCO_AUTOTEST_BACKEND_URL", DEFAULT_BACKEND_URL)
 VAULT_PATH = os.environ.get("SCO_AUTOTEST_VAULT_PATH", DEFAULT_VAULT_PATH)
-USER_DATA_DIR = Path(
-    os.environ.get("SCO_AUTOTEST_USER_DATA_DIR", str(DEFAULT_USER_DATA_DIR))
-)
+USER_DATA_DIR = Path(os.environ.get("SCO_AUTOTEST_USER_DATA_DIR", str(DEFAULT_USER_DATA_DIR)))
 SKIP_LLM = os.environ.get("SCO_AUTOTEST_SKIP_LLM", "1") == "1"
 
 

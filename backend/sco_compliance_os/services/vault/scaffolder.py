@@ -38,7 +38,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 from sco_compliance_os.core.logging_setup import get_logger
 
@@ -536,9 +536,7 @@ Part of [[Giornaliero/_index]]
 def _render_entity_stub(seed: EntitySeed) -> str:
     """Crea wiki/entities/<slug>.md stub con frontmatter SCO tipizzato + sintesi."""
     tags_str = ", ".join(seed.tags)
-    subtype_line = (
-        f"entity_subtype: {seed.entity_subtype}\n" if seed.entity_subtype else ""
-    )
+    subtype_line = f"entity_subtype: {seed.entity_subtype}\n" if seed.entity_subtype else ""
     return f"""---
 type: entity
 entity_type: {seed.entity_type}
@@ -632,9 +630,7 @@ def scaffold_vault(
             e vuoto/whitespace.
     """
     if template not in VALID_TEMPLATES:
-        raise ValueError(
-            f"Template '{template}' non ammesso. Valori: {VALID_TEMPLATES}"
-        )
+        raise ValueError(f"Template '{template}' non ammesso. Valori: {VALID_TEMPLATES}")
     if not vault_name or not vault_name.strip():
         raise ValueError("vault_name non puo essere vuoto")
 
@@ -660,8 +656,8 @@ def scaffold_vault(
     # Crea root + le 9 cartelle + sotto-cartelle wiki/raw.
     vault_path.mkdir(parents=True, exist_ok=True)
     directories_created = 0
-    for rel in _BASE_DIRECTORIES:
-        target = vault_path / rel
+    for base_dir in _BASE_DIRECTORIES:
+        target = vault_path / base_dir
         if not target.exists():
             target.mkdir(parents=True, exist_ok=True)
             directories_created += 1
@@ -768,9 +764,7 @@ _AUTO_CREATE_FOLDERS: frozenset[str] = frozenset(
 
 # Cartelle "opt-in utente" (chiedere prima di toccare).
 # Razionale: dati personali / cliente / generati incrementalmente.
-_OPT_IN_FOLDERS: frozenset[str] = frozenset(
-    {"Contesto", "Business", "raw", "wiki", "CLAUDE.md"}
-)
+_OPT_IN_FOLDERS: frozenset[str] = frozenset({"Contesto", "Business", "raw", "wiki", "CLAUDE.md"})
 
 
 @dataclass(frozen=True)
@@ -827,12 +821,8 @@ def inspect_missing_components(vault_root: Path) -> dict[str, object]:
             "is_sco_structure": False,
             "present_folders": [],
             "missing_folders": list(_CANONICAL_ROOT_FOLDERS),
-            "missing_auto": [
-                f for f in _CANONICAL_ROOT_FOLDERS if f in _AUTO_CREATE_FOLDERS
-            ],
-            "missing_opt_in": [
-                f for f in _CANONICAL_ROOT_FOLDERS if f in _OPT_IN_FOLDERS
-            ],
+            "missing_auto": [f for f in _CANONICAL_ROOT_FOLDERS if f in _AUTO_CREATE_FOLDERS],
+            "missing_opt_in": [f for f in _CANONICAL_ROOT_FOLDERS if f in _OPT_IN_FOLDERS],
             "has_claude_md": False,
             "has_log_dir": False,
         }
@@ -858,9 +848,7 @@ def inspect_missing_components(vault_root: Path) -> dict[str, object]:
     if not has_claude_md:
         missing_opt_in.append("CLAUDE.md")
 
-    is_sco_structure = (
-        not missing_folders and has_claude_md and has_log_dir
-    )
+    is_sco_structure = not missing_folders and has_claude_md and has_log_dir
 
     return {
         "vault_exists": True,
@@ -916,7 +904,7 @@ def complete_missing_structure(
         )
 
     inspect = inspect_missing_components(vault_path)
-    missing_before = tuple(inspect["missing_folders"])  # type: ignore[arg-type]
+    missing_before: tuple[str, ...] = tuple(cast(list[str], inspect["missing_folders"]))
 
     if inspect["is_sco_structure"] and not include_opt_in:
         # Vault gia completo: nessuna azione necessaria.
@@ -939,9 +927,9 @@ def complete_missing_structure(
     errors: list[str] = []
 
     # 1. Crea cartelle root mancanti (sempre auto-create; opt-in solo se richiesto)
-    auto_to_create: list[str] = list(inspect["missing_auto"])  # type: ignore[arg-type]
+    auto_to_create: list[str] = list(cast(list[str], inspect["missing_auto"]))
     opt_in_to_create: list[str] = (
-        list(inspect["missing_opt_in"]) if include_opt_in else []  # type: ignore[arg-type]
+        list(cast(list[str], inspect["missing_opt_in"])) if include_opt_in else []
     )
 
     for folder in auto_to_create + opt_in_to_create:
@@ -1275,9 +1263,10 @@ _CONCEPT_SEEDS: tuple[ConceptSeed, ...] = (
 def _render_concept_stub(seed: ConceptSeed) -> str:
     """Crea wiki/concepts/<slug>.md stub con sintesi + related entities."""
     tags_str = ", ".join(seed.tags)
-    related_block = "\n".join(
-        f"- [[wiki/entities/{slug}]]" for slug in seed.related_entities
-    ) or "(da popolare)"
+    related_block = (
+        "\n".join(f"- [[wiki/entities/{slug}]]" for slug in seed.related_entities)
+        or "(da popolare)"
+    )
     return f"""---
 type: concept
 title: "{seed.title}"
@@ -1330,13 +1319,21 @@ _GLOSSARIO_SEED_ROWS: tuple[tuple[str, str, str], ...] = (
     ("ISO 9001", "Standard internazionale Sistema Gestione Qualita", "qualita"),
     ("ISO 14001", "Standard internazionale Sistema Gestione Ambientale", "gestione-ambientale"),
     ("ISO/IEC 27001", "Standard internazionale Sistema Gestione Sicurezza Informazioni", "cyber"),
-    ("ISO/IEC 42001", "Standard internazionale Sistema Gestione Intelligenza Artificiale", "governance-ai"),
+    (
+        "ISO/IEC 42001",
+        "Standard internazionale Sistema Gestione Intelligenza Artificiale",
+        "governance-ai",
+    ),
     ("LG", "Linee Guida", "cross"),
     ("MFA", "Multi Factor Authentication", "cyber"),
     ("NC", "Non Conformita", "qualita"),
     ("NC_E", "Non Conformita Maggiore Esterna", "qualita"),
     ("NC_I", "Non Conformita Maggiore Interna", "qualita"),
-    ("NIS 2", "Direttiva 2022/2555 + D.Lgs. 138/2024 — Network and Information Security 2", "cyber"),
+    (
+        "NIS 2",
+        "Direttiva 2022/2555 + D.Lgs. 138/2024 — Network and Information Security 2",
+        "cyber",
+    ),
     ("OdC", "Organismo di Certificazione", "qualita"),
     ("RPD", "Responsabile della Protezione dei Dati (DPO in italiano)", "privacy"),
     ("RSPP", "Responsabile del Servizio di Prevenzione e Protezione", "lavoro"),
@@ -1462,9 +1459,7 @@ class AutoOrganizeResult:
             "organized": self.organized,
             "directories_created": list(self.directories_created),
             "files_created": list(self.files_created),
-            "files_moved": [
-                {"src": src, "dest": dest} for src, dest in self.files_moved
-            ],
+            "files_moved": [{"src": src, "dest": dest} for src, dest in self.files_moved],
             "files_backed_up": list(self.files_backed_up),
             "files_skipped": list(self.files_skipped),
             "errors": list(self.errors),
@@ -1684,21 +1679,21 @@ def auto_organize_vault(
 
     # ----- FASE 1: Crea cartelle canoniche SCO -----
     # CircuitBreaker: errori in mkdir loggati ma non bloccano fasi successive.
-    for rel in _BASE_DIRECTORIES:
-        target = vault_path / rel
+    for base_dir in _BASE_DIRECTORIES:
+        target = vault_path / base_dir
         if target.exists():
             continue
         if not auto_apply:
-            directories_created.append(f"{rel}/")
+            directories_created.append(f"{base_dir}/")
             continue
         try:
             target.mkdir(parents=True, exist_ok=True)
-            directories_created.append(f"{rel}/")
+            directories_created.append(f"{base_dir}/")
             logger.debug("auto_organize.dir_created", path=str(target))
         except OSError as exc:
-            err = f"FASE 1 mkdir {rel}/ failed: {exc}"
+            err = f"FASE 1 mkdir {base_dir}/ failed: {exc}"
             errors.append(err)
-            logger.warning("auto_organize.dir_create_failed", folder=rel, error=str(exc))
+            logger.warning("auto_organize.dir_create_failed", folder=base_dir, error=str(exc))
 
     # ----- FASE 2 + 3: Re-classify file esistenti con backup -----
     # CircuitBreaker per file: ogni errore singolo non blocca gli altri.
@@ -1709,10 +1704,10 @@ def auto_organize_vault(
         for md_file in vault_path.rglob("*.md"):
             # Skip file gia nel backup dir, .claude, .obsidian.
             try:
-                rel = md_file.relative_to(vault_path)
+                rel_path: Path = md_file.relative_to(vault_path)
             except ValueError:
                 continue
-            if rel.parts and rel.parts[0] in {
+            if rel_path.parts and rel_path.parts[0] in {
                 _BACKUP_DIR_NAME,
                 ".claude",
                 ".obsidian",
@@ -1743,12 +1738,12 @@ def auto_organize_vault(
 
         if not auto_apply:
             try:
-                src_rel = str(md_file.relative_to(vault_path))
-                dest_rel = str(dest.relative_to(vault_path))
+                src_rel_str = str(md_file.relative_to(vault_path))
+                dest_rel_str = str(dest.relative_to(vault_path))
             except ValueError:
-                src_rel = str(md_file)
-                dest_rel = str(dest)
-            files_moved.append((src_rel, dest_rel))
+                src_rel_str = str(md_file)
+                dest_rel_str = str(dest)
+            files_moved.append((src_rel_str, dest_rel_str))
             continue
 
         # Backup pre-spostamento (Conv. 39 + Conv. 42 backup PRE-REDAZIONE).
@@ -1757,8 +1752,8 @@ def auto_organize_vault(
             # Backup name include subpath per evitare collisioni
             # (Context/identity.md vs Identity.md altro percorso).
             try:
-                src_rel = md_file.relative_to(vault_path)
-                backup_name = "__".join(src_rel.parts)
+                src_rel_path: Path = md_file.relative_to(vault_path)
+                backup_name = "__".join(src_rel_path.parts)
             except ValueError:
                 backup_name = md_file.name
             backup_path = backup_dir / backup_name
@@ -1780,12 +1775,12 @@ def auto_organize_vault(
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(md_file), str(dest))
             try:
-                src_rel = str(md_file.relative_to(vault_path))
-                dest_rel = str(dest.relative_to(vault_path))
+                src_rel_str = str(md_file.relative_to(vault_path))
+                dest_rel_str = str(dest.relative_to(vault_path))
             except ValueError:
-                src_rel = str(md_file)
-                dest_rel = str(dest)
-            files_moved.append((src_rel, dest_rel))
+                src_rel_str = str(md_file)
+                dest_rel_str = str(dest)
+            files_moved.append((src_rel_str, dest_rel_str))
             logger.info(
                 "auto_organize.file_moved",
                 src=str(md_file),
@@ -1917,9 +1912,7 @@ def auto_organize_vault(
                 concept_path.write_text(_render_concept_stub(concept), encoding="utf-8")
                 files_created.append(f"wiki/concepts/{concept.slug}.md")
             except OSError as exc:
-                errors.append(
-                    f"FASE 5 write wiki/concepts/{concept.slug}.md failed: {exc}"
-                )
+                errors.append(f"FASE 5 write wiki/concepts/{concept.slug}.md failed: {exc}")
         else:
             files_created.append(f"wiki/concepts/{concept.slug}.md")
 
@@ -1956,9 +1949,7 @@ def auto_organize_vault(
         else:
             files_created.append("wiki/glossari/_index.md")
 
-    organized = bool(
-        directories_created or files_created or files_moved
-    )
+    organized = bool(directories_created or files_created or files_moved)
 
     logger.info(
         "auto_organize.complete",

@@ -30,7 +30,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from sco_compliance_os.config import Settings, get_settings
@@ -47,7 +47,6 @@ from sco_compliance_os.services.vault.autoingest import (
 )
 from sco_compliance_os.services.vault.scaffolder import (
     VALID_TEMPLATES,
-    TemplateKind,
     auto_organize_vault,
     complete_missing_structure,
     inspect_missing_components,
@@ -120,8 +119,7 @@ class VaultScaffoldRequest(BaseModel):
     template: str = Field(
         default="vuoto",
         description=(
-            "Template di partenza. Valori ammessi: vuoto, cyber, sanita, "
-            "qualita, integrato."
+            "Template di partenza. Valori ammessi: vuoto, cyber, sanita, qualita, integrato."
         ),
     )
     vault_name: str = Field(
@@ -224,9 +222,7 @@ def _inspect_vault(vault_path: Path) -> dict[str, Any]:
     }
 
 
-def _find_vault_in_registry(
-    settings: Settings, vault_id: str
-) -> dict[str, Any]:
+def _find_vault_in_registry(settings: Settings, vault_id: str) -> dict[str, Any]:
     """Trova vault per id nel registry. Solleva 404 se non trovato."""
     entries = _load_registry(settings.vault_registry_path)
     for entry in entries:
@@ -273,7 +269,7 @@ async def _background_sync_and_watch(
                 errors=len(report.errors),
                 duration_sec=report.duration_sec,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.error(
                 "background_sync.error",
                 vault_id=vault_id,
@@ -292,7 +288,7 @@ async def _background_sync_and_watch(
             vault_id=vault_id,
             watcher_started=watcher_started,
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning(
             "background_watcher.start_failed",
             vault_id=vault_id,
@@ -366,9 +362,7 @@ async def add_vault(
     # evitare GC prematura: Bug 3 root cause).
     # Pattern Conv. 47 single source of truth: emit SEMPRE (anche re-add),
     # handler decide se ri-eseguire skill via flag ``is_new``.
-    background_tasks: set[asyncio.Task] = getattr(
-        request.app.state, "background_tasks", set()
-    )
+    background_tasks: set[asyncio.Task] = getattr(request.app.state, "background_tasks", set())
     EventBus.instance().schedule_publish(
         EVENT_VAULT_REGISTERED,
         {
@@ -453,8 +447,7 @@ async def scaffold_vault_endpoint(
         raise HTTPException(
             status_code=400,
             detail=(
-                f"Template '{payload.template}' non ammesso. "
-                f"Valori: {', '.join(VALID_TEMPLATES)}"
+                f"Template '{payload.template}' non ammesso. Valori: {', '.join(VALID_TEMPLATES)}"
             ),
         )
 
@@ -522,9 +515,7 @@ async def scaffold_vault_endpoint(
 
     # Emit evento auto-trigger skill (os-setup + os-ottimizzatore).
     # Conv. 47 single source of truth: nome campo univoco ``is_sco_structure``.
-    background_tasks: set[asyncio.Task] = getattr(
-        request.app.state, "background_tasks", set()
-    )
+    background_tasks: set[asyncio.Task] = getattr(request.app.state, "background_tasks", set())
     EventBus.instance().schedule_publish(
         EVENT_VAULT_REGISTERED,
         {
@@ -563,11 +554,11 @@ async def scaffold_vault_endpoint(
     return response
 
 
-@router.delete("/{vault_id}", status_code=204)
+@router.delete("/{vault_id}", status_code=204, response_class=Response, response_model=None)
 async def remove_vault(
     vault_id: str,
     settings: Settings = Depends(get_settings),
-) -> None:
+) -> Response:
     """Rimuovi vault dal registry + stoppa watcher associato.
 
     NON elimina i file su disco né i chunks gia ingeriti in mem_tree_chunks
@@ -585,10 +576,12 @@ async def remove_vault(
     try:
         manager = get_watcher_manager()
         await manager.stop_watcher(vault_id)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("vault.remove.watcher_stop_failed", vault_id=vault_id, error=str(exc))
 
     logger.info("vault.removed", id=vault_id)
+
+    return Response(status_code=204)
 
 
 @router.post("/{vault_id}/sync")
@@ -622,12 +615,12 @@ async def sync_vault_endpoint(
             sync_vault(vault_path, vault_id, force=force),
             timeout=_SYNC_TIMEOUT_SECONDS,
         )
-    except asyncio.TimeoutError as exc:
+    except TimeoutError as exc:
         raise HTTPException(
             status_code=504,
             detail=f"Sync timeout dopo {_SYNC_TIMEOUT_SECONDS}s",
         ) from exc
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.error("sync_vault.error", vault_id=vault_id, error=str(exc))
         raise HTTPException(status_code=500, detail=f"Errore sync: {exc}") from exc
     finally:
@@ -661,7 +654,7 @@ async def vault_sync_status(
         manager = get_watcher_manager()
         watchers = await manager.list_watchers()
         out["watcher_running"] = bool(watchers.get(vault_id, False))
-    except Exception:  # noqa: BLE001
+    except Exception:
         out["watcher_running"] = False
 
     return out
@@ -796,9 +789,7 @@ async def _background_auto_organize(
             path=str(vault_path),
             auto_apply=auto_apply,
         )
-        result = auto_organize_vault(
-            vault_path, vault_name=vault_name, auto_apply=auto_apply
-        )
+        result = auto_organize_vault(vault_path, vault_name=vault_name, auto_apply=auto_apply)
         logger.info(
             "background_auto_organize.complete",
             vault_id=vault_id,
@@ -810,7 +801,7 @@ async def _background_auto_organize(
             errors=len(result.errors),
         )
         return result.to_dict()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.error(
             "background_auto_organize.error",
             vault_id=vault_id,
@@ -872,9 +863,7 @@ async def auto_organize_vault_endpoint(
 
     # Esecuzione sincrona (sub-pochi-secondi per vault tipici).
     try:
-        result = auto_organize_vault(
-            vault_path, vault_name=vault_name, auto_apply=auto_apply
-        )
+        result = auto_organize_vault(vault_path, vault_name=vault_name, auto_apply=auto_apply)
     except OSError as exc:
         logger.error(
             "vault.auto_organize.filesystem_error",
@@ -921,9 +910,7 @@ async def auto_organize_vault_endpoint(
     # (entity seed + concepts + glossario) entrano in mem_tree_chunks
     # per essere subito interrogabili dall'agente.
     if auto_apply and result.organized:
-        background_tasks: set[asyncio.Task] = getattr(
-            request.app.state, "background_tasks", set()
-        )
+        background_tasks: set[asyncio.Task] = getattr(request.app.state, "background_tasks", set())
         sync_task = asyncio.create_task(
             _background_sync_and_watch(vault_id, vault_path),
             name=f"resync-after-auto-organize-{vault_id}",
@@ -1012,7 +999,7 @@ async def handle_file_event(event: FileEvent) -> None:
                     chunks_deleted=deleted,
                 )
 
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.error(
             "handle_file_event.error",
             vault_id=event.vault_id,

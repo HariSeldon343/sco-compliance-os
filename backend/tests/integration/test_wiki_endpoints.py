@@ -15,9 +15,7 @@ from httpx import AsyncClient
 
 
 @pytest.mark.asyncio
-async def test_wiki_stats_temp_vault(
-    client: AsyncClient, temp_vault: Path
-) -> None:
+async def test_wiki_stats_temp_vault(client: AsyncClient, temp_vault: Path) -> None:
     """Add temp_vault → /wiki/stats → wiki_dir_exists=True + total >= 2."""
     # Register vault
     await client.post(
@@ -39,9 +37,7 @@ async def test_wiki_stats_temp_vault(
 
 
 @pytest.mark.asyncio
-async def test_wiki_sources_list(
-    client: AsyncClient, temp_vault: Path
-) -> None:
+async def test_wiki_sources_list(client: AsyncClient, temp_vault: Path) -> None:
     """GET /api/wiki/sources su temp_vault → contains sample-source."""
     await client.post(
         "/api/vault/add",
@@ -58,9 +54,7 @@ async def test_wiki_sources_list(
 
 
 @pytest.mark.asyncio
-async def test_wiki_entities_filter_by_entity_type(
-    client: AsyncClient, temp_vault: Path
-) -> None:
+async def test_wiki_entities_filter_by_entity_type(client: AsyncClient, temp_vault: Path) -> None:
     """GET /api/wiki/entities?entity_type=atto-normativo → filtra correttamente."""
     await client.post(
         "/api/vault/add",
@@ -80,9 +74,7 @@ async def test_wiki_entities_filter_by_entity_type(
 
 
 @pytest.mark.asyncio
-async def test_wiki_entities_filter_no_match(
-    client: AsyncClient, temp_vault: Path
-) -> None:
+async def test_wiki_entities_filter_no_match(client: AsyncClient, temp_vault: Path) -> None:
     """GET /api/wiki/entities?entity_type=metodologia → 0 items (no match)."""
     await client.post(
         "/api/vault/add",
@@ -108,9 +100,7 @@ async def test_wiki_stats_no_vault_registered(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_wiki_get_single_file(
-    client: AsyncClient, temp_vault: Path
-) -> None:
+async def test_wiki_get_single_file(client: AsyncClient, temp_vault: Path) -> None:
     """GET /api/wiki/sources/sample-source → full body + frontmatter."""
     await client.post(
         "/api/vault/add",
@@ -125,9 +115,7 @@ async def test_wiki_get_single_file(
 
 
 @pytest.mark.asyncio
-async def test_wiki_get_single_invalid_category(
-    client: AsyncClient, temp_vault: Path
-) -> None:
+async def test_wiki_get_single_invalid_category(client: AsyncClient, temp_vault: Path) -> None:
     """GET /api/wiki/bogus-cat/slug → 422 categoria non valida."""
     await client.post(
         "/api/vault/add",

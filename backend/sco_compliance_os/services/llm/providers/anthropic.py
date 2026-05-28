@@ -68,7 +68,7 @@ class AnthropicProvider(LLMProvider):
             timeout=config.timeout_seconds,
         )
 
-    async def stream(
+    def stream(
         self,
         messages: list[dict[str, Any]],
         model: str,
@@ -78,109 +78,135 @@ class AnthropicProvider(LLMProvider):
         extra: dict[str, Any] | None = None,
     ) -> AsyncIterator[ChunkEvent]:
         """Stream da Anthropic messages.stream() normalizzato a ChunkEvent."""
-        logger.info(
-            "anthropic_provider.stream.start",
-            model=model,
-            messages_count=len(messages),
-            max_tokens=max_tokens,
-        )
 
-        client = AsyncAnthropic(
-            base_url=self.config.base_url,
-            api_key=self.config.api_key,
-            timeout=httpx.Timeout(self.config.timeout_seconds),
-            max_retries=self.config.max_retries,
-        )
+        async def iterator() -> AsyncIterator[ChunkEvent]:
+            logger.info(
+                "anthropic_provider.stream.start",
+                model=model,
+                messages_count=len(messages),
+                max_tokens=max_tokens,
+            )
 
-        # Cast messages a MessageParam (richiede role + content compatibile)
-        anthropic_messages: list[MessageParam] = [
-            {"role": m["role"], "content": m["content"]} for m in messages
-        ]
+            client = AsyncAnthropic(
+                base_url=self.config.base_url,
+                api_key=self.config.api_key,
+                timeout=httpx.Timeout(self.config.timeout_seconds),
+                max_retries=self.config.max_retries,
+            )
 
-        kwargs: dict[str, Any] = {
-            "model": model,
-            "max_tokens": max_tokens,
-            "messages": anthropic_messages,
-            "temperature": temperature,
-        }
-        if system_prompt:
-            # v0.13.1 fix latency Opus 4.7 + 22 skill catalog (~5400 input tokens):
-            # prompt caching ephemeral riduce input tokens computati da 5400 a
-            # ~200 dal 2 turn in poi (cache hit). Latency stimata -70%, costo -90%.
-            # Pattern Anthropic: system come list di TextBlockParam con cache_control.
-            # Fallback string se cache_control non supportato dal modello.
-            if len(system_prompt) > 1024:  # cache solo se vale la pena (>1024 char minimum threshold Anthropic)
-                kwargs["system"] = [
-                    {
-                        "type": "text",
-                        "text": system_prompt,
-                        "cache_control": {"type": "ephemeral"},
+            # Cast messages a MessageParam (richiede role + content compatibile)
+            anthropic_messages: list[MessageParam] = [
+                {"role": m["role"], "content": m["content"]} for m in messages
+            ]
+
+            kwargs: dict[str, Any] = {
+                "model": model,
+                "max_tokens": max_tokens,
+                "messages": anthropic_messages,
+                "temperature": temperature,
+            }
+            if system_prompt:
+                # v0.13.1 fix latency Opus 4.7 + 22 skill catalog (~5400 input tokens):
+                # prompt caching ephemeral riduce input tokens computati da 5400 a
+                # ~200 dal 2 turn in poi (cache hit). Latency stimata -70%, costo -90%.
+                # Pattern Anthropic: system come list di TextBlockParam con cache_control.
+                # Fallback string se cache_control non supportato dal modello.
+                if (
+                    len(system_prompt) > 1024
+                ):  # cache solo se vale la pena (>1024 char minimum threshold Anthropic)
+                    kwargs["system"] = [
+                        {
+                            "type": "text",
+                            "text": system_prompt,
+                            "cache_control": {"type": "ephemeral"},
+                        }
+                    ]
+                else:
+                    kwargs["system"] = system_prompt
+            # Passthrough opzioni provider-specific (tools, thinking budget)
+            if extra:
+                for k, v in extra.items():
+                    if k in (
+                        "tools",
+                        "tool_choice",
+                        "thinking",
+                        "metadata",
+                        "permission_mode",
+                    ):
+                        if (
+                            k == "metadata"
+                            and "metadata" in kwargs
+                            and isinstance(kwargs["metadata"], dict)
+                            and isinstance(v, dict)
+                        ):
+                            merged = dict(kwargs["metadata"])
+                            merged.update(v)
+                            kwargs["metadata"] = merged
+                        else:
+                            kwargs[k] = v
+
+            seq = 0
+            try:
+                async with client.messages.stream(**kwargs) as stream:
+                    async for text_chunk in stream.text_stream:
+                        yield ChunkEvent(
+                            kind="text_delta",
+                            data={"text": text_chunk},
+                            seq=seq,
+                        )
+                        seq += 1
+
+                    final_message = await stream.get_final_message()
+                    # v0.13.2 Bug B fix OMEGA-2: espone cache_read_input_tokens +
+                    # cache_creation_input_tokens per validare cache hit ratio +
+                    # observability prompt caching ephemeral (Anthropic SDK >=0.96).
+                    usage_full: dict[str, Any] = {
+                        "input_tokens": final_message.usage.input_tokens,
+                        "output_tokens": final_message.usage.output_tokens,
                     }
-                ]
-            else:
-                kwargs["system"] = system_prompt
-        # Passthrough opzioni provider-specific (tools, thinking budget)
-        if extra:
-            for k, v in extra.items():
-                if k in ("tools", "tool_choice", "thinking", "metadata"):
-                    kwargs[k] = v
-
-        seq = 0
-        try:
-            async with client.messages.stream(**kwargs) as stream:
-                async for text_chunk in stream.text_stream:
+                    cache_read = getattr(
+                        final_message.usage,
+                        "cache_read_input_tokens",
+                        None,
+                    )
+                    cache_create = getattr(
+                        final_message.usage,
+                        "cache_creation_input_tokens",
+                        None,
+                    )
+                    if cache_read is not None:
+                        usage_full["cache_read_input_tokens"] = cache_read
+                    if cache_create is not None:
+                        usage_full["cache_creation_input_tokens"] = cache_create
                     yield ChunkEvent(
-                        kind="text_delta",
-                        data={"text": text_chunk},
+                        kind="done",
+                        data={
+                            "stop_reason": final_message.stop_reason,
+                            "usage": usage_full,
+                            "model": final_message.model,
+                            "provider": self.name,
+                        },
                         seq=seq,
                     )
-                    seq += 1
-
-                final_message = await stream.get_final_message()
-                # v0.13.2 Bug B fix OMEGA-2: espone cache_read_input_tokens +
-                # cache_creation_input_tokens per validare cache hit ratio +
-                # observability prompt caching ephemeral (Anthropic SDK >=0.96).
-                usage_full: dict[str, Any] = {
-                    "input_tokens": final_message.usage.input_tokens,
-                    "output_tokens": final_message.usage.output_tokens,
-                }
-                cache_read = getattr(
-                    final_message.usage, "cache_read_input_tokens", None
-                )
-                cache_create = getattr(
-                    final_message.usage, "cache_creation_input_tokens", None
-                )
-                if cache_read is not None:
-                    usage_full["cache_read_input_tokens"] = cache_read
-                if cache_create is not None:
-                    usage_full["cache_creation_input_tokens"] = cache_create
+                    logger.info(
+                        "anthropic_provider.stream.done",
+                        events=seq + 1,
+                        input_tokens=final_message.usage.input_tokens,
+                        output_tokens=final_message.usage.output_tokens,
+                    )
+            except Exception as exc:
+                logger.exception("anthropic_provider.stream.error", error=str(exc))
                 yield ChunkEvent(
-                    kind="done",
+                    kind="error",
                     data={
-                        "stop_reason": final_message.stop_reason,
-                        "usage": usage_full,
-                        "model": final_message.model,
+                        "message": str(exc),
+                        "exc_type": type(exc).__name__,
                         "provider": self.name,
                     },
                     seq=seq,
                 )
-                logger.info(
-                    "anthropic_provider.stream.done",
-                    events=seq + 1,
-                    input_tokens=final_message.usage.input_tokens,
-                    output_tokens=final_message.usage.output_tokens,
-                )
-        except Exception as exc:
-            logger.exception("anthropic_provider.stream.error", error=str(exc))
-            yield ChunkEvent(
-                kind="error",
-                data={
-                    "message": str(exc),
-                    "exc_type": type(exc).__name__,
-                    "provider": self.name,
-                },
-                seq=seq,
-            )
+
+        return iterator()
 
     async def health_check(self) -> bool:
         """Probe: tenta una richiesta minima a `/v1/models` o equivalente.
@@ -191,9 +217,7 @@ class AnthropicProvider(LLMProvider):
         """
         try:
             url = self.config.base_url.rstrip("/")
-            async with httpx.AsyncClient(
-                timeout=httpx.Timeout(5.0)
-            ) as client:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(5.0)) as client:
                 # Anthropic non ha /health; ping GET /v1/messages senza body -> 405
                 # accettabile come "reachable". Per SaaS proxy: GET /health se esiste.
                 resp = await client.get(f"{url}/health")

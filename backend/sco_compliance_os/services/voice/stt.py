@@ -26,7 +26,6 @@ Conv. 41 enforcement: ogni operazione log structured con timings + model used.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import os
 import platform
 import shutil
@@ -36,6 +35,7 @@ import time
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TypedDict
 
 import structlog
 
@@ -44,11 +44,18 @@ from sco_compliance_os.config import get_settings
 logger = structlog.get_logger(__name__)
 
 
+class WhisperModelMeta(TypedDict):
+    filename: str
+    url: str
+    size_bytes: int
+    languages: list[str]
+
+
 # ----- Costanti modelli + binari -----
 
 # Modello ggml whisper base.en (75 MB) — solo inglese, piu' veloce
 # Modello ggml whisper base (142 MB) — multilingue, supporta italiano + en
-WHISPER_MODELS = {
+WHISPER_MODELS: dict[str, WhisperModelMeta] = {
     "base.en": {
         "filename": "ggml-base.en.bin",
         "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin",
@@ -199,9 +206,7 @@ def _convert_to_pcm16k_mono_blocking(input_bytes: bytes, source_format: str) -> 
     """
     ffmpeg = _ffmpeg_path()
     if not ffmpeg:
-        raise RuntimeError(
-            "ffmpeg not found in PATH. Install ffmpeg or bundle the binary."
-        )
+        raise RuntimeError("ffmpeg not found in PATH. Install ffmpeg or bundle the binary.")
 
     with tempfile.TemporaryDirectory() as td:
         td_path = Path(td)
@@ -249,7 +254,7 @@ def _convert_to_pcm16k_mono_blocking(input_bytes: bytes, source_format: str) -> 
                 )
             return out_path.read_bytes()
         except subprocess.TimeoutExpired:
-            raise RuntimeError("ffmpeg conversion timeout (>30s)")
+            raise RuntimeError("ffmpeg conversion timeout (>30s)") from None
 
 
 # ----- Invocazione whisper-cli -----
@@ -317,7 +322,7 @@ def _run_whisper_cli_blocking(
             # Fallback su stdout
             return proc.stdout.decode("utf-8", errors="replace").strip()
         except subprocess.TimeoutExpired:
-            raise RuntimeError("whisper-cli timeout (>120s)")
+            raise RuntimeError("whisper-cli timeout (>120s)") from None
 
 
 # ----- Pubblico async -----
@@ -358,9 +363,7 @@ async def transcribe(
     if model_path is None:
         # Lazy download del modello in executor
         loop = asyncio.get_running_loop()
-        model_path = await loop.run_in_executor(
-            None, _download_model_blocking, model_name
-        )
+        model_path = await loop.run_in_executor(None, _download_model_blocking, model_name)
 
     # Convert audio -> PCM 16kHz mono WAV
     loop = asyncio.get_running_loop()

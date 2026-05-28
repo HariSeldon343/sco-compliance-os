@@ -84,9 +84,9 @@ load_dotenv(override=True)
 _active_scheduler: ConnectorScheduler | None = None
 _subconscious_loop: SubconsciousTickLoop | None = None
 _autofetch_loop: AutoFetchLoop | None = None
-_seal_scheduler_task: asyncio.Task | None = None
+_seal_scheduler_task: asyncio.Task[None] | None = None
 _seal_scheduler_stop: asyncio.Event | None = None
-_cache_refresh_task: asyncio.Task | None = None
+_cache_refresh_task: asyncio.Task[None] | None = None
 _cache_refresh_stop: asyncio.Event | None = None
 
 
@@ -102,9 +102,7 @@ _CACHE_REFRESH_DEFAULT_INTERVAL_SECONDS = 240
 _CACHE_REFRESH_MIN_INTERVAL_SECONDS = 60
 
 
-async def _seal_scheduler_loop(
-    interval_seconds: int, stop_event: asyncio.Event
-) -> None:
+async def _seal_scheduler_loop(interval_seconds: int, stop_event: asyncio.Event) -> None:
     """Background loop: chiama cascade_seal_all per tutti i tree ogni N secondi.
 
     Pattern Conv. 41 tracciatura: logger structured ogni tick con counts per livello.
@@ -125,7 +123,7 @@ async def _seal_scheduler_loop(
             # Se stop_event partito, esci.
             if stop_event.is_set():
                 break
-        except asyncio.TimeoutError:
+        except TimeoutError:
             # Timeout = tempo di tick.
             pass
 
@@ -151,9 +149,7 @@ async def _seal_scheduler_loop(
     log.info("seal_scheduler.stop")
 
 
-async def _cache_refresh_loop(
-    interval_seconds: int, stop_event: asyncio.Event
-) -> None:
+async def _cache_refresh_loop(interval_seconds: int, stop_event: asyncio.Event) -> None:
     """Background loop: chiama optimizer_trigger.refresh_cache ogni N secondi.
 
     Mantiene calda la cache ephemeral Anthropic (TTL 5 min) cosi' la prima
@@ -182,7 +178,7 @@ async def _cache_refresh_loop(
             await asyncio.wait_for(stop_event.wait(), timeout=interval_seconds)
             if stop_event.is_set():
                 break
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pass
 
         # Re-check toggle a ogni tick: l'utente puo' aver disabilitato runtime.
@@ -327,9 +323,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # v0.13.2 DEV-AUTO-OPTIMIZER: cache refresh scheduler.
     # Mantiene calda la cache ephemeral Anthropic (TTL 5min, tick 4min).
     # Toggle via env SCO_AUTO_OPTIMIZER_ENABLED (default 1).
-    auto_optimizer_enabled = (
-        os.environ.get("SCO_AUTO_OPTIMIZER_ENABLED", "1").strip()
-        not in ("0", "false", "False", "no", "off")
+    auto_optimizer_enabled = os.environ.get("SCO_AUTO_OPTIMIZER_ENABLED", "1").strip() not in (
+        "0",
+        "false",
+        "False",
+        "no",
+        "off",
     )
     cache_refresh_interval_raw = int(
         os.environ.get(
@@ -337,9 +336,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             str(_CACHE_REFRESH_DEFAULT_INTERVAL_SECONDS),
         )
     )
-    cache_refresh_interval = max(
-        _CACHE_REFRESH_MIN_INTERVAL_SECONDS, cache_refresh_interval_raw
-    )
+    cache_refresh_interval = max(_CACHE_REFRESH_MIN_INTERVAL_SECONDS, cache_refresh_interval_raw)
     if auto_optimizer_enabled:
         _cache_refresh_stop = asyncio.Event()
         _cache_refresh_task = asyncio.create_task(
@@ -378,11 +375,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     path=path_existing,
                 )
                 continue
-            asyncio.create_task(
+            asyncio.create_task(  # noqa: RUF006 — startup bg task long-lived intenzionale
                 _background_sync_and_watch(vault_id_existing, vault_path_existing),
                 name=f"startup-autoingest-{vault_id_existing}",
             )
-    except Exception as start_exc:  # noqa: BLE001
+    except Exception as start_exc:
         structlog.get_logger(__name__).warning(
             "startup.vault_autoingest_failed",
             error=str(start_exc),
@@ -414,10 +411,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if _seal_scheduler_task is not None:
         try:
             await asyncio.wait_for(_seal_scheduler_task, timeout=10.0)
-        except asyncio.TimeoutError:
-            structlog.get_logger(__name__).warning(
-                "backend.shutdown.seal_scheduler_timeout"
-            )
+        except TimeoutError:
+            structlog.get_logger(__name__).warning("backend.shutdown.seal_scheduler_timeout")
             _seal_scheduler_task.cancel()
         _seal_scheduler_task = None
         _seal_scheduler_stop = None
@@ -428,10 +423,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if _cache_refresh_task is not None:
         try:
             await asyncio.wait_for(_cache_refresh_task, timeout=10.0)
-        except asyncio.TimeoutError:
-            structlog.get_logger(__name__).warning(
-                "backend.shutdown.cache_refresh_timeout"
-            )
+        except TimeoutError:
+            structlog.get_logger(__name__).warning("backend.shutdown.cache_refresh_timeout")
             _cache_refresh_task.cancel()
         _cache_refresh_task = None
         _cache_refresh_stop = None
@@ -439,7 +432,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Shutdown pulito vault watchers (v0.6.0)
     try:
         await get_watcher_manager().stop_all()
-    except Exception as wm_exc:  # noqa: BLE001
+    except Exception as wm_exc:
         structlog.get_logger(__name__).warning(
             "backend.shutdown.watcher_stop_failed",
             error=str(wm_exc),

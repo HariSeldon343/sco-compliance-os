@@ -30,7 +30,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-import yaml  # type: ignore
+import yaml
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
@@ -172,9 +172,7 @@ def _load_registry(registry_path: Path) -> list[dict[str, Any]]:
         return []
 
 
-def _resolve_active_vault(
-    settings: Settings, vault_path_override: str | None
-) -> Path:
+def _resolve_active_vault(settings: Settings, vault_path_override: str | None) -> Path:
     """Risolve path vault attivo.
 
     Pattern:
@@ -224,8 +222,7 @@ def _resolve_active_vault(
         raise HTTPException(
             status_code=404,
             detail=(
-                f"Vault attivo '{resolved}' non esiste più sul filesystem. "
-                "Aggiorna il registry."
+                f"Vault attivo '{resolved}' non esiste più sul filesystem. Aggiorna il registry."
             ),
         )
     return resolved
@@ -275,9 +272,7 @@ def _list_category(
 
 @router.get("/stats", response_model=WikiStatsResponse)
 async def get_stats(
-    vault_path: str | None = Query(
-        default=None, description="Override vault root path (assoluto)"
-    ),
+    vault_path: str | None = Query(default=None, description="Override vault root path (assoluto)"),
     settings: Settings = Depends(get_settings),
 ) -> WikiStatsResponse:
     """Conteggio file wiki per categoria nel vault attivo."""
@@ -292,9 +287,7 @@ async def get_stats(
 
 @router.get("/graph", response_model=WikiGraphResponse)
 async def get_graph(
-    vault_path: str | None = Query(
-        default=None, description="Override vault root path (assoluto)"
-    ),
+    vault_path: str | None = Query(default=None, description="Override vault root path (assoluto)"),
     include_clienti: bool = Query(
         default=True,
         description="Includi nodi cliente da Business/*/clienti/*/_index.md",
@@ -529,10 +522,7 @@ async def get_single(
     if category not in WIKI_CATEGORIES:
         raise HTTPException(
             status_code=422,
-            detail=(
-                f"Categoria '{category}' non valida. "
-                f"Ammesse: {sorted(WIKI_CATEGORIES)}"
-            ),
+            detail=(f"Categoria '{category}' non valida. Ammesse: {sorted(WIKI_CATEGORIES)}"),
         )
 
     vault_root = _resolve_active_vault(settings, vault_path)
@@ -636,9 +626,7 @@ class WikiIngestConfirmRequest(BaseModel):
     proposal_id: str = Field(
         ..., description="Proposal ID precedentemente emesso da /ingest/proposal"
     )
-    slot_index: int = Field(
-        ..., ge=0, description="Indice slot nella proposta originale"
-    )
+    slot_index: int = Field(..., ge=0, description="Indice slot nella proposta originale")
     destination: str = Field(
         ...,
         description=(
@@ -674,9 +662,7 @@ class WikiIngestConfirmResponse(BaseModel):
 # ----- Helper: validazione destination + serializzazione frontmatter -----
 
 
-_VALID_INGEST_DESTINATIONS: frozenset[str] = frozenset(WIKI_CATEGORIES) | {
-    "memory_tree"
-}
+_VALID_INGEST_DESTINATIONS: frozenset[str] = frozenset(WIKI_CATEGORIES) | {"memory_tree"}
 
 
 def _validate_destination(dest: str) -> WikiDestination:
@@ -685,8 +671,7 @@ def _validate_destination(dest: str) -> WikiDestination:
         raise HTTPException(
             status_code=422,
             detail=(
-                f"Destinazione '{dest}' non valida. "
-                f"Ammesse: {sorted(_VALID_INGEST_DESTINATIONS)}"
+                f"Destinazione '{dest}' non valida. Ammesse: {sorted(_VALID_INGEST_DESTINATIONS)}"
             ),
         )
     return dest  # type: ignore[return-value]
@@ -737,9 +722,7 @@ def _write_wiki_file(
     import re as _re
 
     if not _re.match(r"^[a-zA-Z0-9._\-]+$", slug):
-        raise ValueError(
-            f"Slug '{slug}' contiene caratteri non ammessi (solo a-z, 0-9, ., _, -)"
-        )
+        raise ValueError(f"Slug '{slug}' contiene caratteri non ammessi (solo a-z, 0-9, ., _, -)")
 
     if destination == "memory_tree":
         target_dir = vault_root / "raw" / "inbox"
@@ -801,8 +784,7 @@ async def post_ingest_proposal(
         for a in payload.attachments
     ]
     search_dicts = [
-        {"url": s.url, "title": s.title, "snippet": s.snippet}
-        for s in payload.search_results
+        {"url": s.url, "title": s.title, "snippet": s.snippet} for s in payload.search_results
     ]
     proposal = analyze_message_for_wiki_ingest(
         conversation_id=payload.conversation_id,

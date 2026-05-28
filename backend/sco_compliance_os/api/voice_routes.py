@@ -96,10 +96,7 @@ async def transcribe_audio(
 
     # Validazione tipo file
     content_type = (audio.content_type or "").lower()
-    if not (
-        content_type.startswith("audio/")
-        or content_type == "application/octet-stream"
-    ):
+    if not (content_type.startswith("audio/") or content_type == "application/octet-stream"):
         raise HTTPException(
             status_code=400,
             detail=f"Invalid content_type: {content_type}. Expected audio/*.",
@@ -193,10 +190,7 @@ async def synthesize_text(req: SynthesizeRequest) -> StreamingResponse:
         logger.warning("voice.api.synthesize.tooling_missing", error=str(exc))
         raise HTTPException(
             status_code=503,
-            detail=(
-                f"Voice TTS tooling unavailable: {exc}. "
-                "Ensure piper binary is installed."
-            ),
+            detail=(f"Voice TTS tooling unavailable: {exc}. Ensure piper binary is installed."),
         ) from exc
     except RuntimeError as exc:
         # RuntimeError "binary not found" -> 503 (tooling missing).

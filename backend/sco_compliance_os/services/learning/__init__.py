@@ -31,12 +31,12 @@ from sco_compliance_os.services.learning.user_profile import (
 __all__ = [
     "Preference",
     "ProfileCategory",
+    "delete_preference",
     "extract_preferences",
     "init_schema",
-    "upsert_preference",
     "list_preferences",
-    "delete_preference",
     "pin_preference",
-    "unpin_preference",
     "render_profile_markdown",
+    "unpin_preference",
+    "upsert_preference",
 ]

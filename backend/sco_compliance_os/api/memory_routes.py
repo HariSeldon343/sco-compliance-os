@@ -304,7 +304,7 @@ async def get_memory_tree_summaries(
             day=day,
             limit=limit,
         )
-    except Exception as exc:  # noqa: BLE001 - graceful degradation tabella mancante
+    except Exception as exc:
         logger.warning(
             "memory.tree_summaries.graceful_empty",
             error=str(exc),
@@ -344,7 +344,7 @@ async def get_top_hotness(
     # Stesso pattern di /tree-summaries: tabella scores mai migrata in v0.6.0+.
     try:
         snapshots = await get_top_hot_chunks(n=n)
-    except Exception as exc:  # noqa: BLE001 - graceful degradation tabella mancante
+    except Exception as exc:
         logger.warning(
             "memory.hotness.top.graceful_empty",
             error=str(exc),
@@ -601,12 +601,8 @@ class TreeSummaryItemV2(BaseModel):
 class TreeSealRequest(BaseModel):
     """Request body per POST /tree/seal."""
 
-    tree_kind: str = Field(
-        ..., description="Vocabolario chiuso: source | topic | global."
-    )
-    tree_id: str = Field(
-        ..., description="source_id (per source) o 'global'.", min_length=1
-    )
+    tree_kind: str = Field(..., description="Vocabolario chiuso: source | topic | global.")
+    tree_id: str = Field(..., description="source_id (per source) o 'global'.", min_length=1)
     force: bool = Field(
         default=False,
         description="Se True, sigilla anche sotto-threshold per smoke test / on-demand.",
@@ -766,9 +762,7 @@ async def get_tree_summaries_relevant(
         tree_kind=tree_kind,
         top_k=top_k,
     )
-    summaries = await query_relevant_summaries(
-        query, tree_kind=tree_kind, top_k=top_k
-    )
+    summaries = await query_relevant_summaries(query, tree_kind=tree_kind, top_k=top_k)
     return [
         TreeRelevantQuery(
             id=s.id,

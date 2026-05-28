@@ -107,8 +107,7 @@ async def main() -> int:
         conn = sqlite3.connect(str(db_path))
         rows = list(
             conn.execute(
-                "SELECT slug, category, confidence, text FROM user_profile "
-                "ORDER BY slug"
+                "SELECT slug, category, confidence, text FROM user_profile ORDER BY slug"
             ).fetchall()
         )
         print(f"Tot righe user_profile: {len(rows)}")
@@ -125,9 +124,7 @@ async def main() -> int:
         conn.close()
 
         # Assert finali
-        success = passed == len(mock_answers) and failed == 0 and len(rows) == len(
-            mock_answers
-        )
+        success = passed == len(mock_answers) and failed == 0 and len(rows) == len(mock_answers)
         if success:
             print("\n[OK] Test PASS - tutte le 10 risposte persistite correttamente.")
             return 0

@@ -2,10 +2,15 @@
 // Conv. 48 enforcement: il backend è single source of truth per stato widget;
 // il frontend deduce sempre lo stato dal fetch, mai dalla memoria React optimistic.
 
+import type { ChatMode } from "@/store/chat-store";
+
+import { useProjectStore } from "@/store/project-store";
+
 import type {
   ConversationItem,
   HotnessItem,
   IntegrationItem,
+  SkillSummary,
   MessageItem,
   TreeChunkItem,
   TreeLevel,
@@ -89,6 +94,13 @@ export const apiClient = {
     return request<MessageItem[]>(`/api/chat/conversations/${id}/messages`);
   },
 
+  // ---- Skills ----
+  skills: {
+    async list(): Promise<SkillSummary[]> {
+      return request<SkillSummary[]>("/api/skills/list");
+    },
+  },
+
   // ---- Conversations CRUD ----
   async createConversation(title?: string): Promise<ConversationItem> {
     const res = await fetch(`${BACKEND_URL}/api/chat/conversations`, {
@@ -101,6 +113,30 @@ export const apiClient = {
       throw new ApiError(res.status, "create_conv_error", `HTTP ${res.status} ${body}`);
     }
     return res.json() as Promise<ConversationItem>;
+  },
+
+  async setConversationMode(conversationId: string, agent_mode: ChatMode): Promise<ConversationItem> {
+    const res = await fetch(`${BACKEND_URL}/api/chat/conversations/${conversationId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agent_mode }),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new ApiError(res.status, "update_conv_mode_error", `HTTP ${res.status} ${body}`);
+    }
+    return res.json() as Promise<ConversationItem>;
+  },
+
+  async deleteConversation(id: string): Promise<void> {
+    const res = await fetch(`${BACKEND_URL}/api/chat/conversations/${id}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new ApiError(res.status, "delete_conv_error", `HTTP ${res.status} ${body}`);
+    }
   },
 
   /**
@@ -147,16 +183,23 @@ export const apiClient = {
     conversation_id: string;
     message: string;
     model_slug?: string;
+    agent_mode: ChatMode;
     onEvent?: (event: { kind: string; data: Record<string, unknown>; seq: number }) => void;
   }): Promise<void> {
-    const { conversation_id, message, model_slug, onEvent } = params;
+    const { conversation_id, message, model_slug, agent_mode, onEvent } = params;
     const res = await fetch(`${BACKEND_URL}/api/chat/stream`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Accept: "text/event-stream",
       },
-      body: JSON.stringify({ conversation_id, message, model_slug }),
+      body: JSON.stringify({
+        conversation_id,
+        message,
+        model_slug,
+        agent_mode,
+        project_path: useProjectStore.getState().activeProjectPath,
+      }),
     }).catch((err) => {
       throw new ApiError(0, "network", `Backend non raggiungibile: ${err}`);
     });

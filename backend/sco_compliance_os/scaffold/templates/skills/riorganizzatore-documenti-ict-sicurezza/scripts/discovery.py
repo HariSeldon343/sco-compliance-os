@@ -75,7 +75,7 @@ def extract_text_pdf(path):
 
 def extract_text_xlsx(path):
     try:
-        import openpyxl
+        import openpyxl  # type: ignore[import-untyped]
         wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
         text_parts = []
         for sheet_name in wb.sheetnames:

@@ -1,18 +1,20 @@
-// SCO Compliance OS — SessionEndDialog: dialog conferma "Fine sessione"
+﻿// SCO Compliance OS — SessionEndDialog: dialog conferma "Fine sessione"
 // Trigger manutenzione vault via skill os-ottimizzatore.
 // Conv. 47 + Conv. 48 enforcement: backend = single source of truth (skill
 // runner + conversation persistita). Frontend solo orchestra UX + naviga al
 // report. Linguaggio semplice 14/05.
 //
-// Pipeline UX:
-// 1. Utente click "Fine sessione" -> dialog si apre
+// Pipeline UX (v0.14.0):
+// 1. Utente click "Fine sessione" -> dialog si apre (stato form)
 // 2. Conferma -> POST /api/skills/run streaming SSE
 // 3. Toast loading "Manutenzione vault in corso..."
-// 4. SSE termina -> toast success + auto-navigate alla conversation creata
-//    dal backend (X-Conversation-Id response header).
+// 4. SSE termina success -> dialog passa a success-state (NON si chiude da solo).
+//    Mostra CheckCircle verde + "Ottimizzazione completata!" + N passi applicati.
+//    Resta aperto finché utente non clicca OK (conferma visibile esplicita).
+// 5. SSE termina error -> toast.error transitorio + dialog si chiude.
 import { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { LogOut, Loader2, X } from "lucide-react";
+import { LogOut, Loader2, X, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { useChatStore } from "@/store/chat-store";
@@ -26,10 +28,24 @@ interface SessionEndDialogProps {
 
 export function SessionEndDialog({ open, onOpenChange }: SessionEndDialogProps) {
   const [running, setRunning] = useState(false);
+  // Stato success: quando true il dialog mostra il pannello di conferma
+  // esplicita ("Ottimizzazione completata!") e resta aperto finché l'utente
+  // non clicca OK. Sostituisce il toast.success transitorio precedente.
+  const [done, setDone] = useState(false);
+  const [appliedCount, setAppliedCount] = useState(0);
+
   const endSession = useChatStore((s) => s.endSession);
   const selectedVault = useVaultStore((s) =>
     s.vaults.find((v) => v.id === s.selectedVaultId) ?? null,
   );
+
+  // Reset stato + chiusura. Usato dal bottone OK del success-state e dai
+  // path di cancel/close del form-state.
+  const closeAndReset = () => {
+    setDone(false);
+    setAppliedCount(0);
+    onOpenChange(false);
+  };
 
   const handleConfirm = async () => {
     if (running) return;
@@ -47,23 +63,23 @@ export function SessionEndDialog({ open, onOpenChange }: SessionEndDialogProps) 
       toast.dismiss(loadingId);
 
       if (result.success) {
-        toast.success(
-          result.eventsCount > 0
-            ? `Vault aggiornato. ${result.eventsCount} passi applicati.`
-            : "Vault aggiornato.",
-        );
+        // Success path: NON chiudere il dialog. Passa a success-state e
+        // attendi click esplicito su OK (vedi closeAndReset).
+        setAppliedCount(result.eventsCount);
+        setDone(true);
       } else {
+        // Errore "soft" dal backend: toast transitorio + chiusura dialog.
         toast.error(
           result.errorMessage ||
             "Manutenzione completata con avvisi. Apri la conversazione per i dettagli.",
         );
+        onOpenChange(false);
       }
-
-      onOpenChange(false);
     } catch (err) {
       toast.dismiss(loadingId);
       const message = err instanceof Error ? err.message : String(err);
       toast.error(`Errore manutenzione vault: ${message}`);
+      onOpenChange(false);
     } finally {
       setRunning(false);
     }
@@ -75,7 +91,20 @@ export function SessionEndDialog({ open, onOpenChange }: SessionEndDialogProps) 
   };
 
   return (
-    <Dialog.Root open={open} onOpenChange={(o) => !running && onOpenChange(o)}>
+    <Dialog.Root
+      open={open}
+      onOpenChange={(o) => {
+        // Blocca chiusura durante esecuzione.
+        if (running) return;
+        // Se l'utente chiude da overlay/ESC mentre è in success-state,
+        // resettiamo comunque lo stato locale per il prossimo open.
+        if (!o) {
+          closeAndReset();
+          return;
+        }
+        onOpenChange(o);
+      }}
+    >
       <Dialog.Portal>
         <Dialog.Overlay
           className={cn(
@@ -93,88 +122,122 @@ export function SessionEndDialog({ open, onOpenChange }: SessionEndDialogProps) 
             "data-[state=open]:animate-scale-in",
           )}
         >
-          {/* Header con icona + titolo + close */}
-          <div className="mb-4 flex items-start justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sco-blue/10 text-sco-blue">
-                <LogOut size={18} />
+          {done ? (
+            // ─── Success state: conferma esplicita post-ottimizzazione ───
+            <div className="flex flex-col items-center text-center">
+              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                <CheckCircle2 size={32} />
               </div>
-              <div>
-                <Dialog.Title className="text-base font-semibold text-sco-text dark:text-sco-text-dark">
-                  Termina la sessione e aggiorna il vault?
-                </Dialog.Title>
-                <Dialog.Description className="mt-1 text-sm text-sco-muted-foreground">
-                  Mando in esecuzione <span className="font-mono text-xs">os-ottimizzatore</span>:
-                  controlla la struttura del vault, rileva cartelle o file mancanti
-                  e propone i passi di manutenzione. Il report finisce in una
-                  nuova conversazione che puoi rileggere quando vuoi.
-                </Dialog.Description>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={handleCancel}
-              disabled={running}
-              className="rounded-md p-1 text-sco-muted-foreground transition-colors hover:bg-sco-muted disabled:cursor-not-allowed disabled:opacity-50"
-              aria-label="Chiudi"
-            >
-              <X size={16} />
-            </button>
-          </div>
+              <Dialog.Title className="text-lg font-semibold text-sco-text dark:text-sco-text-dark">
+                Ottimizzazione completata!
+              </Dialog.Title>
+              <Dialog.Description className="mt-2 text-sm text-sco-muted-foreground">
+                {appliedCount > 0
+                  ? `Vault aggiornato. ${appliedCount} ${appliedCount === 1 ? "passo applicato" : "passi applicati"}.`
+                  : "Vault aggiornato. Nessun passo necessario."}
+                <br />
+                Il report è disponibile nella nuova conversazione.
+              </Dialog.Description>
 
-          {/* Box info vault attivo */}
-          {selectedVault ? (
-            <div className="mb-5 rounded-lg border border-sco-border bg-sco-muted/40 p-3">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-sco-muted-foreground">
-                Vault attivo
-              </div>
-              <div className="mt-1 text-sm font-medium text-sco-text dark:text-sco-text-dark">
-                {selectedVault.name}
-              </div>
-              <div className="mt-0.5 truncate text-xs text-sco-muted-foreground" title={selectedVault.path}>
-                {selectedVault.path}
-              </div>
+              <button
+                type="button"
+                onClick={closeAndReset}
+                className={cn(
+                  "mt-6 w-full rounded-md px-4 py-2 text-sm font-medium text-white transition-all duration-150",
+                  "bg-sco-blue hover:bg-sco-navy hover:shadow",
+                )}
+                autoFocus
+              >
+                OK
+              </button>
             </div>
           ) : (
-            <div className="mb-5 rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-700/50 dark:bg-amber-900/20 dark:text-amber-200">
-              Nessun vault selezionato. La manutenzione girerà con il vault
-              risolto dal backend (registry sco-first).
-            </div>
-          )}
+            // ─── Form state: conferma manutenzione vault ───
+            <>
+              {/* Header con icona + titolo + close */}
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sco-blue/10 text-sco-blue">
+                    <LogOut size={18} />
+                  </div>
+                  <div>
+                    <Dialog.Title className="text-base font-semibold text-sco-text dark:text-sco-text-dark">
+                      Termina la sessione e aggiorna il vault?
+                    </Dialog.Title>
+                    <Dialog.Description className="mt-1 text-sm text-sco-muted-foreground">
+                      Mando in esecuzione <span className="font-mono text-xs">os-ottimizzatore</span>:
+                      controlla la struttura del vault, rileva cartelle o file mancanti
+                      e propone i passi di manutenzione. Il report finisce in una
+                      nuova conversazione che puoi rileggere quando vuoi.
+                    </Dialog.Description>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  disabled={running}
+                  className="rounded-md p-1 text-sco-muted-foreground transition-colors hover:bg-sco-muted disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="Chiudi"
+                >
+                  <X size={16} />
+                </button>
+              </div>
 
-          {/* Azioni */}
-          <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={handleCancel}
-              disabled={running}
-              className="rounded-md px-4 py-2 text-sm font-medium text-sco-muted-foreground transition-colors hover:bg-sco-muted disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Annulla
-            </button>
-            <button
-              type="button"
-              onClick={handleConfirm}
-              disabled={running}
-              className={cn(
-                "flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white transition-all duration-150",
-                "bg-sco-blue hover:bg-sco-navy hover:shadow",
-                "disabled:cursor-not-allowed disabled:opacity-70",
-              )}
-            >
-              {running ? (
-                <>
-                  <Loader2 size={14} className="animate-spin" />
-                  In corso...
-                </>
+              {/* Box info vault attivo */}
+              {selectedVault ? (
+                <div className="mb-5 rounded-lg border border-sco-border bg-sco-muted/40 p-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-sco-muted-foreground">
+                    Vault attivo
+                  </div>
+                  <div className="mt-1 text-sm font-medium text-sco-text dark:text-sco-text-dark">
+                    {selectedVault.name}
+                  </div>
+                  <div className="mt-0.5 truncate text-xs text-sco-muted-foreground" title={selectedVault.path}>
+                    {selectedVault.path}
+                  </div>
+                </div>
               ) : (
-                <>
-                  <LogOut size={14} />
-                  Conferma
-                </>
+                <div className="mb-5 rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-700/50 dark:bg-amber-900/20 dark:text-amber-200">
+                  Nessun vault selezionato. La manutenzione girerà con il vault
+                  risolto dal backend (registry sco-first).
+                </div>
               )}
-            </button>
-          </div>
+
+              {/* Azioni */}
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  disabled={running}
+                  className="rounded-md px-4 py-2 text-sm font-medium text-sco-muted-foreground transition-colors hover:bg-sco-muted disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Annulla
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirm}
+                  disabled={running}
+                  className={cn(
+                    "flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white transition-all duration-150",
+                    "bg-sco-blue hover:bg-sco-navy hover:shadow",
+                    "disabled:cursor-not-allowed disabled:opacity-70",
+                  )}
+                >
+                  {running ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      In corso...
+                    </>
+                  ) : (
+                    <>
+                      <LogOut size={14} />
+                      Conferma
+                    </>
+                  )}
+                </button>
+              </div>
+            </>
+          )}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

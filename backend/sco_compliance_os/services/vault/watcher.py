@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -74,7 +73,7 @@ class FileEvent:
 def _watchdog_available() -> bool:
     """Verifica se watchdog e' disponibile (graceful degradation se manca)."""
     try:
-        import watchdog  # type: ignore  # noqa: F401
+        import watchdog  # noqa: F401
 
         return True
     except ImportError:
@@ -94,26 +93,26 @@ class _VaultEventHandler:
     dentro VaultWatcher.start() dopo check disponibilita'.
     """
 
-    def __init__(self, vault_id: str, queue: "queue.Queue[FileEvent]") -> None:  # type: ignore[name-defined]
+    def __init__(self, vault_id: str, queue: queue.Queue[FileEvent]) -> None:
         self.vault_id = vault_id
         self.queue = queue
 
-    def on_created(self, event: Any) -> None:  # noqa: ARG002
+    def on_created(self, event: Any) -> None:
         if event.is_directory:
             return
         self._enqueue("created", event.src_path, None)
 
-    def on_modified(self, event: Any) -> None:  # noqa: ARG002
+    def on_modified(self, event: Any) -> None:
         if event.is_directory:
             return
         self._enqueue("modified", event.src_path, None)
 
-    def on_deleted(self, event: Any) -> None:  # noqa: ARG002
+    def on_deleted(self, event: Any) -> None:
         if event.is_directory:
             return
         self._enqueue("deleted", event.src_path, None)
 
-    def on_moved(self, event: Any) -> None:  # noqa: ARG002
+    def on_moved(self, event: Any) -> None:
         if event.is_directory:
             return
         self._enqueue("moved", event.src_path, event.dest_path)
@@ -129,7 +128,7 @@ class _VaultEventHandler:
                     vault_id=self.vault_id,
                 )
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.debug("watcher enqueue error: %s", exc)
 
 
@@ -207,25 +206,25 @@ class VaultWatcher:
             return False
 
         # Import lazy: solo quando watchdog e' confermato disponibile.
-        from watchdog.events import FileSystemEventHandler  # type: ignore
-        from watchdog.observers import Observer  # type: ignore
+        from watchdog.events import FileSystemEventHandler
+        from watchdog.observers import Observer
 
         # Bind dinamicamente i metodi handler a una sottoclasse vera.
-        class _RealHandler(FileSystemEventHandler):  # type: ignore[misc, no-any-unimported]
+        class _RealHandler(FileSystemEventHandler):
             def __init__(self, base: _VaultEventHandler) -> None:
                 super().__init__()
                 self._base = base
 
-            def on_created(self, event: Any) -> None:  # noqa: ARG002
+            def on_created(self, event: Any) -> None:
                 self._base.on_created(event)
 
-            def on_modified(self, event: Any) -> None:  # noqa: ARG002
+            def on_modified(self, event: Any) -> None:
                 self._base.on_modified(event)
 
-            def on_deleted(self, event: Any) -> None:  # noqa: ARG002
+            def on_deleted(self, event: Any) -> None:
                 self._base.on_deleted(event)
 
-            def on_moved(self, event: Any) -> None:  # noqa: ARG002
+            def on_moved(self, event: Any) -> None:
                 self._base.on_moved(event)
 
         self._handler = _VaultEventHandler(self.vault_id, self._queue)
@@ -254,10 +253,8 @@ class VaultWatcher:
         try:
             self._observer.stop()
             # join in thread separato per non bloccare async loop
-            await asyncio.get_running_loop().run_in_executor(
-                None, self._observer.join, 5.0
-            )
-        except Exception as exc:  # noqa: BLE001
+            await asyncio.get_running_loop().run_in_executor(None, self._observer.join, 5.0)
+        except Exception as exc:
             logger.warning("VaultWatcher.stop observer error: %s", exc)
         self._observer = None
         self._handler = None
@@ -268,11 +265,11 @@ class VaultWatcher:
             try:
                 # Aspetta cancellazione max 2 secondi
                 await asyncio.wait_for(self._task, timeout=2.0)
-            except (asyncio.CancelledError, asyncio.TimeoutError):
+            except (TimeoutError, asyncio.CancelledError):
                 self._task.cancel()
                 try:
                     await self._task
-                except (asyncio.CancelledError, Exception):  # noqa: BLE001, S110
+                except (asyncio.CancelledError, Exception):
                     pass
             self._task = None
 
@@ -292,15 +289,13 @@ class VaultWatcher:
                 await self._flush_debounced()
                 # Pausa breve prima del prossimo poll
                 try:
-                    await asyncio.wait_for(
-                        self._stopped.wait(), timeout=_QUEUE_POLL_INTERVAL
-                    )
-                except asyncio.TimeoutError:
+                    await asyncio.wait_for(self._stopped.wait(), timeout=_QUEUE_POLL_INTERVAL)
+                except TimeoutError:
                     continue
         except asyncio.CancelledError:
             logger.debug("VaultWatcher consume_loop cancelled vault_id=%s", self.vault_id)
             raise
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.error("VaultWatcher consume_loop error: %s", exc)
 
     async def _drain_queue(self) -> None:
@@ -323,7 +318,7 @@ class VaultWatcher:
         """
         if event.event_type in ("deleted", "moved"):
             # Push diretto su task async (no debounce)
-            asyncio.create_task(self._safe_dispatch(event))
+            asyncio.create_task(self._safe_dispatch(event))  # noqa: RUF006 — fire-and-forget dispatch
             return
 
         # Skip file non supportati per evitare debounce buffer crescita
@@ -335,10 +330,7 @@ class VaultWatcher:
             return
 
         # Skip cartelle escluse (Office temp .~lock, .tmp di Word)
-        if any(
-            part.startswith("~$") or part.endswith(".tmp")
-            for part in src.parts
-        ):
+        if any(part.startswith("~$") or part.endswith(".tmp") for part in src.parts):
             return
 
         # Aggiungi/aggiorna debounce buffer
@@ -368,7 +360,7 @@ class VaultWatcher:
             result = self.on_event(event)
             if asyncio.iscoroutine(result):
                 await result
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.error(
                 "watcher.dispatch error vault_id=%s path=%s: %s",
                 self.vault_id,
@@ -443,7 +435,7 @@ class VaultWatcherManager:
         for vault_id, watcher in watchers:
             try:
                 await watcher.stop()
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.warning("stop_all: error stopping vault_id=%s: %s", vault_id, exc)
 
     async def list_watchers(self) -> dict[str, bool]:

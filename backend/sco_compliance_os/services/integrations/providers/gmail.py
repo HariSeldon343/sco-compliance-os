@@ -313,9 +313,7 @@ async def send_message(
     payload = {"raw": raw_b64url}
     try:
         async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT_SECONDS) as client:
-            response = await client.post(
-                url, headers=_auth_headers(access_token), json=payload
-            )
+            response = await client.post(url, headers=_auth_headers(access_token), json=payload)
     except httpx.RequestError as exc:
         raise OAuthError(
             code="network_error",

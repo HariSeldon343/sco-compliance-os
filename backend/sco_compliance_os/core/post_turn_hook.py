@@ -117,6 +117,4 @@ def schedule_on_turn_complete(
     Returns:
         asyncio.Task non-awaited. Caller puo ignorare o awaitare per testing.
     """
-    return asyncio.create_task(
-        on_turn_complete(turn_data, tenant_id=tenant_id, db_path=db_path)
-    )
+    return asyncio.create_task(on_turn_complete(turn_data, tenant_id=tenant_id, db_path=db_path))

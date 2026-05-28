@@ -23,9 +23,7 @@ async def test_vault_list_initial_empty(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_vault_inspect_temp_vault(
-    client: AsyncClient, temp_vault: Path
-) -> None:
+async def test_vault_inspect_temp_vault(client: AsyncClient, temp_vault: Path) -> None:
     """POST /api/vault/inspect su temp_vault → is_sco_structure=True + md_files_count>=3."""
     response = await client.post(
         "/api/vault/inspect",
@@ -73,9 +71,7 @@ async def test_vault_add_and_list(client: AsyncClient, temp_vault: Path) -> None
 
 
 @pytest.mark.asyncio
-async def test_vault_sync_status(
-    client: AsyncClient, temp_vault: Path
-) -> None:
+async def test_vault_sync_status(client: AsyncClient, temp_vault: Path) -> None:
     """POST /add → wait → GET sync-status → no errore + watcher_running.
 
     NOTA: il sync background è fire-and-forget, non sincrono.
@@ -100,9 +96,7 @@ async def test_vault_sync_status(
 
 
 @pytest.mark.asyncio
-async def test_vault_dedup_by_path(
-    client: AsyncClient, temp_vault: Path
-) -> None:
+async def test_vault_dedup_by_path(client: AsyncClient, temp_vault: Path) -> None:
     """POST /add con stesso path → riusa ID, no duplicate entry.
 
     Conv. 47 pattern: dedup naturale per evitare watcher duplicati.

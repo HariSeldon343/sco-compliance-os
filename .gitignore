@@ -137,3 +137,5 @@ user-data/
 *~
 *.rej
 conversation-*.md
+temp.patch
+add_slash_error_ref.py

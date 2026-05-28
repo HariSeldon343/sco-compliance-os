@@ -69,7 +69,7 @@ class OllamaProvider(LLMProvider):
             timeout=config.timeout_seconds,
         )
 
-    async def stream(
+    def stream(
         self,
         messages: list[dict[str, Any]],
         model: str,
@@ -79,144 +79,148 @@ class OllamaProvider(LLMProvider):
         extra: dict[str, Any] | None = None,
     ) -> AsyncIterator[ChunkEvent]:
         """Stream Ollama /api/chat NDJSON normalizzato a ChunkEvent."""
-        logger.info(
-            "ollama_provider.stream.start",
-            model=model,
-            messages_count=len(messages),
-            max_tokens=max_tokens,
-        )
 
-        # Ollama messages schema: list di {role, content} (compatibile OpenAI-like)
-        ollama_messages: list[dict[str, Any]] = []
-        if system_prompt:
-            ollama_messages.append({"role": "system", "content": system_prompt})
-        ollama_messages.extend(messages)
+        async def iterator() -> AsyncIterator[ChunkEvent]:
+            logger.info(
+                "ollama_provider.stream.start",
+                model=model,
+                messages_count=len(messages),
+                max_tokens=max_tokens,
+            )
 
-        options: dict[str, Any] = {
-            "num_predict": max_tokens,
-            "temperature": temperature,
-        }
-        if extra:
-            for k, v in extra.items():
-                if k in ("top_p", "top_k", "stop", "seed", "num_ctx"):
-                    options[k] = v
+            # Ollama messages schema: list di {role, content} (compatibile OpenAI-like)
+            ollama_messages: list[dict[str, Any]] = []
+            if system_prompt:
+                ollama_messages.append({"role": "system", "content": system_prompt})
+            ollama_messages.extend(messages)
 
-        payload: dict[str, Any] = {
-            "model": model,
-            "messages": ollama_messages,
-            "stream": True,
-            "options": options,
-        }
+            options: dict[str, Any] = {
+                "num_predict": max_tokens,
+                "temperature": temperature,
+            }
+            if extra:
+                for k, v in extra.items():
+                    if k in ("top_p", "top_k", "stop", "seed", "num_ctx"):
+                        options[k] = v
 
-        url = f"{self.config.base_url.rstrip('/')}/api/chat"
-        timeout = httpx.Timeout(self.config.timeout_seconds)
-        seq = 0
-        final_usage: dict[str, int] = {}
-        final_stop_reason: str | None = None
-        final_model: str = model
+            payload: dict[str, Any] = {
+                "model": model,
+                "messages": ollama_messages,
+                "stream": True,
+                "options": options,
+            }
 
-        try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                async with client.stream("POST", url, json=payload) as response:
-                    if response.status_code != 200:
-                        body = await response.aread()
-                        msg = (
-                            f"Ollama HTTP {response.status_code}: "
-                            f"{body.decode('utf-8', errors='replace')[:200]}"
-                        )
-                        yield ChunkEvent(
-                            kind="error",
-                            data={
-                                "message": msg,
-                                "exc_type": "HTTPError",
-                                "provider": self.name,
-                            },
-                            seq=seq,
-                        )
-                        return
+            url = f"{self.config.base_url.rstrip('/')}/api/chat"
+            timeout = httpx.Timeout(self.config.timeout_seconds)
+            seq = 0
+            final_usage: dict[str, int] = {}
+            final_stop_reason: str | None = None
+            final_model: str = model
 
-                    async for line in response.aiter_lines():
-                        if not line.strip():
-                            continue
-                        try:
-                            chunk = json.loads(line)
-                        except json.JSONDecodeError as jdec:
-                            logger.warning(
-                                "ollama_provider.stream.parse_error",
-                                error=str(jdec),
-                                line_preview=line[:200],
+            try:
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    async with client.stream("POST", url, json=payload) as response:
+                        if response.status_code != 200:
+                            body = await response.aread()
+                            msg = (
+                                f"Ollama HTTP {response.status_code}: "
+                                f"{body.decode('utf-8', errors='replace')[:200]}"
                             )
-                            continue
-
-                        # Chunk schema: {message: {role, content}, done: bool, ...}
-                        msg_obj = chunk.get("message") or {}
-                        content = msg_obj.get("content", "")
-                        if content:
                             yield ChunkEvent(
-                                kind="text_delta",
-                                data={"text": content},
+                                kind="error",
+                                data={
+                                    "message": msg,
+                                    "exc_type": "HTTPError",
+                                    "provider": self.name,
+                                },
                                 seq=seq,
                             )
-                            seq += 1
+                            return
 
-                        # Ultimo chunk: done=true + eval_count + prompt_eval_count
-                        if chunk.get("done", False):
-                            prompt_count = chunk.get("prompt_eval_count", 0)
-                            eval_count = chunk.get("eval_count", 0)
-                            final_usage = {
-                                "input_tokens": prompt_count,
-                                "output_tokens": eval_count,
-                            }
-                            final_stop_reason = chunk.get("done_reason", "end_turn")
-                            final_model = chunk.get("model", model)
+                        async for line in response.aiter_lines():
+                            if not line.strip():
+                                continue
+                            try:
+                                chunk = json.loads(line)
+                            except json.JSONDecodeError as jdec:
+                                logger.warning(
+                                    "ollama_provider.stream.parse_error",
+                                    error=str(jdec),
+                                    line_preview=line[:200],
+                                )
+                                continue
 
-            yield ChunkEvent(
-                kind="done",
-                data={
-                    "stop_reason": final_stop_reason or "end_turn",
-                    "usage": final_usage or {"input_tokens": 0, "output_tokens": 0},
-                    "model": final_model,
-                    "provider": self.name,
-                },
-                seq=seq,
-            )
-            logger.info(
-                "ollama_provider.stream.done",
-                events=seq + 1,
-                input_tokens=final_usage.get("input_tokens", 0),
-                output_tokens=final_usage.get("output_tokens", 0),
-                stop_reason=final_stop_reason,
-            )
-        except httpx.ConnectError as cerr:
-            # Tipico: Ollama non installato o servizio non avviato
-            logger.warning(
-                "ollama_provider.stream.connect_error",
-                base_url=self.config.base_url,
-                error=str(cerr),
-            )
-            yield ChunkEvent(
-                kind="error",
-                data={
-                    "message": (
-                        f"Ollama non raggiungibile a {self.config.base_url}. "
-                        "Installa Ollama (https://ollama.com) e avvia il servizio."
-                    ),
-                    "exc_type": "ConnectError",
-                    "provider": self.name,
-                },
-                seq=seq,
-            )
-        except Exception as exc:
-            logger.exception("ollama_provider.stream.error", error=str(exc))
-            yield ChunkEvent(
-                kind="error",
-                data={
-                    "message": str(exc),
-                    "exc_type": type(exc).__name__,
-                    "provider": self.name,
-                },
-                seq=seq,
-            )
+                            # Chunk schema: {message: {role, content}, done: bool, ...}
+                            msg_obj = chunk.get("message") or {}
+                            content = msg_obj.get("content", "")
+                            if content:
+                                yield ChunkEvent(
+                                    kind="text_delta",
+                                    data={"text": content},
+                                    seq=seq,
+                                )
+                                seq += 1
+
+                            # Ultimo chunk: done=true + eval_count + prompt_eval_count
+                            if chunk.get("done", False):
+                                prompt_count = chunk.get("prompt_eval_count", 0)
+                                eval_count = chunk.get("eval_count", 0)
+                                final_usage = {
+                                    "input_tokens": prompt_count,
+                                    "output_tokens": eval_count,
+                                }
+                                final_stop_reason = chunk.get("done_reason", "end_turn")
+                                final_model = chunk.get("model", model)
+
+                yield ChunkEvent(
+                    kind="done",
+                    data={
+                        "stop_reason": final_stop_reason or "end_turn",
+                        "usage": final_usage or {"input_tokens": 0, "output_tokens": 0},
+                        "model": final_model,
+                        "provider": self.name,
+                    },
+                    seq=seq,
+                )
+                logger.info(
+                    "ollama_provider.stream.done",
+                    events=seq + 1,
+                    input_tokens=final_usage.get("input_tokens", 0),
+                    output_tokens=final_usage.get("output_tokens", 0),
+                    stop_reason=final_stop_reason,
+                )
+            except httpx.ConnectError as cerr:
+                # Tipico: Ollama non installato o servizio non avviato
+                logger.warning(
+                    "ollama_provider.stream.connect_error",
+                    base_url=self.config.base_url,
+                    error=str(cerr),
+                )
+                yield ChunkEvent(
+                    kind="error",
+                    data={
+                        "message": (
+                            f"Ollama non raggiungibile a {self.config.base_url}. "
+                            "Installa Ollama (https://ollama.com) e avvia il servizio."
+                        ),
+                        "exc_type": "ConnectError",
+                        "provider": self.name,
+                    },
+                    seq=seq,
+                )
+            except Exception as exc:
+                logger.exception("ollama_provider.stream.error", error=str(exc))
+                yield ChunkEvent(
+                    kind="error",
+                    data={
+                        "message": str(exc),
+                        "exc_type": type(exc).__name__,
+                        "provider": self.name,
+                    },
+                    seq=seq,
+                )
+
+        return iterator()
 
     async def health_check(self) -> bool:
         """Probe: GET / che ritorna 'Ollama is running' (200 OK) se servizio up."""
@@ -239,11 +243,7 @@ class OllamaProvider(LLMProvider):
                     return []
                 data = resp.json()
                 models = data.get("models", [])
-                return [
-                    m.get("name", "")
-                    for m in models
-                    if isinstance(m, dict) and m.get("name")
-                ]
+                return [m.get("name", "") for m in models if isinstance(m, dict) and m.get("name")]
         except Exception as exc:
             logger.warning("ollama_provider.list_models_failed", error=str(exc))
             return []

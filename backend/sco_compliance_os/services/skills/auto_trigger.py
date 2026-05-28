@@ -291,7 +291,7 @@ async def handle_vault_registered(payload: dict[str, Any]) -> None:
         # Ricostruisci stat base da snapshot esistente (best-effort fallback).
         base_total = int(structure_snapshot.get("md_files_count", 0) or 0)
         deep_scan_markdown = (
-            f"## Scansione profonda del vault \"{vault_name}\"\n\n"
+            f'## Scansione profonda del vault "{vault_name}"\n\n'
             f"La scansione profonda ha incontrato un problema tecnico: "
             f"`{type(exc).__name__}: {str(exc)[:160]}`.\n\n"
             f"Statistiche base dalla scansione preliminare: "
@@ -380,8 +380,7 @@ async def handle_vault_registered(payload: dict[str, Any]) -> None:
     # framework della domanda 6/10 (calcolato dopo per altri turni LLM-driven).
     _framework_top = deep_scan_report_dict.get("framework_occurrences", [])
     _detected_frameworks_names = [
-        fw[0] if isinstance(fw, (list, tuple)) and fw else str(fw)
-        for fw in _framework_top[:6]
+        fw[0] if isinstance(fw, (list, tuple)) and fw else str(fw) for fw in _framework_top[:6]
     ]
     _detected_summary = (
         f"Nel vault ho gia rilevato: {', '.join(_detected_frameworks_names)}."
@@ -421,12 +420,12 @@ async def handle_vault_registered(payload: dict[str, Any]) -> None:
             '{"value":"importa il profilo precedente, vault pronto all\'\'uso",'
             '"label":"Importa profilo precedente",'
             f'"description":"Mantieni le {existing_profile_count} voci esistenti e parti subito col vault nuovo, salta le 10 domande"'
-            '},'
+            "},"
             '{"value":"ricomincia onboarding da zero con 10 nuove domande",'
             '"label":"Parti da zero con 10 nuove domande",'
             '"description":"Cancella il profilo precedente e ricomincia con Q1-Q10 nuove. Le risposte del nuovo vault sostituiscono quelle vecchie"'
-            '}'
-            ']}'
+            "}"
+            "]}"
         )
         setup_text = (
             f"Hai visto il report del vault. "
@@ -581,18 +580,12 @@ async def handle_vault_registered(payload: dict[str, Any]) -> None:
     if organize_result is not None:
         base_context["auto_organize_applied"] = True
         base_context["auto_organize_organized"] = organize_result.organized
-        base_context["auto_organize_dirs_created"] = list(
-            organize_result.directories_created
-        )
-        base_context["auto_organize_files_created"] = list(
-            organize_result.files_created
-        )
+        base_context["auto_organize_dirs_created"] = list(organize_result.directories_created)
+        base_context["auto_organize_files_created"] = list(organize_result.files_created)
         base_context["auto_organize_files_moved"] = [
             {"src": s, "dest": d} for s, d in organize_result.files_moved
         ]
-        base_context["auto_organize_files_backed_up"] = list(
-            organize_result.files_backed_up
-        )
+        base_context["auto_organize_files_backed_up"] = list(organize_result.files_backed_up)
         # Refresh vault_inspect post-organize: la struttura e' cambiata.
         try:
             fresh_inspect = inspect_missing_components(vault_root)
@@ -640,9 +633,7 @@ async def handle_vault_registered(payload: dict[str, Any]) -> None:
         text_length=len(ottimizzatore_result.assistant_text or ""),
     )
 
-    ottimizzatore_text = (
-        ottimizzatore_result.assistant_text or "".join(ottimizzatore_chunks)
-    )
+    ottimizzatore_text = ottimizzatore_result.assistant_text or "".join(ottimizzatore_chunks)
     # Conv. 41 traceability: appende il summary line dell'auto-organize al
     # messaggio assistant cosi' che l'utente veda in chat cosa e' stato fatto
     # in autonomia dal sistema (struttura SCO completata + file riclassificati).

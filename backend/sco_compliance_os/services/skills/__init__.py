@@ -30,13 +30,13 @@ from sco_compliance_os.services.skills.runner import (
 )
 
 __all__ = [
-    "SkillMeta",
-    "discover_skills",
-    "get_skill",
-    "execute_skill",
-    "SkillExecutionResult",
     "EVENT_VAULT_REGISTERED",
     "EVENT_VAULT_REGISTERED_POST_SETUP",
+    "SkillExecutionResult",
+    "SkillMeta",
+    "discover_skills",
+    "execute_skill",
+    "get_skill",
     "handle_vault_registered",
     "register_default_subscribers",
 ]

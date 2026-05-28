@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Conversation Viewer — jarvis &lt;&gt; codex</title>
+<style>
+  :root {
+    --navy: #302e5c;
+    --blu: #0074b4;
+    --amber: #ffa727;
+    --bg: #16151f;
+    --bg-elev: #1f1d2b;
+    --bg-card: #25232f;
+    --border: #34313f;
+    --text: #e8e6f0;
+    --muted: #9a96ad;
+    --jarvis: #4aa3e0;
+    --codex: #3fd07f;
+    --orch: #ffa727;
+    --err: #ff5d5d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* Sidebar lista chat */
+  #sidebar {
+    width: 300px;
+    min-width: 300px;
+    background: var(--bg-elev);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+  }
+  #sidebar-header {
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  #sidebar-header h1 {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+  #sidebar-header .sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 3px;
+  }
+  #conv-list { flex: 1; overflow-y: auto; padding: 8px; }
+  .conv-item {
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    margin-bottom: 4px;
+    border: 1px solid transparent;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .conv-item:hover { background: var(--bg-card); }
+  .conv-item.selected { background: var(--bg-card); border-color: var(--blu); }
+  .conv-item .name {
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .conv-item .meta {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 3px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .live-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--codex);
+    font-weight: 600;
+  }
+  .live-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--codex);
+    animation: pulse 1.2s infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  /* Main viewer */
+  #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  #main-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-elev);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  #main-title { font-size: 13px; font-weight: 600; }
+  #main-title .goal { font-size: 11px; color: var(--muted); font-weight: 400; margin-top: 2px; max-width: 70vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #autoscroll-ind { font-size: 11px; color: var(--muted); }
+  #viewer { flex: 1; overflow-y: auto; padding: 20px; scroll-behavior: smooth; }
+  #viewer.empty { display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 14px; }
+
+  /* Metadata box header */
+  .meta-box {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 18px;
+    font-size: 12px;
+  }
+  .meta-box .row { display: flex; gap: 8px; margin: 3px 0; }
+  .meta-box .k { color: var(--muted); min-width: 90px; }
+  .meta-box .v { color: var(--text); word-break: break-word; }
+
+  /* Turn card */
+  .turn {
+    margin-bottom: 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    background: var(--bg-card);
+  }
+  .turn-head {
+    padding: 8px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .turn-head .time { color: var(--muted); font-weight: 400; font-size: 11px; }
+  .turn.jarvis .turn-head { color: var(--jarvis); border-left: 3px solid var(--jarvis); }
+  .turn.codex .turn-head { color: var(--codex); border-left: 3px solid var(--codex); }
+  .turn.orchestrator .turn-head, .turn.antonio .turn-head { color: var(--orch); border-left: 3px solid var(--orch); }
+  .turn-body {
+    padding: 12px 14px;
+    font-size: 13px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: "Cascadia Code", "Consolas", monospace;
+    color: #d6d3e3;
+  }
+  .turn-body code { background: #2e2b3a; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+
+  /* Footer chiusura */
+  .closed-box {
+    background: linear-gradient(180deg, var(--bg-card), var(--bg-elev));
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-top: 6px;
+    font-size: 12px;
+  }
+  .closed-box .title { font-weight: 600; color: var(--amber); margin-bottom: 6px; }
+  .closed-box .row { display: flex; gap: 8px; margin: 2px 0; }
+  .closed-box .k { color: var(--muted); min-width: 90px; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 9px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #3a3748; border-radius: 5px; }
+  ::-webkit-scrollbar-thumb:hover { background: #4a4658; }
+</style>
+</head>
+<body>
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <h1>Conversation Viewer</h1>
+      <div class="sub">jarvis &lt;&gt; codex &middot; tempo reale</div>
+    </div>
+    <div id="conv-list"></div>
+  </div>
+  <div id="main">
+    <div id="main-header">
+      <div>
+        <div id="main-title">Nessuna conversazione selezionata</div>
+        <div class="goal" id="main-goal"></div>
+      </div>
+      <div id="autoscroll-ind"></div>
+    </div>
+    <div id="viewer" class="empty">Seleziona una conversazione dalla lista a sinistra.</div>
+  </div>
+
+<script>
+(function () {
+  "use strict";
+
+  var selectedRel = null;
+  var lastContent = "";
+  var convListEl = document.getElementById("conv-list");
+  var viewerEl = document.getElementById("viewer");
+  var mainTitleEl = document.getElementById("main-title");
+  var mainGoalEl = document.getElementById("main-goal");
+  var autoscrollIndEl = document.getElementById("autoscroll-ind");
+
+  function fmtTime(mtime) {
+    var d = new Date(mtime * 1000);
+    return d.toLocaleString("it-IT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  }
+  function fmtSize(bytes) {
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / 1024 / 1024).toFixed(1) + " MB";
+  }
+  function esc(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  // mini inline render: `code` + **bold** dentro il testo gia escaped
+  function inlineFmt(s) {
+    s = esc(s);
+    s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
+    s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    return s;
+  }
+
+  // ---- Sidebar lista ----
+  function renderList(items) {
+    convListEl.innerHTML = "";
+    if (!items.length) {
+      convListEl.innerHTML = '<div style="padding:12px;color:var(--muted);font-size:12px">Nessun conversation-*.md trovato.</div>';
+      return;
+    }
+    items.forEach(function (it) {
+      var div = document.createElement("div");
+      div.className = "conv-item" + (it.rel === selectedRel ? " selected" : "");
+      var live = it.is_active
+        ? '<span class="live-badge"><span class="live-dot"></span>LIVE</span>'
+        : "";
+      div.innerHTML =
+        '<div class="name">' + esc(it.name) + "</div>" +
+        '<div class="meta">' + fmtTime(it.mtime) + " &middot; " + fmtSize(it.size) + " " + live + "</div>";
+      div.onclick = function () {
+        selectedRel = it.rel;
+        lastContent = "";
+        renderList(items);
+        loadConversation(true);
+      };
+      convListEl.appendChild(div);
+    });
+  }
+
+  function refreshList() {
+    fetch("/api/conversations")
+      .then(function (r) { return r.json(); })
+      .then(function (items) {
+        renderList(items);
+        // auto-select il piu recente al primo caricamento
+        if (!selectedRel && items.length) {
+          selectedRel = items[0].rel;
+          renderList(items);
+          loadConversation(true);
+        }
+      })
+      .catch(function () {});
+  }
+
+  // ---- Parser conversation markdown ----
+  function parseConversation(text) {
+    var blocks = text.split(/\n---\n/);
+    var html = "";
+    var goalText = "";
+    blocks.forEach(function (block) {
+      block = block.trim();
+      if (!block) return;
+      if (block.indexOf("# Conversation") === 0) {
+        // header metadata
+        html += '<div class="meta-box">';
+        block.split("\n").forEach(function (line) {
+          var m = line.match(/^-\s+\*\*(.+?)\*\*:\s*(.*)$/);
+          if (m) {
+            var k = m[1], v = m[2];
+            if (k === "goal") goalText = v.replace(/`/g, "");
+            html += '<div class="row"><span class="k">' + esc(k) + '</span><span class="v">' + inlineFmt(v) + "</span></div>";
+          }
+        });
+        html += "</div>";
+      } else if (block.indexOf("## Sessione chiusa") === 0) {
+        html += '<div class="closed-box"><div class="title">Sessione chiusa</div>';
+        block.split("\n").forEach(function (line) {
+          var m = line.match(/^-\s+\*\*(.+?)\*\*:\s*(.*)$/);
+          if (m) html += '<div class="row"><span class="k">' + esc(m[1]) + '</span><span>' + inlineFmt(m[2]) + "</span></div>";
+        });
+        html += "</div>";
+      } else if (block.indexOf("## [") === 0) {
+        // turn block: ## [HH:MM:SS] from -> to
+        var lines = block.split("\n");
+        var headMatch = lines[0].match(/^##\s+\[(.+?)\]\s+(\w+)\s*->\s*(\w+)/);
+        var time = headMatch ? headMatch[1] : "";
+        var from = headMatch ? headMatch[2] : "?";
+        var to = headMatch ? headMatch[3] : "?";
+        var bodyLines = lines.slice(1).map(function (l) {
+          return l.replace(/^>\s?/, "");
+        });
+        var body = bodyLines.join("\n").trim();
+        html +=
+          '<div class="turn ' + esc(from) + '">' +
+          '<div class="turn-head">' + esc(from) + " &rarr; " + esc(to) +
+          '<span class="time">' + esc(time) + "</span></div>" +
+          '<div class="turn-body">' + inlineFmt(body) + "</div></div>";
+      }
+    });
+    return { html: html, goal: goalText };
+  }
+
+  // ---- Viewer ----
+  function isNearBottom() {
+    return viewerEl.scrollHeight - viewerEl.scrollTop - viewerEl.clientHeight < 120;
+  }
+
+  function loadConversation(force) {
+    if (!selectedRel) return;
+    fetch("/api/conversation?file=" + encodeURIComponent(selectedRel))
+      .then(function (r) { return r.text(); })
+      .then(function (text) {
+        if (text === lastContent && !force) return;
+        var wasNearBottom = isNearBottom();
+        lastContent = text;
+        var parsed = parseConversation(text);
+        viewerEl.className = "";
+        viewerEl.innerHTML = parsed.html || '<div style="color:var(--muted)">Conversazione vuota.</div>';
+        mainTitleEl.textContent = selectedRel.split("/").pop();
+        mainGoalEl.textContent = parsed.goal || "";
+        if (force || wasNearBottom) {
+          viewerEl.scrollTop = viewerEl.scrollHeight;
+          autoscrollIndEl.textContent = "auto-scroll attivo";
+        } else {
+          autoscrollIndEl.textContent = "scroll manuale (nuovi messaggi sotto)";
+        }
+      })
+      .catch(function () {});
+  }
+
+  // ---- Polling loops ----
+  refreshList();
+  setInterval(refreshList, 3000);      // lista ogni 3s
+  setInterval(function () { loadConversation(false); }, 1500); // contenuto ogni 1.5s
+})();
+</script>
+</body>
+</html>

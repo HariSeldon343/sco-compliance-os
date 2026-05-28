@@ -65,9 +65,7 @@ from tests.autotest_e2e.test_user_journey import (  # type: ignore[import-not-fo
 
 # Permetti override via env
 BACKEND_URL = os.environ.get("SCO_AUTOTEST_BACKEND_URL", DEFAULT_BACKEND_URL)
-USER_DATA_DIR = Path(
-    os.environ.get("SCO_AUTOTEST_USER_DATA_DIR", str(DEFAULT_USER_DATA_DIR))
-)
+USER_DATA_DIR = Path(os.environ.get("SCO_AUTOTEST_USER_DATA_DIR", str(DEFAULT_USER_DATA_DIR)))
 # Default SKIP LLM = 0 per questi scenari (vogliono LLM reale per validare).
 # Override env SCO_AUTOTEST_SKIP_LLM=1 per skip rapido in CI.
 SKIP_LLM = os.environ.get("SCO_AUTOTEST_SKIP_LLM", "0") == "1"
@@ -110,9 +108,7 @@ async def http_client(backend_live: bool) -> AsyncIterator[httpx.AsyncClient]:
 # ============================================================================
 
 
-async def _create_conversation(
-    client: httpx.AsyncClient, title: str
-) -> str:
+async def _create_conversation(client: httpx.AsyncClient, title: str) -> str:
     """POST /api/chat/conversations -> ritorna ID nuova conv.
 
     Raise:
@@ -124,9 +120,7 @@ async def _create_conversation(
         timeout=TIMEOUT_ENDPOINT,
     )
     if r.status_code not in (200, 201):
-        raise RuntimeError(
-            f"Failed create conversation: HTTP {r.status_code} {r.text[:200]}"
-        )
+        raise RuntimeError(f"Failed create conversation: HTTP {r.status_code} {r.text[:200]}")
     return r.json()["id"]
 
 
@@ -170,9 +164,7 @@ async def _wait_setup_conv_id(
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
-            r = await client.get(
-                "/api/chat/conversations", timeout=TIMEOUT_ENDPOINT
-            )
+            r = await client.get("/api/chat/conversations", timeout=TIMEOUT_ENDPOINT)
             for c in r.json():
                 title = c.get("title", "")
                 if "Configurazione iniziale" in title and vault_name in title:
@@ -183,9 +175,7 @@ async def _wait_setup_conv_id(
     return None
 
 
-async def _get_messages(
-    client: httpx.AsyncClient, conv_id: str
-) -> list[dict[str, Any]]:
+async def _get_messages(client: httpx.AsyncClient, conv_id: str) -> list[dict[str, Any]]:
     """GET messages di una conv (con ask_user_question + tool_calls deserializzati)."""
     r = await client.get(
         f"/api/chat/conversations/{conv_id}/messages",
@@ -247,9 +237,7 @@ async def test_scenario_1_multi_chat_concurrent(
             task1, task2, return_exceptions=False
         )
     except Exception as exc:
-        pytest.fail(
-            f"Stream concurrent FAILED: {type(exc).__name__}: {str(exc)[:300]}"
-        )
+        pytest.fail(f"Stream concurrent FAILED: {type(exc).__name__}: {str(exc)[:300]}")
 
     # Validazione PRIMARIA: entrambe le chat devono aver ricevuto events.
     # Il bug Antonio era "seconda chat bullet vuoto", quindi assert >5 events
@@ -266,9 +254,7 @@ async def test_scenario_1_multi_chat_concurrent(
 
     # Validazione SECONDARIA: entrambe le chat dovrebbero produrre testo
     # sostanziale (>100 char) dall'LLM. Tolleranza alta perché LLM può variare.
-    assert len(text1) > 100, (
-        f"Conv 1 testo troppo corto ({len(text1)} char): {text1[:200]}"
-    )
+    assert len(text1) > 100, f"Conv 1 testo troppo corto ({len(text1)} char): {text1[:200]}"
     assert len(text2) > 100, (
         f"Conv 2 testo troppo corto ({len(text2)} char) — bug Antonio? "
         f"Done: {done2}. Text: {text2[:200]}"
@@ -312,7 +298,7 @@ async def test_scenario_2_memory_recall_cross_conv(
     # Chat 1: dichiarazione identità con sentinel string univoca.
     sentinel_phrase = "Mi chiamo Antonio Amodeo e lavoro in cybersecurity"
     conv1_id = await _create_conversation(http_client, "Test recall - dichiarazione")
-    events1, text1, _ = await _stream_chat_collect(
+    events1, _text1, _ = await _stream_chat_collect(
         http_client,
         conv1_id,
         f"{sentinel_phrase}. Mi puoi rispondere semplicemente 'ok ricevuto'?",
@@ -416,10 +402,7 @@ async def test_scenario_3_os_optimizer_auto_trigger(
 
     vault_id = r.json().get("id")
     is_sco_detected = r.json().get("is_sco_structure", False)
-    print(
-        f"\n[SCENARIO 3] vault_id={vault_id} "
-        f"is_sco_structure_detected={is_sco_detected}"
-    )
+    print(f"\n[SCENARIO 3] vault_id={vault_id} is_sco_structure_detected={is_sco_detected}")
 
     # Wait per auto_trigger.handle_vault_registered async completion.
     # Comprende: deep_scan + Q1 deterministica + (se !sco) auto_organize +
@@ -428,9 +411,7 @@ async def test_scenario_3_os_optimizer_auto_trigger(
     await asyncio.sleep(35)
 
     # Verifica conv "Configurazione iniziale" trovata.
-    setup_conv_id = await _wait_setup_conv_id(
-        http_client, vault_name, timeout=10.0
-    )
+    setup_conv_id = await _wait_setup_conv_id(http_client, vault_name, timeout=10.0)
     assert setup_conv_id is not None, (
         f"Auto-trigger conversation 'Configurazione iniziale del vault {vault_name}' "
         f"non trovata entro 45s totali (35s wait + 10s poll). "
@@ -441,7 +422,7 @@ async def test_scenario_3_os_optimizer_auto_trigger(
     msgs = await _get_messages(http_client, setup_conv_id)
     skill_invocations = []
     for m in msgs:
-        for tc in (m.get("tool_calls") or []):
+        for tc in m.get("tool_calls") or []:
             if tc.get("kind") == "skill_invocation":
                 skill_invocations.append(tc.get("skill_name"))
     print(f"[SCENARIO 3] skill_invocations trovate: {skill_invocations}")
@@ -465,13 +446,10 @@ async def test_scenario_3_os_optimizer_auto_trigger(
 
     # Verifica deep_scan presente.
     has_deep_scan = any(
-        tc.get("kind") == "deep_scan_report"
-        for m in msgs
-        for tc in (m.get("tool_calls") or [])
+        tc.get("kind") == "deep_scan_report" for m in msgs for tc in (m.get("tool_calls") or [])
     )
     assert has_deep_scan, (
-        "Deep scan report tool_call non trovato nella setup conv. "
-        f"messages_count={len(msgs)}"
+        f"Deep scan report tool_call non trovato nella setup conv. messages_count={len(msgs)}"
     )
 
     print(
@@ -531,12 +509,8 @@ async def test_scenario_4_cache_hit_input_tokens_drop(
     print(f"[SCENARIO 4] Turno 2: input_tokens={input2}, output_tokens={output2}")
 
     # Validazione baseline: entrambi i turni hanno usage > 0.
-    assert input1 > 0, (
-        f"Turno 1 input_tokens=0, done event malformato: {done1}"
-    )
-    assert input2 > 0, (
-        f"Turno 2 input_tokens=0, done event malformato: {done2}"
-    )
+    assert input1 > 0, f"Turno 1 input_tokens=0, done event malformato: {done1}"
+    assert input2 > 0, f"Turno 2 input_tokens=0, done event malformato: {done2}"
 
     # NOTA: il done event NON espone cache_read_input_tokens.
     # Il check primario è proxy: input_tokens 2° turno < 2x input_tokens 1°.
@@ -557,18 +531,18 @@ async def test_scenario_4_cache_hit_input_tokens_drop(
     print(
         f"[SCENARIO 4] cache_hit_proxy={cache_hit_proxy} "
         f"(input1={input1} -> input2={input2}, "
-        f"ratio={input2/input1:.2f})"
+        f"ratio={input2 / input1:.2f})"
     )
 
     # FAIL solo se anomalia grave (esplosione tokens).
     # Soft success anche senza drop esplicito perché il provider non espone
     # il segnale cache_read direttamente.
     print(
-        f"[SCENARIO 4] PASS (proxy) — Conv. 34 dichiarazione incertezza: "
-        f"il provider Anthropic non espone cache_read_input_tokens nel done "
-        f"event. Test è proxy basato su input_tokens drop. Per verifica reale "
-        f"cache hit, instrumentare logger in providers/anthropic.py:148 e "
-        f"leggere log file backend.\n"
+        "[SCENARIO 4] PASS (proxy) — Conv. 34 dichiarazione incertezza: "
+        "il provider Anthropic non espone cache_read_input_tokens nel done "
+        "event. Test è proxy basato su input_tokens drop. Per verifica reale "
+        "cache hit, instrumentare logger in providers/anthropic.py:148 e "
+        "leggere log file backend.\n"
     )
 
 

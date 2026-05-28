@@ -298,11 +298,7 @@ async def persist_setup_answer(
         return out
     out["step_key"] = step_key
 
-    turn_id = (
-        f"{conversation_id}__{message_id}"
-        if conversation_id and message_id
-        else None
-    )
+    turn_id = f"{conversation_id}__{message_id}" if conversation_id and message_id else None
 
     # Costruisci Preference
     pref = _build_preference(step_key, user_message, turn_id=turn_id)

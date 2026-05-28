@@ -7,6 +7,9 @@ export type Id = string;
 /** Ruolo del messaggio nella conversazione */
 export type MessageRole = "user" | "assistant" | "system" | "tool";
 
+/** Modalità operative dell'agente per conversazione */
+export type ChatMode = "plan" | "ask" | "auto" | "yolo";
+
 /** Tool call inline (riferimento operazione che l'agente ha eseguito) */
 export interface ToolCallItem {
   id: Id;
@@ -52,6 +55,7 @@ export interface ConversationItem {
   updated_at: string;
   // Numero messaggi (denormalizzato per UI sidebar)
   message_count: number;
+  agent_mode: ChatMode;
 }
 
 /** Vault registrato (cartella SCO collegata) */
@@ -74,6 +78,17 @@ export interface IntegrationItem {
   account_email?: string | null;
   last_used?: string | null;
 }
+
+/** Skill registrata dal runtime (GET /api/skills/list) */
+export interface SkillSummary {
+  name: string;
+  description: string;
+  scope: "user" | "project" | "legacy";
+  path: string;
+  auto_trigger: string | null;
+  language: string;
+}
+
 
 /** Risposta standard endpoint /api/chat/stream (chunk SSE) */
 export interface ChatStreamChunk {

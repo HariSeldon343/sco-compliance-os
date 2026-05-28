@@ -135,10 +135,7 @@ class SyncReport:
             "chunks_dropped": self.chunks_dropped,
             "chunks_pending_extraction": self.chunks_pending_extraction,
             "chunks_skipped_dedup": self.chunks_skipped_dedup,
-            "errors": [
-                {"path": e.path, "error": e.error, "stage": e.stage}
-                for e in self.errors
-            ],
+            "errors": [{"path": e.path, "error": e.error, "stage": e.stage} for e in self.errors],
             "duration_sec": round(self.duration_sec, 3),
             "started_at_ms": self.started_at_ms,
             "finished_at_ms": self.finished_at_ms,
@@ -326,7 +323,7 @@ async def _is_dedup_skippable(
                 stored_mtime = int(row[0])
                 # Mtime invariato -> contenuto invariato -> skip.
                 return stored_mtime == mtime_ms
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("dedup check error path=%s: %s", path_str, exc)
         return False
 
@@ -437,7 +434,7 @@ async def ingest_single_file(
     # Ingest
     try:
         counts = await ingest_chunks(chunks, db_path=db_path)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.error("ingest_single_file: ingest error path=%s: %s", path_str, exc)
         await _file_breaker.record_failure(path_str)
         # Ritorna extracted con error popolato per propagazione SyncReport
@@ -482,7 +479,7 @@ async def delete_chunks_for_file(
                     deleted,
                 )
             return deleted
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("delete_chunks_for_file error path=%s: %s", path_str, exc)
         return 0
 
@@ -567,13 +564,11 @@ async def sync_vault(
                 db_path=db_path,
                 force=force,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             # Safety net: ingest_single_file dovrebbe non sollevare, ma per
             # garantire continuita' del walk in caso di edge cases.
             logger.error("sync_vault: unhandled error path=%s: %s", path_str, exc)
-            report.errors.append(
-                FileError(path=path_str, error=str(exc), stage="ingest_unhandled")
-            )
+            report.errors.append(FileError(path=path_str, error=str(exc), stage="ingest_unhandled"))
             files_done += 1
             continue
 
@@ -610,7 +605,7 @@ async def sync_vault(
                 result = on_progress(progress)
                 if asyncio.iscoroutine(result):
                     await result
-            except Exception as cb_err:  # noqa: BLE001
+            except Exception as cb_err:
                 logger.debug("on_progress callback error: %s", cb_err)
 
     report.duration_sec = time.monotonic() - start
@@ -731,7 +726,7 @@ async def get_sync_status(
                 chunks_pending_extraction=counts.get("pending_extraction", 0),
                 chunks_dropped=counts.get("dropped", 0),
             )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("get_sync_status error vault_id=%s: %s", vault_id, exc)
         return SyncStatus(
             vault_id=vault_id,
@@ -794,11 +789,11 @@ def get_sync_registry() -> SyncRegistry:
 
 
 __all__ = [
-    "FileError",
-    "ProgressCallback",
     "SKIP_DIR_NAMES",
     "SKIP_DIR_PREFIXES",
     "SUPPORTED_EXTENSIONS",
+    "FileError",
+    "ProgressCallback",
     "SyncProgress",
     "SyncRegistry",
     "SyncReport",

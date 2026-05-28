@@ -225,9 +225,7 @@ async def download_file(
 
     _raise_if_error(response, "download_file")
     content = response.content
-    logger.info(
-        "gdrive download_file | file_id=%s size_bytes=%d", file_id, len(content)
-    )
+    logger.info("gdrive download_file | file_id=%s size_bytes=%d", file_id, len(content))
     return content
 
 
@@ -294,7 +292,7 @@ async def upload_file(
         "",
     ]
     body_prefix = ("\r\n".join(body_parts) + "\r\n").encode("utf-8")
-    body_suffix = (f"\r\n--{boundary}--\r\n").encode("utf-8")
+    body_suffix = (f"\r\n--{boundary}--\r\n").encode()
     body = body_prefix + content + body_suffix
 
     url = f"{_GDRIVE_UPLOAD_BASE}/files?uploadType=multipart"
